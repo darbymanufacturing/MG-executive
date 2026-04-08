@@ -1,0 +1,215 @@
+import { useState, useMemo } from 'react';
+import { Plus, Search, Pencil, Trash2, ListChecks } from 'lucide-react';
+import Header from '../components/Layout/Header.jsx';
+import Button from '../components/Shared/Button.jsx';
+import CostFormModal from '../components/Costs/CostFormModal.jsx';
+import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
+import CategoryBadge from '../components/Costs/CategoryBadge.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
+import { useCosts } from '../context/CostContext.jsx';
+import { CATEGORIES, FREQUENCIES } from '../utils/constants.js';
+import { formatEUR, formatDate } from '../utils/formatters.js';
+import { normalizeToMonthly } from '../utils/calculations.js';
+import styles from './CostManager.module.css';
+
+const FILTER_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'one-off', label: 'One-Off' },
+  { key: 'fixed', label: 'Fixed' },
+  { key: 'variable', label: 'Variable' },
+  { key: 'investment', label: 'Investments' },
+];
+
+export default function CostManager() {
+  const { costs, addCost, updateCost, deleteCost } = useCosts();
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingCost, setEditingCost] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const filtered = useMemo(() => {
+    let list = costs;
+    if (activeFilter !== 'all') list = list.filter((c) => c.category === activeFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q));
+    }
+    list = [...list].sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'amount') { va = normalizeToMonthly(a); vb = normalizeToMonthly(b); }
+      else if (sortBy === 'category') { va = a.category; vb = b.category; }
+      else { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [costs, activeFilter, search, sortBy, sortDir]);
+
+  const toggleSort = (field) => {
+    if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortBy(field); setSortDir('asc'); }
+  };
+
+  const openAdd = () => { setEditingCost(null); setModalOpen(true); };
+  const openEdit = (cost) => { setEditingCost(cost); setModalOpen(true); };
+
+  const handleSave = (data) => {
+    if (editingCost) updateCost(editingCost.id, data);
+    else addCost(data);
+  };
+
+  const SortIcon = ({ field }) => {
+    if (sortBy !== field) return <span className={styles.sortNeutral}>↕</span>;
+    return <span className={styles.sortActive}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  return (
+    <div className={styles.page}>
+      <Header
+        title="Cost Manager"
+        subtitle="Add, edit and remove all fleet cost items"
+        actions={
+          <Button variant="primary" onClick={openAdd}>
+            <Plus size={16} /> Add Cost
+          </Button>
+        }
+      />
+
+      <div className={styles.content}>
+        {/* Filter + Search bar */}
+        <div className={styles.toolbar}>
+          <div className={styles.tabs}>
+            {FILTER_TABS.map((t) => (
+              <button
+                key={t.key}
+                className={`${styles.tab} ${activeFilter === t.key ? styles.tabActive : ''}`}
+                onClick={() => setActiveFilter(t.key)}
+              >
+                {t.label}
+                <span className={styles.tabCount}>
+                  {t.key === 'all' ? costs.length : costs.filter((c) => c.category === t.key).length}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.searchWrap}>
+            <Search size={14} className={styles.searchIcon} />
+            <input
+              className={styles.search}
+              placeholder="Search costs…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        {filtered.length === 0 ? (
+          <EmptyState
+            icon={ListChecks}
+            title={costs.length === 0 ? 'No costs yet' : 'No results'}
+            description={
+              costs.length === 0
+                ? 'Add your first cost item to start tracking your fleet economics.'
+                : 'Try adjusting your search or filter.'
+            }
+            action={
+              costs.length === 0 && (
+                <Button variant="primary" onClick={openAdd}>
+                  <Plus size={16} /> Add First Cost
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th} onClick={() => toggleSort('name')}>
+                    Name <SortIcon field="name" />
+                  </th>
+                  <th className={styles.th} onClick={() => toggleSort('category')}>
+                    Category <SortIcon field="category" />
+                  </th>
+                  <th className={styles.th}>Frequency</th>
+                  <th className={`${styles.th} ${styles.right}`} onClick={() => toggleSort('amount')}>
+                    Amount <SortIcon field="amount" />
+                  </th>
+                  <th className={`${styles.th} ${styles.right}`}>Monthly Equiv.</th>
+                  <th className={styles.th}>Start</th>
+                  <th className={`${styles.th} ${styles.center}`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((cost) => (
+                  <tr key={cost.id} className={styles.row}>
+                    <td className={styles.td}>
+                      <div className={styles.costName}>{cost.name}</div>
+                      {cost.notes && <div className={styles.costNotes}>{cost.notes}</div>}
+                    </td>
+                    <td className={styles.td}><CategoryBadge category={cost.category} /></td>
+                    <td className={styles.td}>
+                      <span className={styles.freq}>{FREQUENCIES[cost.frequency]?.label}</span>
+                    </td>
+                    <td className={`${styles.td} ${styles.right}`}>
+                      <span className={styles.amount}>{formatEUR(cost.amount)}</span>
+                    </td>
+                    <td className={`${styles.td} ${styles.right}`}>
+                      <span className={styles.monthly}>
+                        {cost.frequency === 'one-time' ? '—' : formatEUR(normalizeToMonthly(cost))}
+                      </span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={styles.date}>{formatDate(cost.startDate)}</span>
+                    </td>
+                    <td className={`${styles.td} ${styles.center}`}>
+                      <div className={styles.actions}>
+                        <button className={styles.actionBtn} onClick={() => openEdit(cost)} title="Edit">
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                          onClick={() => setDeleteTarget(cost)}
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className={styles.tableFooter}>
+          {filtered.length > 0 && (
+            <span className={styles.count}>{filtered.length} cost item{filtered.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+      </div>
+
+      <CostFormModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+        initialData={editingCost}
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => { deleteCost(deleteTarget.id); setDeleteTarget(null); }}
+        title="Delete Cost"
+        message={`Remove "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+      />
+    </div>
+  );
+}

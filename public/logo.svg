@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none">
+  <!-- Orange chevron ">" -->
+  <path d="M12 8 L32 30 L12 52" stroke="#A0521D" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- XSlide wordmark in white -->
+  <text x="44" y="41" font-family="Poppins, sans-serif" font-weight="600" font-size="28" fill="#FFFFFF" letter-spacing="0.5">XSlide</text>
+  <!-- Small orange accent square (dot above the i) -->
+  <rect x="146" y="8" width="8" height="8" fill="#A0521D" rx="1"/>
+</svg>
