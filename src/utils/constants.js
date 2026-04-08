@@ -91,3 +91,10 @@ export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+
+export const REVENUE_CHART_COLORS = {
+  revenue: '#4CAF50',
+  profit:  '#66BB6A',
+  loss:    '#F44336',
+  trips:   '#42A5F5',
+};

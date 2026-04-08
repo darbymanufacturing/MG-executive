@@ -56,3 +56,21 @@ export function formatDate(dateStr) {
 export function todayISO() {
   return new Date().toISOString().split('T')[0];
 }
+
+export function formatTrips(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return new Intl.NumberFormat('el-GR').format(Math.round(n));
+}
+
+export function formatKm(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return `${new Intl.NumberFormat('el-GR', { maximumFractionDigits: 1 }).format(n)} km`;
+}
+
+export function formatMinutes(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const h = Math.floor(n / 60);
+  const m = Math.round(n % 60);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}

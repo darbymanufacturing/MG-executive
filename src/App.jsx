@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { CostProvider, useCosts } from './context/CostContext.jsx';
+import { RevenueProvider } from './context/RevenueContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import CostManager from './pages/CostManager.jsx';
+import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
@@ -28,6 +30,7 @@ function AppShell() {
         <Routes>
           <Route path="/"         element={<Dashboard />} />
           <Route path="/costs"    element={<CostManager />} />
+          <Route path="/revenue"  element={<Revenue />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
@@ -39,7 +42,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <CostProvider>
-        <AppShell />
+        <RevenueProvider>
+          <AppShell />
+        </RevenueProvider>
       </CostProvider>
     </BrowserRouter>
   );

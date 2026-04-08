@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Settings, Bike } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, Bike } from 'lucide-react';
 import styles from './Sidebar.module.css';
 
 const NAV = [
   { to: '/',        icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/costs',   icon: ListChecks,      label: 'Cost Manager' },
+  { to: '/revenue', icon: Receipt,         label: 'Revenue' },
   { to: '/settings',icon: Settings,        label: 'Settings' },
 ];
 

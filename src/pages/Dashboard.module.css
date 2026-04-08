@@ -42,6 +42,29 @@
 }
 .emptyActions { display: flex; gap: var(--space-3); }
 
+/* Revenue section divider */
+.revenueDivider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+.revenueDivider::before,
+.revenueDivider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+.revenueDividerLabel {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 /* KPI grid */
 .kpiGrid {
   display: grid;
