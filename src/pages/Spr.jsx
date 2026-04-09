@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { MapPin, Activity, Cloud, BarChart2, Clock, Trash2 } from 'lucide-react';
+import { MapPin, Activity, Cloud, BarChart2, Clock, Trash2, Database } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import SprIntroOverlay from '../components/Spr/SprIntroOverlay.jsx';
@@ -21,12 +21,14 @@ const TABS = [
 ];
 
 export default function Spr() {
-  const { events, weather, sprConfig, clearEvents } = useSpr();
+  const { events, weather, sprConfig, clearEvents, loadNafplioData } = useSpr();
   const { config } = useCosts();
 
-  const [tab,          setTab]          = useState('performance');
-  const [city,         setCity]         = useState('');
-  const [clearConfirm, setClearConfirm] = useState(false);
+  const [tab,           setTab]           = useState('performance');
+  const [city,          setCity]          = useState('');
+  const [clearConfirm,  setClearConfirm]  = useState(false);
+  const [seedLoading,   setSeedLoading]   = useState(false);
+  const [seedDone,      setSeedDone]      = useState(false);
 
   const locations = config.locations || [];
 
@@ -67,6 +69,27 @@ export default function Spr() {
       />
 
       <div className={styles.content}>
+
+        {/* Seed data banner — shown only when no events loaded yet */}
+        {events.length === 0 && (
+          <div className={styles.seedBanner}>
+            <Database size={16} />
+            <span>No event data yet. Load the Nafplio sample dataset to get started.</span>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={seedLoading}
+              onClick={async () => {
+                setSeedLoading(true);
+                await loadNafplioData();
+                setSeedLoading(false);
+                setSeedDone(true);
+              }}
+            >
+              {seedLoading ? 'Loading…' : seedDone ? 'Loaded ✓' : 'Load Nafplio Data'}
+            </Button>
+          </div>
+        )}
 
         {/* Tab bar */}
         <div className={styles.tabs}>

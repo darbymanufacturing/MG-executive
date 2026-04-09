@@ -39,6 +39,21 @@
   min-width: 140px;
 }
 
+/* Seed data banner */
+.seedBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.seedBanner > span { flex: 1; }
+.seedBanner svg { color: var(--color-primary); flex-shrink: 0; }
+
 /* Tab bar */
 .tabs {
   display: flex;

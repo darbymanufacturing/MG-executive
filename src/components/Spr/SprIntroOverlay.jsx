@@ -35,7 +35,7 @@ export default function SprIntroOverlay({ onDone }) {
       {/* Main content */}
       <div className={styles.content}>
         <span className={styles.title}>SPR</span>
-        <span className={styles.subtitle}>Spot Performance &amp; Rebalancing</span>
+        <span className={styles.subtitle}>Spot Performance</span>
         <div className={styles.bar}>
           <div className={styles.barFill} />
         </div>

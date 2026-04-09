@@ -4,6 +4,12 @@ import {
   writeBatch, setDoc, getDocs,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import {
+  NAFPLIO_ZONES,
+  NAFPLIO_WEATHER,
+  NAFPLIO_EVENTS,
+  NAFPLIO_CITY_CENTER,
+} from '../utils/nafplioSprData.js';
 
 const EVENTS_COL   = 'sprEvents';
 const WEATHER_COL  = 'sprWeather';
@@ -132,6 +138,41 @@ export function SprProvider({ children }) {
     }
   }, []);
 
+  // ── Nafplio seed data loader ──────────────────────────────────────────────
+
+  const loadNafplioData = useCallback(async () => {
+    // 1. Write config (zones + city center)
+    const configNext = {
+      ...DEFAULT_CONFIG,
+      zones: NAFPLIO_ZONES,
+      cityCenters: { Nafplio: NAFPLIO_CITY_CENTER },
+      morningHour: 10,
+    };
+    await setDoc(doc(db, CONFIG_DOC), configNext);
+
+    // 2. Import weather
+    for (let i = 0; i < NAFPLIO_WEATHER.length; i += BATCH_SIZE) {
+      const chunk = NAFPLIO_WEATHER.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((day) => {
+        const docId = `${day.date}_Nafplio`;
+        batch.set(doc(db, WEATHER_COL, docId), { ...day, city: 'Nafplio' });
+      });
+      await batch.commit();
+    }
+
+    // 3. Import events
+    for (let i = 0; i < NAFPLIO_EVENTS.length; i += BATCH_SIZE) {
+      const chunk = NAFPLIO_EVENTS.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((row) => {
+        const docId = `${row.scooterId}_${row.datetime.replace(/[^0-9]/g, '')}`;
+        batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio' });
+      });
+      await batch.commit();
+    }
+  }, []);
+
   const clearWeather = useCallback(async (city = null) => {
     const snap = await getDocs(collection(db, WEATHER_COL));
     const toDelete = city
@@ -161,6 +202,7 @@ export function SprProvider({ children }) {
         clearEvents,
         importWeather,
         clearWeather,
+        loadNafplioData,
       }}
     >
       {children}
