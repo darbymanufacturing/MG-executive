@@ -85,8 +85,6 @@ export const DEFAULT_CONFIG = {
   companyName: 'XSlide',
   currency: 'EUR',
   targetCostPerScooter: null,
-  revenuePerScooter: null,
-  monthlyDebtService: null,
   locations: [],
 };
 

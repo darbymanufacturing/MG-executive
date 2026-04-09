@@ -108,39 +108,6 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Estimated Revenue per Scooter / Month (EUR)</label>
-              <div className={styles.amountWrap}>
-                <span className={styles.eurSymbol}>€</span>
-                <input
-                  type="number"
-                  className={`${styles.input} ${styles.amountInput}`}
-                  value={config.revenuePerScooter ?? ''}
-                  onChange={(e) => updateConfig({ revenuePerScooter: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                  placeholder="e.g. 180"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </div>
-            <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
-              <label className={styles.label}>Monthly Debt Service (€) — for DSCR</label>
-              <div className={styles.amountWrap}>
-                <span className={styles.eurSymbol}>€</span>
-                <input
-                  type="number"
-                  className={`${styles.input} ${styles.amountInput}`}
-                  value={config.monthlyDebtService ?? ''}
-                  onChange={(e) => updateConfig({ monthlyDebtService: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                  placeholder="0 = no debt"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4, display: 'block' }}>
-                Total monthly loan / financing repayments. Used to calculate Debt Service Coverage Ratio (DSCR). Leave blank if no debt.
-              </span>
-            </div>
           </div>
         </section>
 

@@ -17,7 +17,7 @@ import {
   totalMonthlyCost, totalAnnualCost,
   costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
   breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
-  allTimeMonthlyTrendData,
+  allTimeMonthlyTrendData, normalizeToMonthly,
 } from '../utils/calculations.js';
 import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
@@ -169,9 +169,16 @@ export default function Dashboard() {
 
   // ── Financial health metrics ──────────────────────────────────────────────
   const usedCosts   = viewMode === 'month' ? periodCosts : filteredCosts;
+
+  const autoDebtService = useMemo(() =>
+    usedCosts
+      .filter((c) => c.category === 'loan' || c.category === 'credit-card')
+      .reduce((sum, c) => sum + normalizeToMonthly(c), 0),
+  [usedCosts]);
+
   const ebitda      = hasPeriodData ? calcEBITDA(usedCosts, periodRevenue)       : null;
   const roi         = hasPeriodData ? calcROI(usedCosts, periodRevenue)           : null;
-  const dscr        = hasPeriodData ? calcDSCR(usedCosts, periodRevenue, config)  : null;
+  const dscr        = hasPeriodData ? calcDSCR(usedCosts, periodRevenue, { ...config, monthlyDebtService: autoDebtService > 0 ? autoDebtService : null }) : null;
   const breakEven   = calcBreakEvenRevenue(usedCosts);
   const payback     = hasPeriodData ? calcPaybackPeriod(usedCosts, periodRevenue) : null;
   const costRecovery= hasPeriodData ? calcCostRecoveryRate(usedCosts, periodRevenue) : null;
@@ -341,9 +348,7 @@ export default function Dashboard() {
               icon={DollarSign}
               label="Revenue / Scooter / Month"
               value={formatEUR(actualRevPerScooter)}
-              sub={config.revenuePerScooter
-                ? `Estimated: ${formatEUR(config.revenuePerScooter)}`
-                : 'Actual from data'}
+              sub="Actual from data"
             />
             <KpiCard
               icon={Activity}
@@ -490,24 +495,6 @@ export default function Dashboard() {
                 </>
               )}
 
-              {!hasPeriodData && config.revenuePerScooter && (
-                <>
-                  <div className={styles.econDivider} />
-                  <div className={styles.econItem}>
-                    <span className={styles.econLabel}>Revenue / Scooter (est.)</span>
-                    <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
-                      {formatEUR(config.revenuePerScooter)}
-                    </span>
-                  </div>
-                  <div className={styles.econItem}>
-                    <span className={styles.econLabel}>Gross Margin (est.)</span>
-                    <span className={styles.econValue}
-                      style={{ color: config.revenuePerScooter - perScooterMonthly >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                      {formatEUR(config.revenuePerScooter - perScooterMonthly)}
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
