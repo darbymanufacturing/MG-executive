@@ -1,8 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 75" fill="none">
-  <!-- White chevron ">" -->
-  <path d="M13 8 L37 37.5 L13 67" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- XSlide wordmark in white -->
-  <text x="55" y="51" font-family="Poppins, sans-serif" font-weight="600" font-size="34" fill="#FFFFFF" letter-spacing="0.4">XSlide</text>
-  <!-- White parallelogram accent — dot above the i -->
-  <polygon points="166,8  179,8  174,22  161,22" fill="#FFFFFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 88" fill="none">
+  <defs>
+    <clipPath id="xl">
+      <rect x="-2" y="-2" width="46" height="92"/>
+    </clipPath>
+    <clipPath id="xr">
+      <rect x="40" y="-2" width="48" height="92"/>
+    </clipPath>
+  </defs>
+
+  <!-- White left arms of X -->
+  <g clip-path="url(#xl)" fill="white">
+    <polygon points="2,4  24,4  86,84  64,84"/>
+    <polygon points="2,84  24,84  86,4  64,4"/>
+  </g>
+
+  <!-- Copper right ">" arms of X -->
+  <g clip-path="url(#xr)" fill="#A35820">
+    <polygon points="2,4  24,4  86,84  64,84"/>
+    <polygon points="2,84  24,84  86,4  64,4"/>
+  </g>
+
+  <!-- SL in white -->
+  <text x="96" y="74"
+        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
+        font-size="72"
+        fill="white">SL</text>
+
+  <!-- i in white (stem; dot will be copper-overridden) -->
+  <text x="218" y="74"
+        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
+        font-size="72"
+        fill="white">i</text>
+
+  <!-- Copper square overrides the white i-dot -->
+  <rect x="219" y="5" width="17" height="17" rx="2" fill="#A35820"/>
+
+  <!-- DE in white -->
+  <text x="245" y="74"
+        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
+        font-size="72"
+        fill="white">DE</text>
 </svg>

@@ -1,8 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <!-- Dark rounded background -->
-  <rect width="64" height="64" rx="12" fill="#131313"/>
-  <!-- White chevron ">" -->
-  <path d="M18 14 L38 32 L18 50" stroke="#FFFFFF" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- White parallelogram accent -->
-  <polygon points="40,13  52,13  48,25  36,25" fill="#FFFFFF"/>
+  <rect width="64" height="64" rx="12" fill="#111111"/>
+
+  <defs>
+    <clipPath id="fl">
+      <rect x="-2" y="-2" width="35" height="68"/>
+    </clipPath>
+    <clipPath id="fr">
+      <rect x="30" y="-2" width="36" height="68"/>
+    </clipPath>
+  </defs>
+
+  <!-- White left arms of X -->
+  <g clip-path="url(#fl)" fill="white">
+    <polygon points="6,8  20,8  58,56  44,56"/>
+    <polygon points="6,56  20,56  58,8  44,8"/>
+  </g>
+
+  <!-- Copper right ">" arms of X -->
+  <g clip-path="url(#fr)" fill="#A35820">
+    <polygon points="6,8  20,8  58,56  44,56"/>
+    <polygon points="6,56  20,56  58,8  44,8"/>
+  </g>
 </svg>
