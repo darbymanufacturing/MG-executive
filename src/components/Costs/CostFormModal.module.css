@@ -57,6 +57,17 @@
   font-style: italic;
 }
 
+.sectionDivider {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-primary-light);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  margin-top: var(--space-1);
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;

@@ -84,7 +84,7 @@ export function monthlyTrendData(costs, year = new Date().getFullYear()) {
     const monthDate = new Date(year, i, 1);
     const entry = { month: `${month} ${year}`, _idx: i };
 
-    ['one-off', 'fixed', 'variable', 'investment'].forEach((cat) => {
+    ['one-off', 'fixed', 'variable', 'investment', 'loan', 'credit-card'].forEach((cat) => {
       let total = 0;
       costs.forEach((c) => {
         if (c.category !== cat) return;
@@ -110,7 +110,9 @@ export function monthlyTrendData(costs, year = new Date().getFullYear()) {
       (entry['one-off'] || 0) +
       (entry['fixed'] || 0) +
       (entry['variable'] || 0) +
-      (entry['investment'] || 0);
+      (entry['investment'] || 0) +
+      (entry['loan'] || 0) +
+      (entry['credit-card'] || 0);
 
     return entry;
   });
@@ -160,4 +162,80 @@ export function projectedCostPerScooterSimple(costs, currentFleetSize, newFleetS
 export function budgetVariance(actual, target) {
   if (!target || target === 0) return null;
   return ((actual - target) / target) * 100;
+}
+
+const ALL_CATS = ['one-off', 'fixed', 'variable', 'investment', 'loan', 'credit-card'];
+
+/**
+ * Multi-year monthly trend data spanning from the earliest cost/revenue date to today.
+ * Optional startYM ('YYYY-MM') to force an earlier start (e.g. when revenue predates costs).
+ * Each entry includes a _key field ('YYYY-MM') for revenue lookup.
+ */
+export function allTimeMonthlyTrendData(costs, startYM = null) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  let startYear = currentYear;
+  let startMonthIdx = currentMonth;
+
+  // Find earliest from cost start dates
+  costs.forEach((c) => {
+    if (c.startDate) {
+      const d = new Date(c.startDate);
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      if (y < startYear || (y === startYear && m < startMonthIdx)) {
+        startYear = y;
+        startMonthIdx = m;
+      }
+    }
+  });
+
+  // Override with caller-provided earliest if it's earlier
+  if (startYM) {
+    const [sy, sm] = startYM.split('-').map(Number);
+    const smIdx = sm - 1;
+    if (sy < startYear || (sy === startYear && smIdx < startMonthIdx)) {
+      startYear = sy;
+      startMonthIdx = smIdx;
+    }
+  }
+
+  const results = [];
+  let y = startYear;
+  let m = startMonthIdx;
+
+  while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+    const monthDate = new Date(y, m, 1);
+    const entry = {
+      month: `${MONTHS[m]} ${y}`,
+      _key: `${y}-${String(m + 1).padStart(2, '0')}`,
+    };
+
+    ALL_CATS.forEach((cat) => {
+      let total = 0;
+      costs.forEach((c) => {
+        if (c.category !== cat) return;
+        const start = c.startDate ? new Date(c.startDate) : null;
+        const end   = c.endDate   ? new Date(c.endDate)   : null;
+        if (c.frequency === 'one-time') {
+          if (start && start.getFullYear() === y && start.getMonth() === m) total += c.amount;
+        } else {
+          const activeFrom = start ? start <= new Date(y, m + 1, 0) : true;
+          const activeTo   = end   ? end   >= monthDate              : true;
+          if (activeFrom && activeTo) total += normalizeToMonthly(c);
+        }
+      });
+      entry[cat] = parseFloat(total.toFixed(2));
+    });
+
+    entry.total = ALL_CATS.reduce((s, k) => s + (entry[k] || 0), 0);
+    results.push(entry);
+
+    m++;
+    if (m > 11) { m = 0; y++; }
+  }
+
+  return results;
 }

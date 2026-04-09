@@ -10,7 +10,7 @@ function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const rev    = payload.find((p) => p.dataKey === 'revenue');
   const profit = payload.find((p) => p.dataKey === 'profit');
-  const costs  = payload.filter((p) => ['fixed','variable','one-off','investment'].includes(p.dataKey));
+  const costs  = payload.filter((p) => ['fixed','variable','one-off','investment','loan','credit-card'].includes(p.dataKey));
   const totalCost = costs.reduce((s, p) => s + (p.value || 0), 0);
 
   return (
@@ -61,16 +61,19 @@ export default function RevenueCostTrend({ data }) {
             formatter={(value) => {
               const labels = {
                 'one-off': 'One-Off', fixed: 'Fixed', variable: 'Variable',
-                investment: 'Investment', revenue: 'Revenue', profit: 'Net Profit/Loss',
+                investment: 'Investment', loan: 'Loan', 'credit-card': 'Credit Card',
+                revenue: 'Revenue', profit: 'Net Profit/Loss',
               };
               return <span style={{ color: '#ccc', fontSize: 12 }}>{labels[value] || value}</span>;
             }}
           />
           {/* Stacked cost bars */}
-          <Bar dataKey="one-off"    stackId="costs" fill={CHART_COLORS['one-off']}   name="One-Off"    radius={[0,0,0,0]} />
-          <Bar dataKey="investment" stackId="costs" fill={CHART_COLORS['investment']} name="Investment" radius={[0,0,0,0]} />
-          <Bar dataKey="variable"   stackId="costs" fill={CHART_COLORS['variable']}   name="Variable"   radius={[0,0,0,0]} />
-          <Bar dataKey="fixed"      stackId="costs" fill={CHART_COLORS['fixed']}      name="Fixed"      radius={[4,4,0,0]} />
+          <Bar dataKey="one-off"     stackId="costs" fill={CHART_COLORS['one-off']}     name="One-Off"     radius={[0,0,0,0]} />
+          <Bar dataKey="investment"  stackId="costs" fill={CHART_COLORS['investment']}  name="Investment"  radius={[0,0,0,0]} />
+          <Bar dataKey="variable"    stackId="costs" fill={CHART_COLORS['variable']}    name="Variable"    radius={[0,0,0,0]} />
+          <Bar dataKey="loan"        stackId="costs" fill={CHART_COLORS['loan']}        name="Loan"        radius={[0,0,0,0]} />
+          <Bar dataKey="credit-card" stackId="costs" fill={CHART_COLORS['credit-card']} name="Credit Card" radius={[0,0,0,0]} />
+          <Bar dataKey="fixed"       stackId="costs" fill={CHART_COLORS['fixed']}       name="Fixed"       radius={[4,4,0,0]} />
           {/* Revenue line */}
           <Line
             type="monotone"

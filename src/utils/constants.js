@@ -31,6 +31,22 @@ export const CATEGORIES = {
     icon: 'PiggyBank',
     description: 'Capital expenditure and fleet expansion',
   },
+  loan: {
+    label: 'Loan',
+    fullLabel: 'Loan Repayments',
+    color: '#1E88E5',
+    textColor: '#FFFFFF',
+    icon: 'Landmark',
+    description: 'Bank loans, leasing, equipment financing',
+  },
+  'credit-card': {
+    label: 'Credit Card',
+    fullLabel: 'Credit Card Payments',
+    color: '#8E24AA',
+    textColor: '#FFFFFF',
+    icon: 'CreditCard',
+    description: 'Credit card charges and revolving credit',
+  },
 };
 
 export const CATEGORY_KEYS = Object.keys(CATEGORIES);
@@ -83,10 +99,12 @@ export const STORAGE_KEYS = {
 export const CURRENT_VERSION = '1.0.0';
 
 export const CHART_COLORS = {
-  'one-off':   '#A0521D',
-  fixed:       '#C97D49',
-  variable:    '#CCCCCC',
-  investment:  '#7A3E16',
+  'one-off':     '#A0521D',
+  fixed:         '#C97D49',
+  variable:      '#CCCCCC',
+  investment:    '#7A3E16',
+  loan:          '#1E88E5',
+  'credit-card': '#8E24AA',
 };
 
 export const MONTHS = [

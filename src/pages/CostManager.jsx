@@ -21,6 +21,8 @@ const FILTER_TABS = [
   { key: 'fixed', label: 'Fixed' },
   { key: 'variable', label: 'Variable' },
   { key: 'investment', label: 'Investments' },
+  { key: 'loan', label: 'Loans' },
+  { key: 'credit-card', label: 'Credit Cards' },
 ];
 
 const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };

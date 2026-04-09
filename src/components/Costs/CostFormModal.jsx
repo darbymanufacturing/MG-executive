@@ -15,6 +15,15 @@ const EMPTY = {
   endDate: '',
   notes: '',
   location: '',
+  // Loan-specific
+  lenderName: '',
+  principalAmount: '',
+  interestRate: '',
+  loanTermMonths: '',
+  // Credit card-specific
+  cardName: '',
+  creditLimit: '',
+  minimumPayment: '',
 };
 
 export default function CostFormModal({ isOpen, onClose, onSave, initialData, locations }) {
@@ -46,9 +55,18 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
     if (Object.keys(errs).length) { setErrors(errs); return; }
     onSave({
       ...form,
-      amount: parseFloat(form.amount),
-      endDate: form.endDate || null,
-      location: form.location || null,
+      amount:         parseFloat(form.amount),
+      endDate:        form.endDate        || null,
+      location:       form.location       || null,
+      // Loan fields
+      lenderName:     form.lenderName     || null,
+      principalAmount:form.principalAmount ? parseFloat(form.principalAmount) : null,
+      interestRate:   form.interestRate   ? parseFloat(form.interestRate)     : null,
+      loanTermMonths: form.loanTermMonths ? parseInt(form.loanTermMonths, 10) : null,
+      // Credit card fields
+      cardName:       form.cardName       || null,
+      creditLimit:    form.creditLimit    ? parseFloat(form.creditLimit)      : null,
+      minimumPayment: form.minimumPayment ? parseFloat(form.minimumPayment)   : null,
     });
     onClose();
   };
@@ -160,6 +178,60 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
             rows={2}
           />
         </div>
+
+        {/* Loan-specific fields */}
+        {form.category === 'loan' && (
+          <>
+            <div className={styles.sectionDivider}>Loan Details</div>
+            <div className={styles.row}>
+              <div className={styles.field}>
+                <label className={styles.label}>Lender / Bank</label>
+                <input className={styles.input} value={form.lenderName} onChange={set('lenderName')} placeholder="e.g. Alpha Bank" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Interest Rate (% / yr)</label>
+                <input type="number" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 5.5" step="0.01" min="0" />
+              </div>
+            </div>
+            <div className={styles.row}>
+              <div className={styles.field}>
+                <label className={styles.label}>Original Principal (€)</label>
+                <input type="number" className={styles.input} value={form.principalAmount} onChange={set('principalAmount')} placeholder="e.g. 50000" step="0.01" min="0" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Loan Term (months)</label>
+                <input type="number" className={styles.input} value={form.loanTermMonths} onChange={set('loanTermMonths')} placeholder="e.g. 60" step="1" min="1" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Credit card-specific fields */}
+        {form.category === 'credit-card' && (
+          <>
+            <div className={styles.sectionDivider}>Credit Card Details</div>
+            <div className={styles.row}>
+              <div className={styles.field}>
+                <label className={styles.label}>Card / Bank Name</label>
+                <input className={styles.input} value={form.cardName} onChange={set('cardName')} placeholder="e.g. Eurobank Visa" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Interest Rate / APR (%)</label>
+                <input type="number" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 18.5" step="0.01" min="0" />
+              </div>
+            </div>
+            <div className={styles.row}>
+              <div className={styles.field}>
+                <label className={styles.label}>Credit Limit (€)</label>
+                <input type="number" className={styles.input} value={form.creditLimit} onChange={set('creditLimit')} placeholder="e.g. 10000" step="0.01" min="0" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Minimum Payment (€)</label>
+                <input type="number" className={styles.input} value={form.minimumPayment} onChange={set('minimumPayment')} placeholder="e.g. 250" step="0.01" min="0" />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Actions */}
         <div className={styles.actions}>

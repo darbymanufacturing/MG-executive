@@ -1,5 +1,5 @@
 import { MONTHS } from './constants.js';
-import { totalMonthlyCost, totalAnnualCost } from './calculations.js';
+import { totalMonthlyCost, totalAnnualCost, allTimeMonthlyTrendData } from './calculations.js';
 
 /** Filter revenue rows to a date range (inclusive). Pass null to skip bound. */
 export function filterByRange(revenueData, startDate, endDate) {
@@ -121,6 +121,35 @@ export function combinedMonthlyTrend(costTrendData, revenueData, year) {
 export function filterRevenueByLocation(revenueData, locationFilter) {
   if (!locationFilter || locationFilter === 'all') return revenueData;
   return revenueData.filter((r) => r.location === locationFilter);
+}
+
+/**
+ * All-time combined trend spanning from the earliest data point to today.
+ * Revenue is looked up by YYYY-MM key, so it works across multiple years
+ * without the 3-char abbreviation collision of combinedMonthlyTrend.
+ */
+export function allTimeCombinedTrend(costs, revenueData) {
+  // Find earliest revenue month to extend cost range if needed
+  let earliestRevYM = null;
+  revenueData.forEach((r) => {
+    const ym = r.date.slice(0, 7);
+    if (!earliestRevYM || ym < earliestRevYM) earliestRevYM = ym;
+  });
+
+  const costTrend = allTimeMonthlyTrendData(costs, earliestRevYM);
+
+  // Build revenue lookup by YYYY-MM
+  const revByKey = {};
+  revenueData.forEach((r) => {
+    const key = r.date.slice(0, 7);
+    revByKey[key] = (revByKey[key] || 0) + (r.totalPaidRevenue || 0);
+  });
+
+  return costTrend.map(({ _key, ...rest }) => ({
+    ...rest,
+    revenue: parseFloat((revByKey[_key] || 0).toFixed(2)),
+    profit:  parseFloat(((revByKey[_key] || 0) - (rest.total || 0)).toFixed(2)),
+  }));
 }
 
 /**

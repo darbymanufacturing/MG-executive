@@ -17,11 +17,12 @@ import {
   totalMonthlyCost, totalAnnualCost,
   costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
   breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
+  allTimeMonthlyTrendData,
 } from '../utils/calculations.js';
 import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
-  filterRevenueByLocation,
+  filterRevenueByLocation, allTimeCombinedTrend,
 } from '../utils/revenueCalculations.js';
 import {
   calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
@@ -138,7 +139,9 @@ export default function Dashboard() {
   const perScooterDaily   = costPerScooterDaily(filteredCosts, config.fleetSize);
   const perScooterAnnual  = costPerScooterAnnual(filteredCosts, config.fleetSize);
   const breakdown         = breakdownByCategory(viewMode === 'month' ? periodCosts : filteredCosts);
-  const trendData         = monthlyTrendData(filteredCosts, chartYear);
+  const trendData         = viewMode === 'all'
+    ? allTimeMonthlyTrendData(filteredCosts)
+    : monthlyTrendData(filteredCosts, chartYear);
   const budgetVar         = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
 
   // ── Revenue metrics ───────────────────────────────────────────────────────
@@ -148,7 +151,11 @@ export default function Dashboard() {
   const revPerTrip         = revenuePerTrip(periodRevenue);
   const utilization        = vehicleUtilization(periodRevenue, config.fleetSize);
   const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, config.fleetSize);
-  const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, filteredRevenue, chartYear) : null;
+  const combinedTrend      = hasRevenue
+    ? (viewMode === 'all'
+        ? allTimeCombinedTrend(filteredCosts, filteredRevenue)
+        : combinedMonthlyTrend(trendData, filteredRevenue, chartYear))
+    : null;
 
   // Monthly revenue rate for break-even comparison
   const periodMonthlyRevenue = hasPeriodData
@@ -255,8 +262,8 @@ export default function Dashboard() {
               </h2>
               <span className={styles.chartSub}>
                 {hasRevenue
-                  ? `${chartYear} · Revenue line + cost bars + profit/loss`
-                  : `${chartYear} · Stacked by category`}
+                  ? (viewMode === 'all' ? 'All time · Revenue line + cost bars + profit/loss' : `${chartYear} · Revenue line + cost bars + profit/loss`)
+                  : (viewMode === 'all' ? 'All time · Stacked by category' : `${chartYear} · Stacked by category`)}
               </span>
             </div>
             <div className={styles.chartFull}>
