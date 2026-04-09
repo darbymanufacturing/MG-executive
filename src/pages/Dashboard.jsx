@@ -19,7 +19,7 @@ import {
   breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
 } from '../utils/calculations.js';
 import {
-  totalRevenue, currentMonthRevenue, avgTripsPerDay, revenuePerTrip,
+  totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation,
 } from '../utils/revenueCalculations.js';
@@ -31,64 +31,152 @@ import {
 import { formatEUR, formatEURCompact, formatPercent, formatTrips } from '../utils/formatters.js';
 import styles from './Dashboard.module.css';
 
-const PERIODS = ['Monthly', 'Quarterly', 'Annual'];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtMonth(s) {
+  if (!s) return '';
+  const [y, m] = s.split('-');
+  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function todayMonthStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const selectStyle = {
+  background: 'var(--color-surface-2)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-md)',
+  color: 'var(--color-text-primary)',
+  fontFamily: 'var(--font-body)',
+  fontSize: 'var(--text-sm)',
+  padding: '7px 10px',
+  outline: 'none',
+  cursor: 'pointer',
+};
 
 export default function Dashboard() {
   const { costs, config, loadSampleData } = useCosts();
   const { revenueData } = useRevenue();
   const navigate = useNavigate();
-  const [period, setPeriod] = useState('Monthly');
+
+  const [viewMode,      setViewMode]      = useState('month'); // 'month' | 'range' | 'all'
+  const [selectedMonth, setSelectedMonth] = useState(todayMonthStr);
+  const [rangeFrom,     setRangeFrom]     = useState('');
+  const [rangeTo,       setRangeTo]       = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
   const locations = config.locations || [];
 
-  const currentYear = new Date().getFullYear();
-  const availableYears = useMemo(() => {
-    const years = new Set([currentYear, ...revenueData.map((r) => parseInt(r.date.slice(0, 4), 10))]);
-    return [...years].filter(Boolean).sort((a, b) => b - a);
-  }, [revenueData, currentYear]);
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-
-  // ── Location-filtered arrays (upstream filtering) ─────────────────────────
-  const filteredCosts   = useMemo(() => filterCostsByLocation(costs, locationFilter),   [costs, locationFilter]);
+  // ── Location-filtered base arrays ─────────────────────────────────────────
+  const filteredCosts   = useMemo(() => filterCostsByLocation(costs, locationFilter),         [costs, locationFilter]);
   const filteredRevenue = useMemo(() => filterRevenueByLocation(revenueData, locationFilter), [revenueData, locationFilter]);
 
-  const multiplier = period === 'Monthly' ? 1 : period === 'Quarterly' ? 3 : 12;
-  const hasRevenue = filteredRevenue.length > 0;
+  // ── Available months for selectors ───────────────────────────────────────
+  const availableMonths = useMemo(() => {
+    const months = new Set([todayMonthStr(), ...filteredRevenue.map((r) => r.date.slice(0, 7))]);
+    return [...months].sort((a, b) => b.localeCompare(a)); // newest first
+  }, [filteredRevenue]);
+
+  // ── Period-filtered revenue ───────────────────────────────────────────────
+  const periodRevenue = useMemo(() => {
+    if (viewMode === 'month') {
+      return filteredRevenue.filter((r) => r.date.startsWith(selectedMonth));
+    }
+    if (viewMode === 'range') {
+      return filteredRevenue.filter((r) => {
+        const d = r.date;
+        return (!rangeFrom || d >= rangeFrom + '-01') && (!rangeTo || d <= rangeTo + '-31');
+      });
+    }
+    return filteredRevenue;
+  }, [filteredRevenue, viewMode, selectedMonth, rangeFrom, rangeTo]);
+
+  // ── Period-filtered costs (active in selected month) ─────────────────────
+  const periodCosts = useMemo(() => {
+    if (viewMode !== 'month' || !selectedMonth) return filteredCosts;
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const monthIdx = m - 1;
+    const monthStart = new Date(y, monthIdx, 1);
+    const monthEnd   = new Date(y, monthIdx + 1, 0);
+    return filteredCosts.filter((c) => {
+      const start = c.startDate ? new Date(c.startDate) : null;
+      const end   = c.endDate   ? new Date(c.endDate)   : null;
+      if (c.frequency === 'one-time') {
+        return start && start.getFullYear() === y && start.getMonth() === monthIdx;
+      }
+      return (start ? start <= monthEnd : true) && (end ? end >= monthStart : true);
+    });
+  }, [filteredCosts, viewMode, selectedMonth]);
+
+  // ── Period span (months count for range) ─────────────────────────────────
+  const periodMonths = useMemo(() => {
+    if (viewMode === 'month') return 1;
+    if (viewMode === 'range' && rangeFrom && rangeTo) {
+      const [fy, fm] = rangeFrom.split('-').map(Number);
+      const [ty, tm] = rangeTo.split('-').map(Number);
+      return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1);
+    }
+    return 1;
+  }, [viewMode, rangeFrom, rangeTo]);
+
+  // ── Chart year (drives the trend chart) ──────────────────────────────────
+  const chartYear = useMemo(() => {
+    if (viewMode === 'month') return parseInt(selectedMonth.split('-')[0], 10);
+    if (viewMode === 'range' && rangeTo) return parseInt(rangeTo.split('-')[0], 10);
+    return new Date().getFullYear();
+  }, [viewMode, selectedMonth, rangeTo]);
+
+  const hasRevenue     = filteredRevenue.length > 0;      // any revenue for chart
+  const hasPeriodData  = periodRevenue.length > 0;         // revenue in selected period
 
   // ── Cost metrics ─────────────────────────────────────────────────────────
-  const monthlyTotal       = totalMonthlyCost(filteredCosts);
-  const annualTotal        = totalAnnualCost(filteredCosts);
-  const perScooterMonthly  = costPerScooterMonthly(filteredCosts, config.fleetSize);
-  const perScooterDaily    = costPerScooterDaily(filteredCosts, config.fleetSize);
-  const perScooterAnnual   = costPerScooterAnnual(filteredCosts, config.fleetSize);
-  const breakdown          = breakdownByCategory(filteredCosts);
-  const trendData          = monthlyTrendData(filteredCosts, selectedYear);
-  const budgetVar          = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
-  const displayTotal       = period === 'Annual' ? annualTotal : monthlyTotal * multiplier;
-  const displayPerScooter  = period === 'Annual' ? perScooterAnnual : perScooterMonthly * multiplier;
+  const monthlyCostRate   = totalMonthlyCost(viewMode === 'month' ? periodCosts : filteredCosts);
+  const displayTotal      = monthlyCostRate * periodMonths;
+  const annualTotal       = totalAnnualCost(filteredCosts);
+  const perScooterMonthly = costPerScooterMonthly(filteredCosts, config.fleetSize);
+  const perScooterDaily   = costPerScooterDaily(filteredCosts, config.fleetSize);
+  const perScooterAnnual  = costPerScooterAnnual(filteredCosts, config.fleetSize);
+  const breakdown         = breakdownByCategory(viewMode === 'month' ? periodCosts : filteredCosts);
+  const trendData         = monthlyTrendData(filteredCosts, chartYear);
+  const budgetVar         = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
 
   // ── Revenue metrics ───────────────────────────────────────────────────────
-  const monthlyRevenue     = currentMonthRevenue(filteredRevenue);
-  const displayRevenue     = period === 'Annual'
-    ? totalRevenue(filteredRevenue)
-    : period === 'Quarterly' ? monthlyRevenue * 3 : monthlyRevenue;
+  const displayRevenue     = totalRevenue(periodRevenue);
   const displayPnL         = displayRevenue - displayTotal;
-  const tripsPerDay        = avgTripsPerDay(filteredRevenue);
-  const revPerTrip         = revenuePerTrip(filteredRevenue);
-  const utilization        = vehicleUtilization(filteredRevenue, config.fleetSize);
-  const actualRevPerScooter= actualRevenuePerScooterMonthly(filteredRevenue, config.fleetSize);
-  const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, filteredRevenue, selectedYear) : null;
+  const tripsPerDay        = avgTripsPerDay(periodRevenue);
+  const revPerTrip         = revenuePerTrip(periodRevenue);
+  const utilization        = vehicleUtilization(periodRevenue, config.fleetSize);
+  const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, config.fleetSize);
+  const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, filteredRevenue, chartYear) : null;
+
+  // Monthly revenue rate for break-even comparison
+  const periodMonthlyRevenue = hasPeriodData
+    ? totalRevenue(periodRevenue) / periodMonths
+    : 0;
+
+  // MoM growth only meaningful with multiple months
+  const revGrowthMoM = viewMode !== 'month' && hasPeriodData
+    ? calcRevGrowthMoM(periodRevenue)
+    : null;
 
   // ── Financial health metrics ──────────────────────────────────────────────
-  const ebitda       = hasRevenue ? calcEBITDA(filteredCosts, filteredRevenue) : null;
-  const roi          = hasRevenue ? calcROI(filteredCosts, filteredRevenue) : null;
-  const dscr         = hasRevenue ? calcDSCR(filteredCosts, filteredRevenue, config) : null;
-  const breakEven    = calcBreakEvenRevenue(filteredCosts);
-  const payback      = hasRevenue ? calcPaybackPeriod(filteredCosts, filteredRevenue) : null;
-  const costRecovery = hasRevenue ? calcCostRecoveryRate(filteredCosts, filteredRevenue) : null;
-  const revGrowthMoM = hasRevenue ? calcRevGrowthMoM(filteredRevenue) : null;
+  const usedCosts   = viewMode === 'month' ? periodCosts : filteredCosts;
+  const ebitda      = hasPeriodData ? calcEBITDA(usedCosts, periodRevenue)       : null;
+  const roi         = hasPeriodData ? calcROI(usedCosts, periodRevenue)           : null;
+  const dscr        = hasPeriodData ? calcDSCR(usedCosts, periodRevenue, config)  : null;
+  const breakEven   = calcBreakEvenRevenue(usedCosts);
+  const payback     = hasPeriodData ? calcPaybackPeriod(usedCosts, periodRevenue) : null;
+  const costRecovery= hasPeriodData ? calcCostRecoveryRate(usedCosts, periodRevenue) : null;
 
   const isEmpty = costs.length === 0;
+
+  // ── Period label for card titles ─────────────────────────────────────────
+  const periodLabel = viewMode === 'month'
+    ? fmtMonth(selectedMonth)
+    : viewMode === 'range' && rangeFrom && rangeTo
+      ? `${fmtMonth(rangeFrom)} – ${fmtMonth(rangeTo)}`
+      : 'All Time';
 
   return (
     <div className={styles.page} id="dashboard-export">
@@ -97,38 +185,47 @@ export default function Dashboard() {
         subtitle={`Fleet overview · ${config.fleetSize} scooters`}
         actions={
           <div className={styles.headerActions}>
+            {/* View mode toggle */}
             <div className={styles.periodToggle}>
-              {PERIODS.map((p) => (
+              {[['month', 'By Month'], ['range', 'Range'], ['all', 'All Time']].map(([mode, label]) => (
                 <button
-                  key={p}
-                  className={`${styles.periodBtn} ${period === p ? styles.periodActive : ''}`}
-                  onClick={() => setPeriod(p)}
+                  key={mode}
+                  className={`${styles.periodBtn} ${viewMode === mode ? styles.periodActive : ''}`}
+                  onClick={() => setViewMode(mode)}
                 >
-                  {p}
+                  {label}
                 </button>
               ))}
             </div>
-            {availableYears.length > 1 && (
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                style={{
-                  background: 'var(--color-surface-2)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--color-text-primary)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 'var(--text-sm)',
-                  padding: '7px 10px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>{y}</option>
+
+            {/* Month picker */}
+            {viewMode === 'month' && (
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={selectStyle}>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>{fmtMonth(m)}</option>
                 ))}
               </select>
             )}
+
+            {/* Range pickers */}
+            {viewMode === 'range' && (
+              <>
+                <select value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} style={selectStyle}>
+                  <option value="">From…</option>
+                  {[...availableMonths].reverse().map((m) => (
+                    <option key={m} value={m}>{fmtMonth(m)}</option>
+                  ))}
+                </select>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>→</span>
+                <select value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} style={selectStyle}>
+                  <option value="">To…</option>
+                  {availableMonths.map((m) => (
+                    <option key={m} value={m}>{fmtMonth(m)}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
           </div>
         }
@@ -138,7 +235,7 @@ export default function Dashboard() {
         {isEmpty && (
           <div className={styles.emptyBanner}>
             <div>
-              <strong>No data yet.</strong> Load sample data to see the dashboard in action, or go to Cost Manager to add your first cost.
+              <strong>No data yet.</strong> Load sample data or go to Cost Manager to add your first cost.
             </div>
             <div className={styles.emptyActions}>
               <Button variant="outline" size="sm" onClick={loadSampleData}>Load Sample Data</Button>
@@ -149,22 +246,44 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── Revenue vs. Costs chart — full width, top ── */}
+        {(hasRevenue || !isEmpty) && (
+          <div className={styles.chartCardFull}>
+            <div className={styles.chartHeader}>
+              <h2 className={styles.chartTitle}>
+                {hasRevenue ? 'Revenue vs. Costs' : 'Monthly Cost Trend'}
+              </h2>
+              <span className={styles.chartSub}>
+                {hasRevenue
+                  ? `${chartYear} · Revenue line + cost bars + profit/loss`
+                  : `${chartYear} · Stacked by category`}
+              </span>
+            </div>
+            <div className={styles.chartFull}>
+              {hasRevenue
+                ? <RevenueCostTrend data={combinedTrend} />
+                : <MonthlyCostTrend data={trendData} />
+              }
+            </div>
+          </div>
+        )}
+
         {/* ── Cost KPI Cards ── */}
         <div className={styles.kpiGrid}>
           <KpiCard
             icon={Euro}
-            label={`Total ${period} Cost`}
+            label={`Total Cost · ${periodLabel}`}
             value={formatEURCompact(displayTotal)}
-            sub={period !== 'Annual' ? `${formatEURCompact(annualTotal)}/year` : `${formatEURCompact(monthlyTotal)}/month`}
+            sub={`${formatEURCompact(annualTotal)}/year estimate`}
             accent
           />
           <KpiCard
             icon={Bike}
-            label={`Cost per Scooter · ${period}`}
-            value={formatEUR(displayPerScooter)}
+            label="Cost per Scooter / Month"
+            value={formatEUR(perScooterMonthly)}
             sub={`${formatEUR(perScooterDaily)}/day`}
             highlight
-            trend={period === 'Monthly' ? budgetVar : null}
+            trend={budgetVar}
           />
           <KpiCard
             icon={ListChecks}
@@ -189,24 +308,24 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* ── Revenue KPI Cards (only when revenue data exists) ── */}
+        {/* ── Revenue KPI Cards ── */}
         {hasRevenue && (
           <div className={styles.revenueDivider}>
-            <span className={styles.revenueDividerLabel}>Revenue & Operations</span>
+            <span className={styles.revenueDividerLabel}>Revenue & Operations · {periodLabel}</span>
           </div>
         )}
         {hasRevenue && (
           <div className={styles.kpiGrid}>
             <KpiCard
               icon={TrendingUp}
-              label={`Total ${period} Revenue`}
+              label={`Revenue · ${periodLabel}`}
               value={formatEURCompact(displayRevenue)}
-              sub={`${formatEURCompact(totalRevenue(filteredRevenue))} all time`}
+              sub={hasPeriodData ? `${formatEURCompact(totalRevenue(filteredRevenue))} all time` : 'No data for this period'}
               accent
             />
             <KpiCard
               icon={displayPnL >= 0 ? TrendingUp : TrendingDown}
-              label={`${period} Profit / Loss`}
+              label={`Profit / Loss · ${periodLabel}`}
               value={formatEURCompact(displayPnL)}
               sub={`Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)}`}
               highlight
@@ -235,10 +354,10 @@ export default function Dashboard() {
         )}
 
         {/* ── Financial Health KPIs ── */}
-        {hasRevenue && (
+        {hasPeriodData && (
           <>
             <div className={styles.revenueDivider}>
-              <span className={styles.revenueDividerLabel}>Financial Health</span>
+              <span className={styles.revenueDividerLabel}>Financial Health · {periodLabel}</span>
             </div>
             <div className={styles.kpiGrid}>
               <KpiCard
@@ -281,10 +400,10 @@ export default function Dashboard() {
                 <span className={styles.breakEvenSub}>Minimum monthly revenue needed to cover all costs</span>
               </div>
               <div className={styles.breakEvenStatus}>
-                <div className={`${styles.breakEvenPill} ${monthlyRevenue >= breakEven ? styles.breakEvenGreen : styles.breakEvenRed}`}>
-                  {monthlyRevenue >= breakEven
-                    ? `+${formatEURCompact(monthlyRevenue - breakEven)} above break-even`
-                    : `${formatEURCompact(breakEven - monthlyRevenue)} short of break-even`}
+                <div className={`${styles.breakEvenPill} ${periodMonthlyRevenue >= breakEven ? styles.breakEvenGreen : styles.breakEvenRed}`}>
+                  {periodMonthlyRevenue >= breakEven
+                    ? `+${formatEURCompact(periodMonthlyRevenue - breakEven)} above break-even`
+                    : `${formatEURCompact(breakEven - periodMonthlyRevenue)} short of break-even`}
                 </div>
                 {revGrowthMoM !== null && (
                   <div className={styles.revGrowth}>
@@ -308,107 +427,81 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* ── Charts ── */}
+        {/* ── Bottom row: Cost Breakdown + Per-Scooter Economics ── */}
         <div className={styles.chartsGrid}>
           <div className={styles.chartCard}>
             <div className={styles.chartHeader}>
               <h2 className={styles.chartTitle}>Cost Breakdown</h2>
-              <span className={styles.chartSub}>By category · {period}</span>
+              <span className={styles.chartSub}>By category · {periodLabel}</span>
             </div>
             <CostBreakdownChart breakdown={breakdown} />
           </div>
 
           <div className={styles.chartCard}>
             <div className={styles.chartHeader}>
-              <h2 className={styles.chartTitle}>
-                {hasRevenue ? 'Revenue vs. Costs' : 'Monthly Cost Trend'}
-              </h2>
-              <span className={styles.chartSub}>
-                {hasRevenue ? 'Revenue line + cost bars + profit/loss' : 'Current year, stacked by category'}
-              </span>
+              <h2 className={styles.chartTitle}>Per-Scooter Economics</h2>
+              <span className={styles.chartSub}>Monthly rates</span>
             </div>
-            {hasRevenue
-              ? <RevenueCostTrend data={combinedTrend} />
-              : <MonthlyCostTrend data={trendData} />
-            }
-          </div>
-        </div>
+            <div className={styles.economicsGrid}>
+              <div className={styles.econItem}>
+                <span className={styles.econLabel}>Cost / Month</span>
+                <span className={styles.econValue}>{formatEUR(perScooterMonthly)}</span>
+              </div>
+              <div className={styles.econItem}>
+                <span className={styles.econLabel}>Cost / Day</span>
+                <span className={styles.econValue}>{formatEUR(perScooterDaily)}</span>
+              </div>
+              <div className={styles.econItem}>
+                <span className={styles.econLabel}>Cost / Year</span>
+                <span className={styles.econValue}>{formatEUR(perScooterAnnual)}</span>
+              </div>
 
-        {/* ── Per-Scooter Economics ── */}
-        <div className={styles.economicsCard}>
-          <h2 className={styles.chartTitle}>Per-Scooter Economics</h2>
-          <div className={styles.economicsGrid}>
-            <div className={styles.econItem}>
-              <span className={styles.econLabel}>Cost / Month</span>
-              <span className={styles.econValue}>{formatEUR(perScooterMonthly)}</span>
-            </div>
-            <div className={styles.econItem}>
-              <span className={styles.econLabel}>Cost / Day</span>
-              <span className={styles.econValue}>{formatEUR(perScooterDaily)}</span>
-            </div>
-            <div className={styles.econItem}>
-              <span className={styles.econLabel}>Cost / Year</span>
-              <span className={styles.econValue}>{formatEUR(perScooterAnnual)}</span>
-            </div>
+              {hasPeriodData && actualRevPerScooter !== null && (
+                <>
+                  <div className={styles.econDivider} />
+                  <div className={styles.econItem}>
+                    <span className={styles.econLabel}>Revenue / Scooter</span>
+                    <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
+                      {formatEUR(actualRevPerScooter)}
+                    </span>
+                  </div>
+                  <div className={styles.econItem}>
+                    <span className={styles.econLabel}>Gross Margin</span>
+                    <span className={styles.econValue}
+                      style={{ color: actualRevPerScooter - perScooterMonthly >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                      {formatEUR(actualRevPerScooter - perScooterMonthly)}
+                    </span>
+                  </div>
+                  <div className={styles.econItem}>
+                    <span className={styles.econLabel}>Margin %</span>
+                    <span className={styles.econValue}>
+                      {actualRevPerScooter > 0
+                        ? `${(((actualRevPerScooter - perScooterMonthly) / actualRevPerScooter) * 100).toFixed(1)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                </>
+              )}
 
-            {/* Actual revenue (from data) */}
-            {hasRevenue && actualRevPerScooter !== null && (
-              <>
-                <div className={styles.econDivider} />
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>
-                    Revenue / Scooter
-                    {config.revenuePerScooter ? ' (actual)' : ''}
-                  </span>
-                  <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
-                    {formatEUR(actualRevPerScooter)}
-                  </span>
-                </div>
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>Gross Margin</span>
-                  <span
-                    className={styles.econValue}
-                    style={{ color: actualRevPerScooter - perScooterMonthly >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}
-                  >
-                    {formatEUR(actualRevPerScooter - perScooterMonthly)}
-                  </span>
-                </div>
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>Margin %</span>
-                  <span className={styles.econValue}>
-                    {actualRevPerScooter > 0
-                      ? `${(((actualRevPerScooter - perScooterMonthly) / actualRevPerScooter) * 100).toFixed(1)}%`
-                      : '—'}
-                  </span>
-                </div>
-              </>
-            )}
-
-            {/* Estimated revenue (from config, shown only when no real data) */}
-            {!hasRevenue && config.revenuePerScooter && (
-              <>
-                <div className={styles.econDivider} />
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>Revenue / Scooter (est.)</span>
-                  <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
-                    {formatEUR(config.revenuePerScooter)}
-                  </span>
-                </div>
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>Gross Margin (est.)</span>
-                  <span className={styles.econValue}
-                    style={{ color: config.revenuePerScooter - perScooterMonthly >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                    {formatEUR(config.revenuePerScooter - perScooterMonthly)}
-                  </span>
-                </div>
-                <div className={styles.econItem}>
-                  <span className={styles.econLabel}>Margin % (est.)</span>
-                  <span className={styles.econValue}>
-                    {`${(((config.revenuePerScooter - perScooterMonthly) / config.revenuePerScooter) * 100).toFixed(1)}%`}
-                  </span>
-                </div>
-              </>
-            )}
+              {!hasPeriodData && config.revenuePerScooter && (
+                <>
+                  <div className={styles.econDivider} />
+                  <div className={styles.econItem}>
+                    <span className={styles.econLabel}>Revenue / Scooter (est.)</span>
+                    <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
+                      {formatEUR(config.revenuePerScooter)}
+                    </span>
+                  </div>
+                  <div className={styles.econItem}>
+                    <span className={styles.econLabel}>Gross Margin (est.)</span>
+                    <span className={styles.econValue}
+                      style={{ color: config.revenuePerScooter - perScooterMonthly >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                      {formatEUR(config.revenuePerScooter - perScooterMonthly)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
