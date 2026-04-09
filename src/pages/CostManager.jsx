@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin } from 'lucide-react';
+import CostIntroOverlay from '../components/Costs/CostIntroOverlay.jsx';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import CostFormModal from '../components/Costs/CostFormModal.jsx';
@@ -30,6 +31,7 @@ const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };
 export default function CostManager() {
   const { costs, config, addCost, updateCost, deleteCost, importData } = useCosts();
   const locations = config.locations || [];
+  const [showIntro, setShowIntro] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -110,6 +112,7 @@ export default function CostManager() {
 
   return (
     <div className={styles.page}>
+      {showIntro && <CostIntroOverlay onDone={() => setShowIntro(false)} />}
       <Header
         title="Cost Manager"
         subtitle="Add, edit and remove all fleet cost items"

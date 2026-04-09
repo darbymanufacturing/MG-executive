@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Trash2, TrendingUp } from 'lucide-react';
+import RevenueIntroOverlay from '../components/Revenue/RevenueIntroOverlay.jsx';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
@@ -18,6 +19,7 @@ export default function Revenue() {
   const locations = config.locations || [];
   const [clearConfirm, setClearConfirm] = useState(false);
   const [locationFilter, setLocationFilter] = useState('all');
+  const [showIntro, setShowIntro] = useState(true);
 
   const filteredRevenue = useMemo(
     () => filterRevenueByLocation(revenueData, locationFilter),
@@ -32,6 +34,7 @@ export default function Revenue() {
 
   return (
     <div className={styles.page}>
+      {showIntro && <RevenueIntroOverlay onDone={() => setShowIntro(false)} />}
       <Header
         title="Revenue"
         subtitle="Import and browse daily revenue data from your platform CSV exports"
