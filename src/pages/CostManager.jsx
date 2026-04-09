@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Plus, Search, Pencil, Trash2, ListChecks } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import CostFormModal from '../components/Costs/CostFormModal.jsx';
@@ -9,7 +9,9 @@ import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { CATEGORIES, FREQUENCIES } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
-import { normalizeToMonthly } from '../utils/calculations.js';
+import { normalizeToMonthly, getCostStatus } from '../utils/calculations.js';
+import { exportCostsCSV, downloadCostTemplate } from '../utils/exportData.js';
+import { parseCostsCSV } from '../utils/costCsvParser.js';
 import styles from './CostManager.module.css';
 
 const FILTER_TABS = [
@@ -20,8 +22,10 @@ const FILTER_TABS = [
   { key: 'investment', label: 'Investments' },
 ];
 
+const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };
+
 export default function CostManager() {
-  const { costs, addCost, updateCost, deleteCost } = useCosts();
+  const { costs, addCost, updateCost, deleteCost, importData } = useCosts();
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('name');
@@ -29,6 +33,9 @@ export default function CostManager() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCost, setEditingCost] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [csvMsg, setCsvMsg] = useState(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const csvFileRef = useRef();
 
   const filtered = useMemo(() => {
     let list = costs;
@@ -62,6 +69,35 @@ export default function CostManager() {
     else addCost(data);
   };
 
+  const handleCsvImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const parsed = parseCostsCSV(ev.target.result);
+      if (parsed.errors.length > 0 && parsed.rows.length === 0) {
+        setCsvMsg({ type: 'error', text: parsed.errors[0] });
+        setTimeout(() => setCsvMsg(null), 6000);
+        return;
+      }
+      setCsvLoading(true);
+      try {
+        await importData({ costs: parsed.rows }, 'merge');
+        const skipped = parsed.errors.length;
+        setCsvMsg({
+          type: 'success',
+          text: `Imported ${parsed.rows.length} cost item${parsed.rows.length !== 1 ? 's' : ''}${skipped ? ` · ${skipped} row${skipped !== 1 ? 's' : ''} skipped` : ''}. Note: re-importing the same file creates duplicates.`,
+        });
+      } catch (err) {
+        setCsvMsg({ type: 'error', text: `Import failed: ${err.message}` });
+      }
+      setCsvLoading(false);
+      setTimeout(() => setCsvMsg(null), 8000);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const SortIcon = ({ field }) => {
     if (sortBy !== field) return <span className={styles.sortNeutral}>↕</span>;
     return <span className={styles.sortActive}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
@@ -73,13 +109,32 @@ export default function CostManager() {
         title="Cost Manager"
         subtitle="Add, edit and remove all fleet cost items"
         actions={
-          <Button variant="primary" onClick={openAdd}>
-            <Plus size={16} /> Add Cost
-          </Button>
+          <div className={styles.headerActions}>
+            <input type="file" accept=".csv" ref={csvFileRef} style={{ display: 'none' }} onChange={handleCsvImport} />
+            <Button variant="outline" size="sm" onClick={() => csvFileRef.current?.click()} disabled={csvLoading}>
+              <FileUp size={14} /> Import CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => exportCostsCSV(costs)} disabled={costs.length === 0}>
+              <FileDown size={14} /> Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={downloadCostTemplate}>
+              <FileText size={14} /> Template
+            </Button>
+            <Button variant="primary" onClick={openAdd}>
+              <Plus size={16} /> Add Cost
+            </Button>
+          </div>
         }
       />
 
       <div className={styles.content}>
+        {/* CSV feedback banner */}
+        {csvMsg && (
+          <div className={`${styles.csvMsg} ${csvMsg.type === 'error' ? styles.csvError : styles.csvSuccess}`}>
+            {csvMsg.text}
+          </div>
+        )}
+
         {/* Filter + Search bar */}
         <div className={styles.toolbar}>
           <div className={styles.tabs}>
@@ -114,7 +169,7 @@ export default function CostManager() {
             title={costs.length === 0 ? 'No costs yet' : 'No results'}
             description={
               costs.length === 0
-                ? 'Add your first cost item to start tracking your fleet economics.'
+                ? 'Add your first cost item or import a CSV to start tracking.'
                 : 'Try adjusting your search or filter.'
             }
             action={
@@ -142,47 +197,60 @@ export default function CostManager() {
                   </th>
                   <th className={`${styles.th} ${styles.right}`}>Monthly Equiv.</th>
                   <th className={styles.th}>Start</th>
+                  <th className={styles.th}>Status</th>
                   <th className={`${styles.th} ${styles.center}`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((cost) => (
-                  <tr key={cost.id} className={styles.row}>
-                    <td className={styles.td}>
-                      <div className={styles.costName}>{cost.name}</div>
-                      {cost.notes && <div className={styles.costNotes}>{cost.notes}</div>}
-                    </td>
-                    <td className={styles.td}><CategoryBadge category={cost.category} /></td>
-                    <td className={styles.td}>
-                      <span className={styles.freq}>{FREQUENCIES[cost.frequency]?.label}</span>
-                    </td>
-                    <td className={`${styles.td} ${styles.right}`}>
-                      <span className={styles.amount}>{formatEUR(cost.amount)}</span>
-                    </td>
-                    <td className={`${styles.td} ${styles.right}`}>
-                      <span className={styles.monthly}>
-                        {cost.frequency === 'one-time' ? '—' : formatEUR(normalizeToMonthly(cost))}
-                      </span>
-                    </td>
-                    <td className={styles.td}>
-                      <span className={styles.date}>{formatDate(cost.startDate)}</span>
-                    </td>
-                    <td className={`${styles.td} ${styles.center}`}>
-                      <div className={styles.actions}>
-                        <button className={styles.actionBtn} onClick={() => openEdit(cost)} title="Edit">
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className={`${styles.actionBtn} ${styles.deleteBtn}`}
-                          onClick={() => setDeleteTarget(cost)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((cost) => {
+                  const status = getCostStatus(cost);
+                  return (
+                    <tr key={cost.id} className={styles.row}>
+                      <td className={styles.td}>
+                        <div className={styles.costName}>{cost.name}</div>
+                        {cost.notes && <div className={styles.costNotes}>{cost.notes}</div>}
+                      </td>
+                      <td className={styles.td}><CategoryBadge category={cost.category} /></td>
+                      <td className={styles.td}>
+                        <span className={styles.freq}>{FREQUENCIES[cost.frequency]?.label}</span>
+                      </td>
+                      <td className={`${styles.td} ${styles.right}`}>
+                        <span className={styles.amount}>{formatEUR(cost.amount)}</span>
+                      </td>
+                      <td className={`${styles.td} ${styles.right}`}>
+                        <span className={styles.monthly}>
+                          {cost.frequency === 'one-time' ? '—' : formatEUR(normalizeToMonthly(cost))}
+                        </span>
+                      </td>
+                      <td className={styles.td}>
+                        <span className={styles.date}>{formatDate(cost.startDate)}</span>
+                      </td>
+                      <td className={styles.td}>
+                        <span className={`${styles.statusBadge} ${styles[`status${status.charAt(0).toUpperCase() + status.slice(1)}`]}`}>
+                          <span className={styles.statusDot} />
+                          {STATUS_LABELS[status]}
+                        </span>
+                        {status === 'past' && cost.endDate && (
+                          <div className={styles.date} style={{ marginTop: 3 }}>{formatDate(cost.endDate)}</div>
+                        )}
+                      </td>
+                      <td className={`${styles.td} ${styles.center}`}>
+                        <div className={styles.actions}>
+                          <button className={styles.actionBtn} onClick={() => openEdit(cost)} title="Edit">
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                            onClick={() => setDeleteTarget(cost)}
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

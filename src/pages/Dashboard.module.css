@@ -150,3 +150,61 @@
   font-weight: 700;
   color: var(--color-primary-light);
 }
+
+/* Break-even wide card */
+.breakEvenCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.breakEvenMain { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.breakEvenLabel {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+}
+
+.breakEvenValue {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.breakEvenSub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.breakEvenStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.breakEvenPill {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+}
+
+.breakEvenGreen { background: rgba(76,175,80,0.12); color: var(--color-success); }
+.breakEvenRed   { background: rgba(244,67,54,0.12); color: var(--color-danger); }
+
+.revGrowth {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}

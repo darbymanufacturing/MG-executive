@@ -1,4 +1,5 @@
 import { CURRENT_VERSION } from './constants.js';
+import { todayISO } from './formatters.js';
 
 /** Download costs + config as a JSON backup file */
 export function exportToJSON(costs, config) {
@@ -36,6 +37,55 @@ export function importFromJSON(file) {
     reader.onerror = () => reject(new Error('Failed to read file.'));
     reader.readAsText(file);
   });
+}
+
+/** Helper: trigger a CSV string download */
+function downloadCSV(csvString, filename) {
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Quote a CSV field value (escapes internal quotes) */
+function csvField(v) {
+  const str = v == null ? '' : String(v);
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+const COST_CSV_HEADERS = ['Name', 'Category', 'Frequency', 'Amount (EUR)', 'Start Date', 'End Date', 'Notes'];
+
+/** Export costs array to a CSV file download */
+export function exportCostsCSV(costs) {
+  const rows = costs.map((c) => [
+    csvField(c.name),
+    csvField(c.category),
+    csvField(c.frequency),
+    csvField(c.amount),
+    csvField(c.startDate ?? ''),
+    csvField(c.endDate ?? ''),
+    csvField(c.notes ?? ''),
+  ].join(','));
+  const csv = [COST_CSV_HEADERS.map(csvField).join(','), ...rows].join('\n');
+  downloadCSV(csv, `xslide-costs-${todayISO()}.csv`);
+}
+
+/** Download a blank cost CSV template with one example row */
+export function downloadCostTemplate() {
+  const example = [
+    csvField('Insurance'),
+    csvField('fixed'),
+    csvField('monthly'),
+    csvField('250'),
+    csvField('2025-01-01'),
+    csvField(''),
+    csvField('Annual premium paid monthly'),
+  ].join(',');
+  const csv = [COST_CSV_HEADERS.map(csvField).join(','), example].join('\n');
+  downloadCSV(csv, 'xslide-costs-template.csv');
 }
 
 /** Export dashboard section to PDF using html2canvas + jsPDF */

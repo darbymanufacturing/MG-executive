@@ -1,4 +1,5 @@
 import { FREQUENCIES, MONTHS } from './constants.js';
+import { todayISO } from './formatters.js';
 
 /** Normalise a cost entry to its monthly EUR equivalent */
 export function normalizeToMonthly(cost) {
@@ -59,14 +60,19 @@ export function annualBreakdownByCategory(costs) {
   }, {});
 }
 
-/** Monthly trend data for current year (each month gets annualised monthly recurring costs + any one-time if they started that month) */
+/**
+ * Monthly trend data for current year.
+ * - X-axis labels show 'Jan 2025' format (not just 'Jan')
+ * - Future months with no costs are trimmed
+ */
 export function monthlyTrendData(costs) {
   const now = new Date();
   const year = now.getFullYear();
+  const currentMonthIdx = now.getMonth();
 
-  return MONTHS.map((month, i) => {
+  const all = MONTHS.map((month, i) => {
     const monthDate = new Date(year, i, 1);
-    const entry = { month };
+    const entry = { month: `${month} ${year}`, _idx: i };
 
     ['one-off', 'fixed', 'variable', 'investment'].forEach((cat) => {
       let total = 0;
@@ -76,12 +82,10 @@ export function monthlyTrendData(costs) {
         const end = c.endDate ? new Date(c.endDate) : null;
 
         if (c.frequency === 'one-time') {
-          // Include only in the month the cost started
           if (start && start.getFullYear() === year && start.getMonth() === i) {
             total += c.amount;
           }
         } else {
-          // Recurring: include if active in this month
           const activeFrom = start ? start <= new Date(year, i + 1, 0) : true;
           const activeTo = end ? end >= monthDate : true;
           if (activeFrom && activeTo) {
@@ -100,6 +104,19 @@ export function monthlyTrendData(costs) {
 
     return entry;
   });
+
+  // Keep months up to and including current month, plus past months that have data
+  return all
+    .filter((e) => e._idx <= currentMonthIdx || e.total > 0)
+    .map(({ _idx, ...rest }) => rest); // strip internal _idx
+}
+
+/** Returns 'active' | 'past' | 'future' based on cost start/end dates vs today */
+export function getCostStatus(cost) {
+  const today = todayISO();
+  if (cost.startDate && cost.startDate > today) return 'future';
+  if (cost.endDate   && cost.endDate   < today) return 'past';
+  return 'active';
 }
 
 /** What-if: cost per scooter at a different fleet size */

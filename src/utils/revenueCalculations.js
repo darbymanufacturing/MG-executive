@@ -95,15 +95,22 @@ export function monthlyRevenueSummary(revenueData, year) {
 
 /**
  * Merge monthly cost trend data with monthly revenue for the combined chart.
- * Returns array of 12 objects with cost breakdown + revenue + profit.
+ * Matches by 3-char month abbreviation (cost labels are now 'Jan 2025' format).
  */
 export function combinedMonthlyTrend(costTrendData, revenueData, year) {
   const revSummary = monthlyRevenueSummary(revenueData, year);
-  return costTrendData.map((costMonth, i) => ({
-    ...costMonth,
-    revenue: parseFloat((revSummary[i]?.revenue || 0).toFixed(2)),
-    profit:  parseFloat(((revSummary[i]?.revenue || 0) - (costMonth.total || 0)).toFixed(2)),
-  }));
+  // Build lookup: 'Jan' → summary entry
+  const revByMonth = Object.fromEntries(revSummary.map((r) => [r.month, r]));
+  return costTrendData.map((costMonth) => {
+    // costMonth.month is 'Jan 2025' — extract 3-char abbreviation
+    const abbr = costMonth.month.slice(0, 3);
+    const rev  = revByMonth[abbr];
+    return {
+      ...costMonth,
+      revenue: parseFloat(((rev?.revenue) || 0).toFixed(2)),
+      profit:  parseFloat((((rev?.revenue) || 0) - (costMonth.total || 0)).toFixed(2)),
+    };
+  });
 }
 
 /**

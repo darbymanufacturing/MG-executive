@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Euro, Bike, TrendingUp, ListChecks, Target, DollarSign, Plus,
-  TrendingDown, Activity, Users,
+  TrendingDown, Activity, Users, BarChart2, Shield, Clock,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import KpiCard from '../components/Dashboard/KpiCard.jsx';
@@ -21,6 +21,11 @@ import {
   totalRevenue, currentMonthRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
 } from '../utils/revenueCalculations.js';
+import {
+  calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
+  calcPaybackPeriod, calcCostRecoveryRate, calcRevGrowthMoM,
+  getHealthColor,
+} from '../utils/financialHealth.js';
 import { formatEUR, formatEURCompact, formatPercent, formatTrips } from '../utils/formatters.js';
 import styles from './Dashboard.module.css';
 
@@ -58,6 +63,15 @@ export default function Dashboard() {
   const utilization        = vehicleUtilization(revenueData, config.fleetSize);
   const actualRevPerScooter= actualRevenuePerScooterMonthly(revenueData, config.fleetSize);
   const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, revenueData) : null;
+
+  // ── Financial health metrics ──────────────────────────────────────────────
+  const ebitda       = hasRevenue ? calcEBITDA(costs, revenueData) : null;
+  const roi          = hasRevenue ? calcROI(costs, revenueData) : null;
+  const dscr         = hasRevenue ? calcDSCR(costs, revenueData, config) : null;
+  const breakEven    = calcBreakEvenRevenue(costs);
+  const payback      = hasRevenue ? calcPaybackPeriod(costs, revenueData) : null;
+  const costRecovery = hasRevenue ? calcCostRecoveryRate(costs, revenueData) : null;
+  const revGrowthMoM = hasRevenue ? calcRevGrowthMoM(revenueData) : null;
 
   const isEmpty = costs.length === 0;
 
@@ -181,6 +195,80 @@ export default function Dashboard() {
               sub={`of ${config.fleetSize} scooters active`}
             />
           </div>
+        )}
+
+        {/* ── Financial Health KPIs ── */}
+        {hasRevenue && (
+          <>
+            <div className={styles.revenueDivider}>
+              <span className={styles.revenueDividerLabel}>Financial Health</span>
+            </div>
+            <div className={styles.kpiGrid}>
+              <KpiCard
+                icon={BarChart2}
+                label="EBITDA Margin"
+                value={ebitda?.ebitdaMargin !== null ? `${ebitda.ebitdaMargin.toFixed(1)}%` : 'N/A'}
+                sub={ebitda?.ebitda !== null ? `${formatEURCompact(ebitda.ebitda)}/yr operating profit` : 'No revenue data'}
+                healthColor={ebitda ? getHealthColor('ebitdaMargin', ebitda.ebitdaMargin) : 'muted'}
+              />
+              <KpiCard
+                icon={TrendingUp}
+                label="ROI"
+                value={roi !== null ? `${roi.toFixed(1)}%` : 'N/A'}
+                sub={roi !== null ? 'Return on investment costs' : 'No investment costs entered'}
+                healthColor={getHealthColor('roi', roi)}
+              />
+              <KpiCard
+                icon={Shield}
+                label="DSCR"
+                value={dscr !== null ? dscr.toFixed(2) : 'N/A'}
+                sub={dscr !== null
+                  ? (dscr >= 1.25 ? 'Comfortably covering debt' : dscr >= 1 ? 'Just covering debt' : 'At risk — below 1.0')
+                  : 'Set monthly debt service in Settings'}
+                healthColor={getHealthColor('dscr', dscr)}
+              />
+              <KpiCard
+                icon={Clock}
+                label="Payback Period"
+                value={payback === null ? 'N/A' : payback === Infinity ? '∞' : `${Math.ceil(payback)} mo`}
+                sub={payback === null ? 'No investment costs' : payback === Infinity ? 'Not profitable yet' : 'To recover all investments'}
+                healthColor={getHealthColor('paybackMonths', payback)}
+              />
+            </div>
+
+            {/* Break-even wide card */}
+            <div className={styles.breakEvenCard}>
+              <div className={styles.breakEvenMain}>
+                <span className={styles.breakEvenLabel}>Break-Even Revenue</span>
+                <span className={styles.breakEvenValue}>{formatEUR(breakEven)}/mo</span>
+                <span className={styles.breakEvenSub}>Minimum monthly revenue needed to cover all costs</span>
+              </div>
+              <div className={styles.breakEvenStatus}>
+                <div className={`${styles.breakEvenPill} ${monthlyRevenue >= breakEven ? styles.breakEvenGreen : styles.breakEvenRed}`}>
+                  {monthlyRevenue >= breakEven
+                    ? `+${formatEURCompact(monthlyRevenue - breakEven)} above break-even`
+                    : `${formatEURCompact(breakEven - monthlyRevenue)} short of break-even`}
+                </div>
+                {revGrowthMoM !== null && (
+                  <div className={styles.revGrowth}>
+                    MoM Revenue Growth:{' '}
+                    <strong style={{ color: revGrowthMoM >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                      {revGrowthMoM >= 0 ? '+' : ''}{revGrowthMoM.toFixed(1)}%
+                    </strong>
+                  </div>
+                )}
+                {costRecovery !== null && (
+                  <div className={styles.revGrowth}>
+                    Cost Recovery:{' '}
+                    <strong style={{ color: costRecovery >= 1 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                      {(costRecovery * 100).toFixed(0)}%
+                    </strong>
+                    {' '}({costRecovery >= 1 ? 'profitable' : 'below break-even'})
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
         {/* ── Charts ── */}

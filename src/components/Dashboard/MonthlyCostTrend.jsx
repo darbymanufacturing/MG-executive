@@ -23,12 +23,19 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function MonthlyCostTrend({ data }) {
+  const angled = data.length > 7;
   return (
     <div className={styles.chartWrap}>
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: angled ? 20 : 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
-          <XAxis dataKey="month" tick={{ fill: '#888', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <XAxis
+            dataKey="month"
+            tick={{ fill: '#888', fontSize: 11, ...(angled ? { angle: -35, textAnchor: 'end' } : {}) }}
+            axisLine={false}
+            tickLine={false}
+            height={angled ? 50 : 30}
+          />
           <YAxis tickFormatter={formatEURCompact} tick={{ fill: '#888', fontSize: 11 }} axisLine={false} tickLine={false} width={56} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           <Legend

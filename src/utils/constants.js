@@ -70,6 +70,7 @@ export const DEFAULT_CONFIG = {
   currency: 'EUR',
   targetCostPerScooter: null,
   revenuePerScooter: null,
+  monthlyDebtService: null,
 };
 
 export const STORAGE_KEYS = {
