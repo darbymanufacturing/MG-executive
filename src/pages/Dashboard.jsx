@@ -250,7 +250,7 @@ export default function Dashboard() {
                     <option key={m} value={m}>{fmtMonth(m)}</option>
                   ))}
                 </select>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>→</span>
+                <span className={styles.rangeArrow}>→</span>
                 <select value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} style={selectStyle}>
                   <option value="">To…</option>
                   {availableMonths.map((m) => (

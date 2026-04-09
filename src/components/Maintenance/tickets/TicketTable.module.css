@@ -8,6 +8,7 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
+  min-width: 560px;
 }
 
 .th {
@@ -154,6 +155,20 @@
   background: color-mix(in srgb, #F44336 15%, var(--color-surface-2));
   color: #F44336;
   border-color: #F44336;
+}
+
+/* ── Mobile column hiding ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Hide City (col 2), Date (col 3), Tag (col 7) */
+  .table th:nth-child(2),
+  .table td:nth-child(2),
+  .table th:nth-child(3),
+  .table td:nth-child(3),
+  .table th:nth-child(7),
+  .table td:nth-child(7) { display: none; }
+
+  .th, .td { padding: var(--space-2) var(--space-3); }
+  .issue { max-width: 140px; }
 }
 
 /* Empty state */

@@ -6,14 +6,21 @@
   .content { padding: var(--space-4); gap: var(--space-4); }
   .kpiGrid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .headerActions { flex-wrap: wrap; gap: var(--space-2); }
-  .periodToggle { order: -1; }
+  .periodToggle { order: -1; width: 100%; }
   .economicsGrid { gap: var(--space-4); }
   .breakEvenCard { flex-direction: column; align-items: flex-start; }
   .breakEvenStatus { width: 100%; }
   .breakEvenValue { font-size: var(--text-2xl); }
+  .rangeArrow { display: none; }
 }
 
-.headerActions { display: flex; align-items: center; gap: var(--space-4); }
+.headerActions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+
+.rangeArrow {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
 
 .periodToggle {
   display: flex;
@@ -235,6 +242,18 @@
 
 @media (max-width: 768px) {
   .chartFull { height: 240px; }
+}
+
+@media (max-width: 480px) {
+  .chartFull { height: 190px; }
+  .kpiGrid { grid-template-columns: repeat(2, 1fr); }
+  .econDivider { display: none; }
+  .economicsGrid { gap: var(--space-4); }
+  .econValue { font-size: var(--text-xl); }
+  .breakEvenValue { font-size: var(--text-2xl); }
+  .chartCard, .chartCardFull { padding: var(--space-4); }
+  .periodBtn { padding: 5px 10px; font-size: var(--text-xs); }
+  .revenueDividerLabel { font-size: 9px; letter-spacing: 0.06em; }
 }
 
 /* Bottom row: two cards side-by-side */

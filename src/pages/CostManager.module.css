@@ -37,6 +37,12 @@
   .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: var(--space-1); }
   .searchWrap { width: 100%; }
   .search { width: 100%; }
+  /* Hide Frequency (3), Monthly Equiv. (5), Start date (6) */
+  .table th:nth-child(3), .table td:nth-child(3),
+  .table th:nth-child(5), .table td:nth-child(5),
+  .table th:nth-child(6), .table td:nth-child(6) { display: none; }
+  .td { padding: var(--space-3); }
+  .costNotes { max-width: 160px; }
 }
 
 .toolbar {
