@@ -1,6 +1,48 @@
 import { MONTHS } from './constants.js';
 import { totalMonthlyCost, totalAnnualCost, allTimeMonthlyTrendData } from './calculations.js';
 
+const DAY_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/**
+ * Daily revenue breakdown for a selected month (YYYY-MM string).
+ * Returns one entry per calendar day with actual revenue, daily cost rate,
+ * trips, and profit/loss. Used by the "By Month" daily chart on Dashboard.
+ */
+export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
+  if (!selectedMonth) return [];
+  const [y, m] = selectedMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+
+  // Revenue lookup by exact date string
+  const revByDate   = {};
+  const tripsByDate = {};
+  periodRevenue.forEach((r) => {
+    revByDate[r.date]   = (revByDate[r.date]   || 0) + (r.totalPaidRevenue || 0);
+    tripsByDate[r.date] = (tripsByDate[r.date] || 0) + (r.totalTrips       || 0);
+  });
+
+  // Spread monthly costs evenly across all days
+  const monthlyCost  = totalMonthlyCost(costs);
+  const dailyCostRate = monthlyCost / daysInMonth;
+
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const dayNum  = i + 1;
+    const dateStr = `${selectedMonth}-${String(dayNum).padStart(2, '0')}`;
+    const revenue = revByDate[dateStr]   || 0;
+    const trips   = tripsByDate[dateStr] || 0;
+    const hasData = !!revByDate[dateStr];
+    return {
+      day:      `${DAY_ABBRS[m - 1]} ${dayNum}`,
+      date:     dateStr,
+      revenue:  parseFloat(revenue.toFixed(2)),
+      costRate: parseFloat(dailyCostRate.toFixed(2)),
+      profit:   parseFloat((revenue - dailyCostRate).toFixed(2)),
+      trips,
+      hasData,
+    };
+  });
+}
+
 /** Filter revenue rows to a date range (inclusive). Pass null to skip bound. */
 export function filterByRange(revenueData, startDate, endDate) {
   return revenueData.filter((r) => {

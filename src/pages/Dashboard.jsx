@@ -10,6 +10,7 @@ import KpiCard from '../components/Dashboard/KpiCard.jsx';
 import CostBreakdownChart from '../components/Dashboard/CostBreakdownChart.jsx';
 import MonthlyCostTrend from '../components/Dashboard/MonthlyCostTrend.jsx';
 import RevenueCostTrend from '../components/Dashboard/RevenueCostTrend.jsx';
+import DailyRevenueTrend from '../components/Dashboard/DailyRevenueTrend.jsx';
 import Button from '../components/Shared/Button.jsx';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { useCosts } from '../context/CostContext.jsx';
@@ -24,7 +25,7 @@ import {
 import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
-  filterRevenueByLocation, allTimeCombinedTrend,
+  filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
 } from '../utils/revenueCalculations.js';
 import {
   calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
@@ -170,6 +171,12 @@ export default function Dashboard() {
         : combinedMonthlyTrend(trendData, filteredRevenue, chartYear))
     : null;
 
+  // Daily breakdown — only computed for "By Month" view
+  const dailyTrendData = useMemo(
+    () => viewMode === 'month' ? dailyRevenueTrend(periodRevenue, filteredCosts, selectedMonth) : [],
+    [viewMode, periodRevenue, filteredCosts, selectedMonth],
+  );
+
   // Monthly revenue rate for break-even comparison
   const periodMonthlyRevenue = hasPeriodData
     ? totalRevenue(periodRevenue) / periodMonths
@@ -278,18 +285,28 @@ export default function Dashboard() {
           <div className={styles.chartCardFull}>
             <div className={styles.chartHeader}>
               <h2 className={styles.chartTitle}>
-                {hasRevenue ? 'Revenue vs. Costs' : 'Monthly Cost Trend'}
+                {hasRevenue
+                  ? (viewMode === 'month' ? `Daily Revenue · ${fmtMonth(selectedMonth)}` : 'Revenue vs. Costs')
+                  : 'Monthly Cost Trend'}
               </h2>
               <span className={styles.chartSub}>
                 {hasRevenue
-                  ? (viewMode === 'all' ? 'All time · Revenue line + cost bars + profit/loss' : `${chartYear} · Revenue line + cost bars + profit/loss`)
-                  : (viewMode === 'all' ? 'All time · Stacked by category' : `${chartYear} · Stacked by category`)}
+                  ? viewMode === 'month'
+                    ? 'Revenue bars per day · dashed line = daily cost rate'
+                    : viewMode === 'all'
+                      ? 'All time · Revenue line + cost bars + profit/loss'
+                      : `${chartYear} · Revenue line + cost bars + profit/loss`
+                  : viewMode === 'all'
+                    ? 'All time · Stacked by category'
+                    : `${chartYear} · Stacked by category`}
               </span>
             </div>
             <div className={styles.chartFull}>
-              {hasRevenue
-                ? <RevenueCostTrend data={combinedTrend} />
-                : <MonthlyCostTrend data={trendData} />
+              {hasRevenue && viewMode === 'month'
+                ? <DailyRevenueTrend data={dailyTrendData} />
+                : hasRevenue
+                  ? <RevenueCostTrend data={combinedTrend} />
+                  : <MonthlyCostTrend data={trendData} />
               }
             </div>
           </div>
