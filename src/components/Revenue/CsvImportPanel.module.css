@@ -84,7 +84,8 @@
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .previewTable { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
@@ -156,3 +157,10 @@
 /* Spinner animation */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; }
+
+@media (max-width: 768px) {
+  .panel { padding: var(--space-4); gap: var(--space-3); }
+  .dropZone { padding: var(--space-6) var(--space-4); }
+  .actions { flex-wrap: wrap; justify-content: stretch; }
+  .actions > * { flex: 1; min-width: 120px; }
+}

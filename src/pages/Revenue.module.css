@@ -9,7 +9,10 @@
 
 @media (max-width: 768px) {
   .content { padding: var(--space-4); gap: var(--space-4); }
-  .statsRow { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .statsRow { grid-template-columns: repeat(2, 1fr); }
+  .statValue { font-size: var(--text-xl); }
+  .tableSection { padding: var(--space-4); }
+  .tableSectionHeader { margin-bottom: var(--space-3); }
 }
 
 /* Summary stats */
