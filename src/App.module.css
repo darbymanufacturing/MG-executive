@@ -10,8 +10,65 @@
   background: var(--color-bg);
 }
 
+/* Mobile top bar — hidden on desktop */
+.mobileTopBar {
+  display: none;
+}
+
+/* Overlay */
+.overlay {
+  display: none;
+}
+
 @media (max-width: 768px) {
-  .main { margin-left: 0; }
+  .main {
+    margin-left: 0;
+    /* push content below the mobile top bar */
+    padding-top: 56px;
+  }
+
+  .mobileTopBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: #111111;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0 var(--space-4);
+    z-index: 200;
+  }
+
+  .mobileLogoImg {
+    height: 28px;
+    width: auto;
+  }
+
+  .menuBtn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+  .menuBtn:hover { background: var(--color-surface-2); }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 149;
+  }
 }
 
 /* Loading screen */

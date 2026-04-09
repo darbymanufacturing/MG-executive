@@ -55,3 +55,22 @@
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
+
+@media (max-width: 768px) {
+  .header {
+    padding: var(--space-4);
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    /* Sticky header sits below the mobile top bar */
+    top: 56px;
+  }
+  .title { font-size: var(--text-xl); }
+  .subtitle { display: none; }
+  .right { gap: var(--space-2); }
+  .fleetLabel { display: none; }
+  .fleet { padding: var(--space-2) var(--space-3); }
+}
+
+@media (max-width: 480px) {
+  .right { flex-wrap: wrap; justify-content: flex-end; width: 100%; }
+}

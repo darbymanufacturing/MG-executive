@@ -9,9 +9,9 @@ const NAV = [
   { to: '/settings',icon: Settings,        label: 'Settings' },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }) {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
       <div className={styles.logo}>
         <img src="/logo.svg" alt="XSlide" className={styles.logoImg} />
       </div>
@@ -22,6 +22,7 @@ export default function Sidebar() {
             key={to}
             to={to}
             end={to === '/'}
+            onClick={onClose}
             className={({ isActive }) =>
               `${styles.navItem} ${isActive ? styles.active : ''}`
             }

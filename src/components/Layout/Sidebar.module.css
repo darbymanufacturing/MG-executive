@@ -68,3 +68,16 @@
   color: var(--color-primary);
   flex-shrink: 0;
 }
+
+@media (max-width: 768px) {
+  .sidebar {
+    top: 56px; /* below mobile top bar */
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    z-index: 150;
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}

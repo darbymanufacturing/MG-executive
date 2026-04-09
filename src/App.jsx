@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
 import { CostProvider, useCosts } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
@@ -12,6 +14,7 @@ import styles from './App.module.css';
 
 function AppShell() {
   const { loading } = useCosts();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading) {
     return (
@@ -25,7 +28,28 @@ function AppShell() {
 
   return (
     <div className={styles.layout}>
-      <Sidebar />
+      {/* Mobile top bar */}
+      <div className={styles.mobileTopBar}>
+        <img src="/logo.svg" alt="XSlide" className={styles.mobileLogoImg} />
+        <button
+          className={styles.menuBtn}
+          onClick={() => setSidebarOpen((o) => !o)}
+          aria-label="Toggle menu"
+        >
+          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
+      </div>
+
+      {/* Overlay (mobile only) */}
+      {sidebarOpen && (
+        <div
+          className={styles.overlay}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
       <main className={styles.main}>
         <Routes>
           <Route path="/"         element={<Dashboard />} />
