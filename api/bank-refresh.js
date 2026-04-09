@@ -1,44 +1,51 @@
-// Re-fetches latest booked transactions for a specific account
-// POST body: { account_id }
+// Triggers a Salt Edge connection refresh and re-fetches transactions
+// POST body: { connection_id }
 // Returns: { transactions: [...] }
 
-const BASE = 'https://bankaccountdata.gocardless.com/api/v2';
-
-async function getToken(secretId, secretKey) {
-  const res = await fetch(`${BASE}/token/new/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret_id: secretId, secret_key: secretKey }),
-  });
-  const data = await res.json();
-  if (!data.access) throw new Error(`Token error: ${JSON.stringify(data)}`);
-  return data.access;
-}
+const BASE = 'https://www.saltedge.com/api/v5';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { connection_id } = req.body || {};
+  if (!connection_id) return res.status(400).json({ error: 'connection_id required' });
+
+  const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
+  if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {
+    return res.status(500).json({ error: 'Salt Edge credentials not configured' });
   }
 
-  const { GOCARDLESS_SECRET_ID, GOCARDLESS_SECRET_KEY } = process.env;
-  if (!GOCARDLESS_SECRET_ID || !GOCARDLESS_SECRET_KEY) {
-    return res.status(500).json({ error: 'GoCardless credentials not configured' });
-  }
-
-  const { account_id } = req.body || {};
-  if (!account_id) {
-    return res.status(400).json({ error: 'account_id is required' });
-  }
+  const headers     = { 'App-id': SALTEDGE_APP_ID, 'Secret': SALTEDGE_SECRET };
+  const jsonHeaders = { ...headers, 'Content-Type': 'application/json' };
 
   try {
-    const token = await getToken(GOCARDLESS_SECRET_ID, GOCARDLESS_SECRET_KEY);
-    const headers = { Authorization: `Bearer ${token}` };
+    // Trigger async refresh (Salt Edge fetches new data in background)
+    await fetch(`${BASE}/connections/${connection_id}/refresh`, {
+      method:  'PUT',
+      headers: jsonHeaders,
+      body:    JSON.stringify({ data: {} }),
+    });
 
-    const txRes = await fetch(`${BASE}/accounts/${account_id}/transactions/`, { headers });
-    const txData = await txRes.json();
-    const transactions = (txData.transactions?.booked || []).map((tx) => ({ ...tx, accountId: account_id }));
+    // Re-fetch accounts and transactions (returns current data; refresh may still be in progress)
+    const acctRes  = await fetch(`${BASE}/accounts?connection_id=${connection_id}`, { headers });
+    const acctData = await acctRes.json();
+    const accounts = acctData.data || [];
 
-    return res.status(200).json({ transactions });
+    const allTransactions = [];
+    for (const account of accounts) {
+      let url = `${BASE}/transactions?connection_id=${connection_id}&account_id=${account.id}`;
+      while (url) {
+        const txRes  = await fetch(url, { headers });
+        const txData = await txRes.json();
+        const txs    = (txData.data || []).map((tx) => ({ ...tx, accountId: account.id }));
+        allTransactions.push(...txs);
+        url = txData.meta?.next_id
+          ? `${BASE}/transactions?connection_id=${connection_id}&account_id=${account.id}&from_id=${txData.meta.next_id}`
+          : null;
+      }
+    }
+
+    return res.status(200).json({ transactions: allTransactions });
   } catch (err) {
     console.error('[bank-refresh]', err.message);
     return res.status(500).json({ error: err.message });

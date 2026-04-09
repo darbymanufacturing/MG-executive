@@ -213,10 +213,10 @@ export default function Settings() {
             <h2 className={styles.sectionTitle}>Bank Integration</h2>
           </div>
           <p className={styles.sectionDesc}>
-            Connect your Alpha Bank account to automatically import outgoing transactions as draft
-            cost entries. Powered by GoCardless open banking (free, PSD2 compliant).
-            You will need a free GoCardless account — set <code>GOCARDLESS_SECRET_ID</code> and{' '}
-            <code>GOCARDLESS_SECRET_KEY</code> in Vercel environment variables to activate.
+            Connect your Greek bank account (Alpha Bank, Eurobank, NBG) to automatically import
+            outgoing transactions as draft cost entries. Powered by Salt Edge (PSD2 compliant).
+            Set <code>SALTEDGE_APP_ID</code> and <code>SALTEDGE_SECRET</code> in Vercel environment
+            variables to activate.
           </p>
           <BankConnect />
           <BankTransactionReview />

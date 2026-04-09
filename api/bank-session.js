@@ -1,67 +1,65 @@
-// Creates a GoCardless requisition for Alpha Bank (ALPHA_GRAA)
-// POST body: { redirect_url }
-// Returns: { link, requisition_id }
+// Creates a Salt Edge connect session for bank linking
+// POST body: { customer_id?, redirect_url? }
+// Returns: { connect_url, customer_id }
+// Env vars: SALTEDGE_APP_ID, SALTEDGE_SECRET
 
-const BASE = 'https://bankaccountdata.gocardless.com/api/v2';
+const BASE = 'https://www.saltedge.com/api/v5';
 
-async function getToken(secretId, secretKey) {
-  const res = await fetch(`${BASE}/token/new/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret_id: secretId, secret_key: secretKey }),
-  });
-  const data = await res.json();
-  if (!data.access) throw new Error(`Token error: ${JSON.stringify(data)}`);
-  return data.access;
+function seHeaders() {
+  return {
+    'App-id':        process.env.SALTEDGE_APP_ID,
+    'Secret':        process.env.SALTEDGE_SECRET,
+    'Content-Type':  'application/json',
+  };
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
+  if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {
+    return res.status(500).json({ error: 'Salt Edge credentials not configured (SALTEDGE_APP_ID / SALTEDGE_SECRET)' });
   }
 
-  const { GOCARDLESS_SECRET_ID, GOCARDLESS_SECRET_KEY } = process.env;
-  if (!GOCARDLESS_SECRET_ID || !GOCARDLESS_SECRET_KEY) {
-    return res.status(500).json({ error: 'GoCardless credentials not configured in environment variables' });
-  }
-
-  const { redirect_url } = req.body || {};
+  let { customer_id, redirect_url } = req.body || {};
   const redirectTo = redirect_url || `https://${req.headers.host}/settings`;
 
   try {
-    const token = await getToken(GOCARDLESS_SECRET_ID, GOCARDLESS_SECRET_KEY);
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    // 1. Create customer if this is the first connect
+    if (!customer_id) {
+      const custRes  = await fetch(`${BASE}/customers`, {
+        method:  'POST',
+        headers: seHeaders(),
+        body:    JSON.stringify({ data: { identifier: `xslide-${Date.now()}` } }),
+      });
+      const custData = await custRes.json();
+      if (!custData.data?.id) throw new Error(`Customer error: ${JSON.stringify(custData)}`);
+      customer_id = custData.data.id;
+    }
 
-    // 1. Create end-user agreement (90 days history, 90 days access)
-    const agreementRes = await fetch(`${BASE}/agreements/enduser/`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        institution_id: 'ALPHA_GRAA',
-        max_historical_days: 90,
-        access_valid_for_days: 90,
-        access_scope: ['balances', 'details', 'transactions'],
+    // 2. Create connect session (90 days of history)
+    const from_date = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const sessionRes = await fetch(`${BASE}/connect_sessions/create`, {
+      method:  'POST',
+      headers: seHeaders(),
+      body:    JSON.stringify({
+        data: {
+          customer_id,
+          consent: {
+            scopes:    ['account_details', 'transactions_details'],
+            from_date,
+          },
+          attempt: {
+            return_to:         redirectTo,
+            store_credentials: true,
+          },
+        },
       }),
     });
-    const agreement = await agreementRes.json();
-    if (!agreement.id) throw new Error(`Agreement error: ${JSON.stringify(agreement)}`);
+    const sessionData = await sessionRes.json();
+    if (!sessionData.data?.connect_url) throw new Error(`Session error: ${JSON.stringify(sessionData)}`);
 
-    // 2. Create requisition
-    const reqRes = await fetch(`${BASE}/requisitions/`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        redirect: redirectTo,
-        institution_id: 'ALPHA_GRAA',
-        agreement: agreement.id,
-        reference: `xslide-${Date.now()}`,
-        user_language: 'EN',
-      }),
-    });
-    const requisition = await reqRes.json();
-    if (!requisition.link) throw new Error(`Requisition error: ${JSON.stringify(requisition)}`);
-
-    return res.status(200).json({ link: requisition.link, requisition_id: requisition.id });
+    return res.status(200).json({ connect_url: sessionData.data.connect_url, customer_id });
   } catch (err) {
     console.error('[bank-session]', err.message);
     return res.status(500).json({ error: err.message });
