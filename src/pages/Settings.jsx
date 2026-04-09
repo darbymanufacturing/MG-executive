@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
-  DollarSign, TrendingUp, MapPin, Plus, X,
+  DollarSign, TrendingUp, MapPin, Plus, X, Link2,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
+import BankConnect from '../components/Bank/BankConnect.jsx';
+import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
 import { projectedCostPerScooterSimple } from '../utils/calculations.js';
@@ -202,6 +204,22 @@ export default function Settings() {
               <Plus size={14} /> Add
             </Button>
           </div>
+        </section>
+
+        {/* Bank Integration */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Link2 size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Bank Integration</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Connect your Alpha Bank account to automatically import outgoing transactions as draft
+            cost entries. Powered by GoCardless open banking (free, PSD2 compliant).
+            You will need a free GoCardless account — set <code>GOCARDLESS_SECRET_ID</code> and{' '}
+            <code>GOCARDLESS_SECRET_KEY</code> in Vercel environment variables to activate.
+          </p>
+          <BankConnect />
+          <BankTransactionReview />
         </section>
 
         {/* Data Management */}
