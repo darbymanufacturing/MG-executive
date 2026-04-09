@@ -2,7 +2,7 @@
 // GET ?customer_id=...
 // Returns: { connections: [{ id, provider_name, status }] }
 
-const BASE = 'https://www.saltedge.com/api/v5';
+const BASE = 'https://www.saltedge.com/api/v6';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });

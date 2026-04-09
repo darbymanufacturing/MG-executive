@@ -2,7 +2,7 @@
 // POST body: { connection_id }
 // Returns: { transactions: [...] }
 
-const BASE = 'https://www.saltedge.com/api/v5';
+const BASE = 'https://www.saltedge.com/api/v6';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

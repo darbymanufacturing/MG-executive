@@ -3,7 +3,7 @@
 // Returns: { connect_url, customer_id }
 // Env vars: SALTEDGE_APP_ID, SALTEDGE_SECRET
 
-const BASE = 'https://www.saltedge.com/api/v5';
+const BASE = 'https://www.saltedge.com/api/v6';
 
 function seHeaders() {
   return {
