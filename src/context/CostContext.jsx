@@ -116,12 +116,16 @@ export function CostProvider({ children }) {
       existingSnap.docs.forEach((d) => batch.delete(d.ref));
     }
 
-    // Add imported costs (skip duplicates by id in merge mode)
-    const existingIds = new Set(costs.map((c) => c.id));
+    // Add imported costs — in merge mode skip by id (if present) or by name+startDate composite
+    const existingIds        = new Set(costs.filter((c) => c.id).map((c) => c.id));
+    const existingComposites = new Set(costs.map((c) => `${c.name}__${c.startDate}__${c.frequency}`));
     (data.costs || []).forEach((cost) => {
-      if (mode === 'merge' && existingIds.has(cost.id)) return;
+      if (mode === 'merge') {
+        if (cost.id && existingIds.has(cost.id)) return;
+        if (!cost.id && existingComposites.has(`${cost.name}__${cost.startDate}__${cost.frequency}`)) return;
+      }
       const ref = doc(collection(db, COSTS_COL));
-      batch.set(ref, cost);
+      batch.set(ref, { ...cost, id: cost.id || uuidv4() });
     });
 
     await batch.commit();

@@ -12,6 +12,7 @@ import PartsTab from '../components/Maintenance/tabs/PartsTab.jsx';
 import AnalyticsTab from '../components/Maintenance/tabs/AnalyticsTab.jsx';
 import SettingsTab from '../components/Maintenance/tabs/SettingsTab.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useCosts } from '../context/CostContext.jsx';
 import styles from './Maintenance.module.css';
 
 const TABS = [
@@ -24,6 +25,8 @@ const TABS = [
 
 export default function Maintenance() {
   const { tickets, parts, loadSeedData } = useMaintenance();
+  const { config: costConfig } = useCosts();
+  const locations = costConfig.locations?.length ? costConfig.locations : ['Corinth', 'Nafplion'];
 
   const [activeTab,   setActiveTab]   = useState('overview');
   const [city,        setCity]        = useState('');
@@ -60,8 +63,9 @@ export default function Maintenance() {
               onChange={(e) => setCity(e.target.value)}
             >
               <option value="">All Cities</option>
-              <option value="Corinth">Corinth</option>
-              <option value="Nafplion">Nafplion</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
             </select>
           </div>
         }

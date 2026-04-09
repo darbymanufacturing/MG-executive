@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../Shared/Modal.jsx';
 import Button from '../../Shared/Button.jsx';
+import { useCosts } from '../../../context/CostContext.jsx';
 import styles from './TicketForm.module.css';
 
 const PRIMARY_TAGS = [
@@ -15,7 +16,6 @@ const SECONDARY_TAGS = [
 
 const CATEGORIES = { Q: 'Quoted', M: 'Medium/Estimated', C: 'Complex', B: 'Basic', F: 'Finished' };
 const STATUSES   = ['Active', 'Backlog', 'Investigation', 'Blocked', 'Donor', 'Completed'];
-const CITIES     = ['Corinth', 'Nafplion'];
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -35,6 +35,9 @@ function blank() {
 }
 
 export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtMaxActive }) {
+  const { config } = useCosts();
+  const cities = config.locations?.length ? config.locations : ['Corinth', 'Nafplion'];
+
   const [form,   setForm]   = useState(blank());
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -111,7 +114,7 @@ export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtM
               value={form.city}
               onChange={(e) => set('city', e.target.value)}
             >
-              {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             {errors.city && <span className={styles.errorMsg}>{errors.city}</span>}
           </div>

@@ -53,6 +53,7 @@ export default function PartsTable({ parts, onEdit, onDelete }) {
               const isLow =
                 typeof part.stockOnHand === 'number' &&
                 typeof part.reorderPoint === 'number' &&
+                part.reorderPoint > 0 &&
                 part.stockOnHand <= part.reorderPoint &&
                 part.status !== 'Discontinued';
 

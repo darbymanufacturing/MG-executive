@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Euro, Bike, TrendingUp, ListChecks, Target, DollarSign, Plus,
   TrendingDown, Activity, Users, BarChart2, Shield, Clock,
+  Wrench, AlertTriangle, Package,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import KpiCard from '../components/Dashboard/KpiCard.jsx';
@@ -13,6 +14,7 @@ import Button from '../components/Shared/Button.jsx';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
+import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import {
   totalMonthlyCost, totalAnnualCost,
   costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
@@ -60,7 +62,18 @@ const selectStyle = {
 export default function Dashboard() {
   const { costs, config, loadSampleData } = useCosts();
   const { revenueData } = useRevenue();
+  const {
+    totalRevenueLost,
+    activeCount,
+    lowStockParts,
+    tickets,
+    parts,
+    config: maintConfig,
+  } = useMaintenance();
   const navigate = useNavigate();
+
+  const hasMaintenanceData   = tickets.length > 0 || parts.length > 0;
+  const maxActiveTickets     = maintConfig?.maxActiveTickets ?? 3;
 
   const [viewMode,      setViewMode]      = useState('month'); // 'month' | 'range' | 'all'
   const [selectedMonth, setSelectedMonth] = useState(todayMonthStr);
@@ -341,7 +354,11 @@ export default function Dashboard() {
               icon={displayPnL >= 0 ? TrendingUp : TrendingDown}
               label={`Profit / Loss · ${periodLabel}`}
               value={formatEURCompact(displayPnL)}
-              sub={`Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)}`}
+              sub={
+                totalRevenueLost > 0
+                  ? `Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)} · Adj. P&L incl. maintenance risk: ${formatEURCompact(displayPnL - totalRevenueLost)}`
+                  : `Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)}`
+              }
               highlight
             />
             <KpiCard
@@ -363,6 +380,38 @@ export default function Dashboard() {
               sub={`of ${config.fleetSize} scooters active`}
             />
           </div>
+        )}
+
+        {/* ── Maintenance KPI Cards ── */}
+        {hasMaintenanceData && (
+          <>
+            <div className={styles.revenueDivider}>
+              <span className={styles.revenueDividerLabel}>Maintenance · Live Status</span>
+            </div>
+            <div className={styles.kpiGrid}>
+              <KpiCard
+                icon={Wrench}
+                label="Revenue at Risk"
+                value={formatEURCompact(totalRevenueLost)}
+                sub={totalRevenueLost > 0 ? 'From scooters currently in repair' : 'No open tickets with revenue loss'}
+                healthColor={totalRevenueLost > 500 ? 'danger' : totalRevenueLost > 0 ? 'warning' : 'good'}
+              />
+              <KpiCard
+                icon={AlertTriangle}
+                label="Active Repair Tickets"
+                value={`${activeCount} / ${maxActiveTickets}`}
+                sub={activeCount >= maxActiveTickets ? '⚠ At maximum active limit' : `${maxActiveTickets - activeCount} slot${maxActiveTickets - activeCount !== 1 ? 's' : ''} remaining`}
+                healthColor={activeCount >= maxActiveTickets ? 'warning' : activeCount > 0 ? 'muted' : 'good'}
+              />
+              <KpiCard
+                icon={Package}
+                label="Parts Low Stock"
+                value={lowStockParts.length}
+                sub={lowStockParts.length > 0 ? `${lowStockParts.map((p) => p.sku).slice(0, 2).join(', ')}${lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ''}` : 'All parts above reorder point'}
+                healthColor={lowStockParts.length > 3 ? 'danger' : lowStockParts.length > 0 ? 'warning' : 'good'}
+              />
+            </div>
+          </>
         )}
 
         {/* ── Financial Health KPIs ── */}

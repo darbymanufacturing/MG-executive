@@ -35,7 +35,7 @@ export function RevenueProvider({ children }) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        const docId = day.location ? `${day.date}_${day.location}` : day.date;
+        const docId = `${day.date}_${day.location || 'global'}`;
         const ref = doc(db, REVENUE_COL, docId);
         batch.set(ref, day); // setDoc via batch → overwrites existing doc
       });
