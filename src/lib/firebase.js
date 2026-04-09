@@ -1,5 +1,6 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDo1mG2qucaWeD-rmtLhSgk2DddBz1yP4c",
@@ -10,5 +11,8 @@ const firebaseConfig = {
   appId: "1:344679740633:web:d2488b87d5a5abc9363ac8",
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Guard against re-initialization during Vite HMR
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+export const db   = getFirestore(app);
+export const auth = getAuth(app);

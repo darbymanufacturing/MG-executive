@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, Bike } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
 import styles from './Sidebar.module.css';
 
 const NAV = [
@@ -10,6 +11,8 @@ const NAV = [
 ];
 
 export default function Sidebar({ open, onClose }) {
+  const { user, signOut } = useAuth();
+
   return (
     <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
       <div className={styles.logo}>
@@ -34,8 +37,19 @@ export default function Sidebar({ open, onClose }) {
       </nav>
 
       <div className={styles.footer}>
-        <Bike size={14} className={styles.footerIcon} />
-        <span>XSlide Fleet Manager</span>
+        <div className={styles.userInfo}>
+          <span className={styles.userEmail} title={user?.email}>
+            {user?.email}
+          </span>
+          <button
+            className={styles.logoutBtn}
+            onClick={signOut}
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
       </div>
     </aside>
   );

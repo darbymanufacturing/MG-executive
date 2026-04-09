@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { CostProvider, useCosts } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
@@ -8,23 +9,35 @@ import Dashboard from './pages/Dashboard.jsx';
 import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
+import Login from './pages/Login.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
+
+/** Shows during auth check and Firestore load */
+function LoadingScreen() {
+  return (
+    <div className={styles.loadingScreen}>
+      <img src="/logo.svg" alt="XSlide" className={styles.loadingLogo} />
+      <div className={styles.spinner} />
+      <p className={styles.loadingText}>Connecting to cloud…</p>
+    </div>
+  );
+}
+
+/** Redirects to /login if not authenticated */
+function ProtectedRoute({ children }) {
+  const { user, authLoading } = useAuth();
+  if (authLoading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
 function AppShell() {
   const { loading } = useCosts();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (loading) {
-    return (
-      <div className={styles.loadingScreen}>
-        <img src="/logo.svg" alt="XSlide" className={styles.loadingLogo} />
-        <div className={styles.spinner} />
-        <p className={styles.loadingText}>Connecting to cloud…</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <div className={styles.layout}>
@@ -42,10 +55,7 @@ function AppShell() {
 
       {/* Overlay (mobile only) */}
       {sidebarOpen && (
-        <div
-          className={styles.overlay}
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className={styles.overlay} onClick={() => setSidebarOpen(false)} />
       )}
 
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -65,11 +75,26 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <CostProvider>
-        <RevenueProvider>
-          <AppShell />
-        </RevenueProvider>
-      </CostProvider>
+      <AuthProvider>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Protected — everything else */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <CostProvider>
+                  <RevenueProvider>
+                    <AppShell />
+                  </RevenueProvider>
+                </CostProvider>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
