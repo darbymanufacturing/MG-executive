@@ -14,9 +14,10 @@ const EMPTY = {
   startDate: todayISO(),
   endDate: '',
   notes: '',
+  location: '',
 };
 
-export default function CostFormModal({ isOpen, onClose, onSave, initialData }) {
+export default function CostFormModal({ isOpen, onClose, onSave, initialData, locations }) {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const isEdit = !!initialData;
@@ -47,6 +48,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData }) 
       ...form,
       amount: parseFloat(form.amount),
       endDate: form.endDate || null,
+      location: form.location || null,
     });
     onClose();
   };
@@ -98,6 +100,19 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData }) 
             </select>
           </div>
         </div>
+
+        {/* Location (only when locations are configured) */}
+        {locations?.length > 0 && (
+          <div className={styles.field}>
+            <label className={styles.label}>Location</label>
+            <select className={styles.select} value={form.location} onChange={set('location')}>
+              <option value="">All Locations (fleet-wide)</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Amount */}
         <div className={styles.field}>

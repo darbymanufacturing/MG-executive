@@ -83,7 +83,7 @@ export function monthlyRevenueSummary(revenueData, year) {
     const prefix = `${y}-${String(i + 1).padStart(2, '0')}`;
     const rows = revenueData.filter((r) => r.date.startsWith(prefix));
     return {
-      month,
+      month: `${month} ${y}`,
       revenue:        rows.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0),
       trips:          rows.reduce((s, r) => s + (r.totalTrips || 0), 0),
       distance:       rows.reduce((s, r) => s + (r.totalTripDistanceKm || 0), 0),
@@ -100,7 +100,7 @@ export function monthlyRevenueSummary(revenueData, year) {
 export function combinedMonthlyTrend(costTrendData, revenueData, year) {
   const revSummary = monthlyRevenueSummary(revenueData, year);
   // Build lookup: 'Jan' → summary entry
-  const revByMonth = Object.fromEntries(revSummary.map((r) => [r.month, r]));
+  const revByMonth = Object.fromEntries(revSummary.map((r) => [r.month.slice(0, 3), r]));
   return costTrendData.map((costMonth) => {
     // costMonth.month is 'Jan 2025' — extract 3-char abbreviation
     const abbr = costMonth.month.slice(0, 3);
@@ -111,6 +111,16 @@ export function combinedMonthlyTrend(costTrendData, revenueData, year) {
       profit:  parseFloat((((rev?.revenue) || 0) - (costMonth.total || 0)).toFixed(2)),
     };
   });
+}
+
+/**
+ * Filter revenue rows by location.
+ * When locationFilter is null or 'all', returns all rows.
+ * When a specific location is chosen, returns only rows tagged to that location.
+ */
+export function filterRevenueByLocation(revenueData, locationFilter) {
+  if (!locationFilter || locationFilter === 'all') return revenueData;
+  return revenueData.filter((r) => r.location === locationFilter);
 }
 
 /**

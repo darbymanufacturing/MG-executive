@@ -61,14 +61,24 @@ export function annualBreakdownByCategory(costs) {
 }
 
 /**
- * Monthly trend data for current year.
- * - X-axis labels show 'Jan 2025' format (not just 'Jan')
- * - Future months with no costs are trimmed
+ * Filter costs by location.
+ * Fleet-wide costs (location null/undefined) are always included.
+ * When locationFilter is null or 'all', returns all costs.
  */
-export function monthlyTrendData(costs) {
+export function filterCostsByLocation(costs, locationFilter) {
+  if (!locationFilter || locationFilter === 'all') return costs;
+  return costs.filter((c) => !c.location || c.location === locationFilter);
+}
+
+/**
+ * Monthly trend data for a given year (defaults to current year).
+ * - X-axis labels show 'Jan 2025' format (not just 'Jan')
+ * - Future months with no costs are trimmed (only for current year)
+ */
+export function monthlyTrendData(costs, year = new Date().getFullYear()) {
   const now = new Date();
-  const year = now.getFullYear();
-  const currentMonthIdx = now.getMonth();
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = year === currentYear ? now.getMonth() : 11;
 
   const all = MONTHS.map((month, i) => {
     const monthDate = new Date(year, i, 1);

@@ -1,24 +1,34 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Trash2, TrendingUp } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CsvImportPanel from '../components/Revenue/CsvImportPanel.jsx';
 import RevenueTable from '../components/Revenue/RevenueTable.jsx';
+import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
+import { useCosts } from '../context/CostContext.jsx';
 import { formatEUR, formatTrips, formatKm } from '../utils/formatters.js';
-import { totalRevenue, avgTripsPerDay, totalDistanceKm, totalTrips } from '../utils/revenueCalculations.js';
+import { totalRevenue, avgTripsPerDay, totalDistanceKm, totalTrips, filterRevenueByLocation } from '../utils/revenueCalculations.js';
 import styles from './Revenue.module.css';
 
 export default function Revenue() {
   const { revenueData, clearAllRevenue } = useRevenue();
+  const { config } = useCosts();
+  const locations = config.locations || [];
   const [clearConfirm, setClearConfirm] = useState(false);
+  const [locationFilter, setLocationFilter] = useState('all');
+
+  const filteredRevenue = useMemo(
+    () => filterRevenueByLocation(revenueData, locationFilter),
+    [revenueData, locationFilter]
+  );
 
   const hasData = revenueData.length > 0;
-  const allRev  = totalRevenue(revenueData);
-  const allKm   = totalDistanceKm(revenueData);
-  const allTrips= totalTrips(revenueData);
-  const avgTrips= avgTripsPerDay(revenueData);
+  const allRev  = totalRevenue(filteredRevenue);
+  const allKm   = totalDistanceKm(filteredRevenue);
+  const allTrips= totalTrips(filteredRevenue);
+  const avgTrips= avgTripsPerDay(filteredRevenue);
 
   return (
     <div className={styles.page}>
@@ -26,11 +36,14 @@ export default function Revenue() {
         title="Revenue"
         subtitle="Import and browse daily revenue data from your platform CSV exports"
         actions={
-          hasData && (
-            <Button variant="danger" size="sm" onClick={() => setClearConfirm(true)}>
-              <Trash2 size={14} /> Clear Revenue Data
-            </Button>
-          )
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
+            {hasData && (
+              <Button variant="danger" size="sm" onClick={() => setClearConfirm(true)}>
+                <Trash2 size={14} /> Clear Revenue Data
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -56,13 +69,13 @@ export default function Revenue() {
             </div>
             <div className={styles.statCard}>
               <span className={styles.statLabel}>Days Imported</span>
-              <span className={styles.statValue}>{revenueData.length}</span>
+              <span className={styles.statValue}>{filteredRevenue.length}</span>
             </div>
           </div>
         )}
 
         {/* CSV Import */}
-        <CsvImportPanel />
+        <CsvImportPanel locations={locations} />
 
         {/* Data table */}
         {hasData && (
@@ -71,7 +84,7 @@ export default function Revenue() {
               <TrendingUp size={16} className={styles.tableSectionIcon} />
               <h2 className={styles.tableSectionTitle}>Daily Revenue Records</h2>
             </div>
-            <RevenueTable />
+            <RevenueTable data={filteredRevenue} />
           </div>
         )}
       </div>

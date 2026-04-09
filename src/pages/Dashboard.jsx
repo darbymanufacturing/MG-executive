@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Euro, Bike, TrendingUp, ListChecks, Target, DollarSign, Plus,
@@ -10,16 +10,18 @@ import CostBreakdownChart from '../components/Dashboard/CostBreakdownChart.jsx';
 import MonthlyCostTrend from '../components/Dashboard/MonthlyCostTrend.jsx';
 import RevenueCostTrend from '../components/Dashboard/RevenueCostTrend.jsx';
 import Button from '../components/Shared/Button.jsx';
+import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import {
   totalMonthlyCost, totalAnnualCost,
   costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
-  breakdownByCategory, monthlyTrendData, budgetVariance,
+  breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
 } from '../utils/calculations.js';
 import {
   totalRevenue, currentMonthRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
+  filterRevenueByLocation,
 } from '../utils/revenueCalculations.js';
 import {
   calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
@@ -36,42 +38,55 @@ export default function Dashboard() {
   const { revenueData } = useRevenue();
   const navigate = useNavigate();
   const [period, setPeriod] = useState('Monthly');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const locations = config.locations || [];
+
+  const currentYear = new Date().getFullYear();
+  const availableYears = useMemo(() => {
+    const years = new Set([currentYear, ...revenueData.map((r) => parseInt(r.date.slice(0, 4), 10))]);
+    return [...years].filter(Boolean).sort((a, b) => b - a);
+  }, [revenueData, currentYear]);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+
+  // ── Location-filtered arrays (upstream filtering) ─────────────────────────
+  const filteredCosts   = useMemo(() => filterCostsByLocation(costs, locationFilter),   [costs, locationFilter]);
+  const filteredRevenue = useMemo(() => filterRevenueByLocation(revenueData, locationFilter), [revenueData, locationFilter]);
 
   const multiplier = period === 'Monthly' ? 1 : period === 'Quarterly' ? 3 : 12;
-  const hasRevenue = revenueData.length > 0;
+  const hasRevenue = filteredRevenue.length > 0;
 
   // ── Cost metrics ─────────────────────────────────────────────────────────
-  const monthlyTotal       = totalMonthlyCost(costs);
-  const annualTotal        = totalAnnualCost(costs);
-  const perScooterMonthly  = costPerScooterMonthly(costs, config.fleetSize);
-  const perScooterDaily    = costPerScooterDaily(costs, config.fleetSize);
-  const perScooterAnnual   = costPerScooterAnnual(costs, config.fleetSize);
-  const breakdown          = breakdownByCategory(costs);
-  const trendData          = monthlyTrendData(costs);
+  const monthlyTotal       = totalMonthlyCost(filteredCosts);
+  const annualTotal        = totalAnnualCost(filteredCosts);
+  const perScooterMonthly  = costPerScooterMonthly(filteredCosts, config.fleetSize);
+  const perScooterDaily    = costPerScooterDaily(filteredCosts, config.fleetSize);
+  const perScooterAnnual   = costPerScooterAnnual(filteredCosts, config.fleetSize);
+  const breakdown          = breakdownByCategory(filteredCosts);
+  const trendData          = monthlyTrendData(filteredCosts, selectedYear);
   const budgetVar          = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
   const displayTotal       = period === 'Annual' ? annualTotal : monthlyTotal * multiplier;
   const displayPerScooter  = period === 'Annual' ? perScooterAnnual : perScooterMonthly * multiplier;
 
   // ── Revenue metrics ───────────────────────────────────────────────────────
-  const monthlyRevenue     = currentMonthRevenue(revenueData);
+  const monthlyRevenue     = currentMonthRevenue(filteredRevenue);
   const displayRevenue     = period === 'Annual'
-    ? totalRevenue(revenueData)
+    ? totalRevenue(filteredRevenue)
     : period === 'Quarterly' ? monthlyRevenue * 3 : monthlyRevenue;
   const displayPnL         = displayRevenue - displayTotal;
-  const tripsPerDay        = avgTripsPerDay(revenueData);
-  const revPerTrip         = revenuePerTrip(revenueData);
-  const utilization        = vehicleUtilization(revenueData, config.fleetSize);
-  const actualRevPerScooter= actualRevenuePerScooterMonthly(revenueData, config.fleetSize);
-  const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, revenueData) : null;
+  const tripsPerDay        = avgTripsPerDay(filteredRevenue);
+  const revPerTrip         = revenuePerTrip(filteredRevenue);
+  const utilization        = vehicleUtilization(filteredRevenue, config.fleetSize);
+  const actualRevPerScooter= actualRevenuePerScooterMonthly(filteredRevenue, config.fleetSize);
+  const combinedTrend      = hasRevenue ? combinedMonthlyTrend(trendData, filteredRevenue, selectedYear) : null;
 
   // ── Financial health metrics ──────────────────────────────────────────────
-  const ebitda       = hasRevenue ? calcEBITDA(costs, revenueData) : null;
-  const roi          = hasRevenue ? calcROI(costs, revenueData) : null;
-  const dscr         = hasRevenue ? calcDSCR(costs, revenueData, config) : null;
-  const breakEven    = calcBreakEvenRevenue(costs);
-  const payback      = hasRevenue ? calcPaybackPeriod(costs, revenueData) : null;
-  const costRecovery = hasRevenue ? calcCostRecoveryRate(costs, revenueData) : null;
-  const revGrowthMoM = hasRevenue ? calcRevGrowthMoM(revenueData) : null;
+  const ebitda       = hasRevenue ? calcEBITDA(filteredCosts, filteredRevenue) : null;
+  const roi          = hasRevenue ? calcROI(filteredCosts, filteredRevenue) : null;
+  const dscr         = hasRevenue ? calcDSCR(filteredCosts, filteredRevenue, config) : null;
+  const breakEven    = calcBreakEvenRevenue(filteredCosts);
+  const payback      = hasRevenue ? calcPaybackPeriod(filteredCosts, filteredRevenue) : null;
+  const costRecovery = hasRevenue ? calcCostRecoveryRate(filteredCosts, filteredRevenue) : null;
+  const revGrowthMoM = hasRevenue ? calcRevGrowthMoM(filteredRevenue) : null;
 
   const isEmpty = costs.length === 0;
 
@@ -93,6 +108,28 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+            {availableYears.length > 1 && (
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                style={{
+                  background: 'var(--color-surface-2)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 'var(--text-sm)',
+                  padding: '7px 10px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            )}
+            <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
           </div>
         }
       />
@@ -132,7 +169,7 @@ export default function Dashboard() {
           <KpiCard
             icon={ListChecks}
             label="Active Cost Items"
-            value={costs.length}
+            value={filteredCosts.length}
             sub={`${Object.keys(breakdown).length} categories`}
           />
           <KpiCard
@@ -164,7 +201,7 @@ export default function Dashboard() {
               icon={TrendingUp}
               label={`Total ${period} Revenue`}
               value={formatEURCompact(displayRevenue)}
-              sub={`${formatEURCompact(totalRevenue(revenueData))} all time`}
+              sub={`${formatEURCompact(totalRevenue(filteredRevenue))} all time`}
               accent
             />
             <KpiCard

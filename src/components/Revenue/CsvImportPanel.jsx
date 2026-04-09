@@ -6,15 +6,20 @@ import { useRevenue } from '../../context/RevenueContext.jsx';
 import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './CsvImportPanel.module.css';
 
-export default function CsvImportPanel() {
+export default function CsvImportPanel({ locations }) {
   const { revenueData, importRevenueDays } = useRevenue();
   const fileRef   = useRef();
-  const [parsed,   setParsed]   = useState(null);   // { rows, errors, total }
-  const [status,   setStatus]   = useState(null);   // { type, text }
-  const [loading,  setLoading]  = useState(false);
-  const [dragging, setDragging] = useState(false);
+  const [parsed,          setParsed]          = useState(null);   // { rows, errors, total }
+  const [status,          setStatus]          = useState(null);   // { type, text }
+  const [loading,         setLoading]         = useState(false);
+  const [dragging,        setDragging]        = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState('');
 
-  const existingDates = new Set(revenueData.map((r) => r.date));
+  const existingDates = new Set(
+    revenueData
+      .filter((r) => !selectedLocation || r.location === selectedLocation)
+      .map((r) => r.date)
+  );
 
   function handleFile(file) {
     if (!file) return;
@@ -39,7 +44,8 @@ export default function CsvImportPanel() {
     if (!parsed?.rows?.length) return;
     setLoading(true);
     try {
-      await importRevenueDays(parsed.rows);
+      const rows = parsed.rows.map((r) => ({ ...r, location: selectedLocation || null }));
+      await importRevenueDays(rows);
       const newCount     = parsed.rows.filter((r) => !existingDates.has(r.date)).length;
       const updateCount  = parsed.rows.length - newCount;
       setStatus({
@@ -140,6 +146,35 @@ export default function CsvImportPanel() {
               <p className={styles.more}>…and {parsed.rows.length - 10} more rows</p>
             )}
           </div>
+
+          {/* Location assignment */}
+          {locations?.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                Which location is this data for?
+              </span>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                style={{
+                  background: 'var(--color-surface-2)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 'var(--text-sm)',
+                  padding: '6px 10px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">All Locations (fleet-wide)</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className={styles.actions}>
             <Button variant="secondary" size="sm" onClick={() => setParsed(null)}>Cancel</Button>

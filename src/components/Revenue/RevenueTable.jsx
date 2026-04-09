@@ -6,15 +6,16 @@ import EmptyState from '../Shared/EmptyState.jsx';
 import { BarChart2 } from 'lucide-react';
 import styles from './RevenueTable.module.css';
 
-export default function RevenueTable() {
+export default function RevenueTable({ data }) {
   const { revenueData } = useRevenue();
+  const source = data ?? revenueData; // use pre-filtered data if provided
   const [startDate, setStartDate] = useState('');
   const [endDate,   setEndDate]   = useState('');
   const [sortBy,    setSortBy]    = useState('date');
   const [sortDir,   setSortDir]   = useState('desc');
 
   const filtered = useMemo(() => {
-    let list = revenueData;
+    let list = source;
     if (startDate) list = list.filter((r) => r.date >= startDate);
     if (endDate)   list = list.filter((r) => r.date <= endDate);
     return [...list].sort((a, b) => {
@@ -26,7 +27,7 @@ export default function RevenueTable() {
       if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [revenueData, startDate, endDate, sortBy, sortDir]);
+  }, [source, startDate, endDate, sortBy, sortDir]);
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -38,7 +39,7 @@ export default function RevenueTable() {
     return <span className={styles.sortActive}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
   };
 
-  if (!revenueData.length) {
+  if (!source.length) {
     return (
       <EmptyState
         icon={BarChart2}
@@ -81,7 +82,7 @@ export default function RevenueTable() {
           </thead>
           <tbody>
             {filtered.map((r) => (
-              <tr key={r.date} className={styles.row}>
+              <tr key={r._docId || r.date} className={styles.row}>
                 <td className={styles.td}><span className={styles.dateCell}>{formatDate(r.date)}</span></td>
                 <td className={styles.td}>{formatTrips(r.totalTrips)}</td>
                 <td className={styles.td}>{r.uniqueUsersCount}</td>

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
-  DollarSign, TrendingUp,
+  DollarSign, TrendingUp, MapPin, Plus, X,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
@@ -17,7 +17,21 @@ export default function Settings() {
   const [clearConfirm, setClearConfirm] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const [projFleet, setProjFleet] = useState(config.fleetSize);
+  const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
+
+  const locations = config.locations || [];
+
+  const handleAddLocation = () => {
+    const trimmed = newLocation.trim();
+    if (!trimmed || locations.includes(trimmed)) return;
+    updateConfig({ locations: [...locations, trimmed] });
+    setNewLocation('');
+  };
+
+  const handleRemoveLocation = (loc) => {
+    updateConfig({ locations: locations.filter((l) => l !== loc) });
+  };
 
   const field = (key, label, type = 'text', extra = {}) => (
     <div className={styles.field}>
@@ -173,6 +187,53 @@ export default function Settings() {
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* Locations */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <MapPin size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Locations</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Add your operating cities or zones. Once configured, you can tag costs and revenue imports
+            to a specific location and filter the dashboard by city.
+          </p>
+
+          {locations.length > 0 ? (
+            <ul className={styles.locationList}>
+              {locations.map((loc) => (
+                <li key={loc} className={styles.locationPill}>
+                  <span className={styles.locationPillName}>{loc}</span>
+                  <button
+                    className={styles.locationPillRemove}
+                    onClick={() => handleRemoveLocation(loc)}
+                    title={`Remove ${loc}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.locationEmpty}>
+              No locations added yet. Add your first city to enable location filtering.
+            </p>
+          )}
+
+          <div className={styles.locationAdd}>
+            <input
+              className={styles.input}
+              placeholder="e.g. Athens"
+              value={newLocation}
+              onChange={(e) => setNewLocation(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddLocation()}
+              style={{ flex: 1 }}
+            />
+            <Button variant="outline" size="sm" onClick={handleAddLocation} disabled={!newLocation.trim()}>
+              <Plus size={14} /> Add
+            </Button>
           </div>
         </section>
 

@@ -71,6 +71,7 @@ export const DEFAULT_CONFIG = {
   targetCostPerScooter: null,
   revenuePerScooter: null,
   monthlyDebtService: null,
+  locations: [],
 };
 
 export const STORAGE_KEYS = {

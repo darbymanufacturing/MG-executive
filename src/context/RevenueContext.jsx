@@ -19,7 +19,7 @@ export function RevenueProvider({ children }) {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, REVENUE_COL), (snap) => {
       const rows = snap.docs
-        .map((d) => d.data())
+        .map((d) => ({ _docId: d.id, ...d.data() }))
         .sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
       setRevenueData(rows);
       setRevenueLoading(false);
@@ -35,8 +35,9 @@ export function RevenueProvider({ children }) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        const ref = doc(db, REVENUE_COL, day.date);
-        batch.set(ref, day); // setDoc via batch → overwrites existing date
+        const docId = day.location ? `${day.date}_${day.location}` : day.date;
+        const ref = doc(db, REVENUE_COL, docId);
+        batch.set(ref, day); // setDoc via batch → overwrites existing doc
       });
       await batch.commit();
     }
@@ -44,8 +45,8 @@ export function RevenueProvider({ children }) {
 
   // ── Delete a single day ───────────────────────────────────────────────────
 
-  const deleteRevenueDay = useCallback(async (date) => {
-    await deleteDoc(doc(db, REVENUE_COL, date));
+  const deleteRevenueDay = useCallback(async (docId) => {
+    await deleteDoc(doc(db, REVENUE_COL, docId));
   }, []);
 
   // ── Clear all revenue data ────────────────────────────────────────────────

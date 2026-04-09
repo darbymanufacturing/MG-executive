@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import CostFormModal from '../components/Costs/CostFormModal.jsx';
@@ -9,7 +9,8 @@ import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { CATEGORIES, FREQUENCIES } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
-import { normalizeToMonthly, getCostStatus } from '../utils/calculations.js';
+import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
+import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { exportCostsCSV, downloadCostTemplate } from '../utils/exportData.js';
 import { parseCostsCSV } from '../utils/costCsvParser.js';
 import styles from './CostManager.module.css';
@@ -25,8 +26,10 @@ const FILTER_TABS = [
 const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };
 
 export default function CostManager() {
-  const { costs, addCost, updateCost, deleteCost, importData } = useCosts();
+  const { costs, config, addCost, updateCost, deleteCost, importData } = useCosts();
+  const locations = config.locations || [];
   const [activeFilter, setActiveFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
@@ -38,7 +41,7 @@ export default function CostManager() {
   const csvFileRef = useRef();
 
   const filtered = useMemo(() => {
-    let list = costs;
+    let list = filterCostsByLocation(costs, locationFilter);
     if (activeFilter !== 'all') list = list.filter((c) => c.category === activeFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -54,7 +57,7 @@ export default function CostManager() {
       return 0;
     });
     return list;
-  }, [costs, activeFilter, search, sortBy, sortDir]);
+  }, [costs, locationFilter, activeFilter, search, sortBy, sortDir]);
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -151,6 +154,7 @@ export default function CostManager() {
               </button>
             ))}
           </div>
+          <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
           <div className={styles.searchWrap}>
             <Search size={14} className={styles.searchIcon} />
             <input
@@ -198,6 +202,7 @@ export default function CostManager() {
                   <th className={`${styles.th} ${styles.right}`}>Monthly Equiv.</th>
                   <th className={styles.th}>Start</th>
                   <th className={styles.th}>Status</th>
+                  {locations.length > 0 && <th className={styles.th}><MapPin size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />Location</th>}
                   <th className={`${styles.th} ${styles.center}`}>Actions</th>
                 </tr>
               </thead>
@@ -234,6 +239,13 @@ export default function CostManager() {
                           <div className={styles.date} style={{ marginTop: 3 }}>{formatDate(cost.endDate)}</div>
                         )}
                       </td>
+                      {locations.length > 0 && (
+                        <td className={styles.td}>
+                          <span style={{ fontSize: 'var(--text-xs)', color: cost.location ? 'var(--color-primary-light)' : 'var(--color-text-muted)' }}>
+                            {cost.location || 'Fleet-wide'}
+                          </span>
+                        </td>
+                      )}
                       <td className={`${styles.td} ${styles.center}`}>
                         <div className={styles.actions}>
                           <button className={styles.actionBtn} onClick={() => openEdit(cost)} title="Edit">
@@ -268,6 +280,7 @@ export default function CostManager() {
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
         initialData={editingCost}
+        locations={locations}
       />
 
       <ConfirmDialog
