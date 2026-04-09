@@ -4,12 +4,14 @@ import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { CostProvider, useCosts } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
+import { SprProvider } from './context/SprContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
+import Spr from './pages/Spr.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -65,6 +67,7 @@ function AppShell() {
           <Route path="/"         element={<Dashboard />} />
           <Route path="/costs"    element={<CostManager />} />
           <Route path="/revenue"  element={<Revenue />} />
+          <Route path="/spr"      element={<Spr />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
@@ -87,7 +90,9 @@ export default function App() {
               <ProtectedRoute>
                 <CostProvider>
                   <RevenueProvider>
-                    <AppShell />
+                    <SprProvider>
+                      <AppShell />
+                    </SprProvider>
                   </RevenueProvider>
                 </CostProvider>
               </ProtectedRoute>
