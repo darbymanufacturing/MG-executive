@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- Dark background -->
-  <rect width="64" height="64" rx="10" fill="#111111"/>
-  <!-- Copper chevron -->
-  <path d="M14 10 L38 32 L14 54" stroke="#A0521D" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Copper parallelogram accent -->
-  <polygon points="40,10  52,10  48,22  36,22" fill="#A0521D"/>
+  <!-- Dark rounded background -->
+  <rect width="64" height="64" rx="12" fill="#131313"/>
+  <!-- White chevron ">" -->
+  <path d="M18 14 L38 32 L18 50" stroke="#FFFFFF" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- White parallelogram accent -->
+  <polygon points="40,13  52,13  48,25  36,25" fill="#FFFFFF"/>
 </svg>

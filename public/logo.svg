@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 75" fill="none">
-  <!-- Copper chevron ">" -->
-  <path d="M13 8 L37 37.5 L13 67" stroke="#A0521D" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- White chevron ">" -->
+  <path d="M13 8 L37 37.5 L13 67" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- XSlide wordmark in white -->
   <text x="55" y="51" font-family="Poppins, sans-serif" font-weight="600" font-size="34" fill="#FFFFFF" letter-spacing="0.4">XSlide</text>
-  <!-- Copper parallelogram accent — dot above the i -->
-  <polygon points="166,8  179,8  174,22  161,22" fill="#A0521D"/>
+  <!-- White parallelogram accent — dot above the i -->
+  <polygon points="166,8  179,8  174,22  161,22" fill="#FFFFFF"/>
 </svg>
