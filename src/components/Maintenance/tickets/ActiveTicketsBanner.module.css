@@ -1,0 +1,26 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, #FF9800 12%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, #FF9800 40%, var(--color-border));
+  border-radius: var(--radius-md);
+  width: 100%;
+}
+
+.icon {
+  color: #FF9800;
+  flex-shrink: 0;
+}
+
+.text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.text strong {
+  color: #FF9800;
+  font-weight: 700;
+}

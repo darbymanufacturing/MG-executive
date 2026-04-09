@@ -1,0 +1,94 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid #FF9800;
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.row:hover {
+  border-color: #FF9800;
+}
+
+.row.critical {
+  border-left-color: #F44336;
+}
+
+.partInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.partName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sku {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: monospace;
+}
+
+.stockInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.stockCount {
+  font-family: var(--font-heading);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.divider {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.reorderCount {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Empty state */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  min-height: 100px;
+}
+
+.emptyIcon {
+  color: #4CAF50;
+  opacity: 0.7;
+}
+
+.emptyText {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
