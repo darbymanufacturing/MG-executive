@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Euro, Bike, TrendingUp, ListChecks, Target, DollarSign, Plus,
   TrendingDown, Activity, Users, BarChart2, Shield, Clock,
-  Wrench, AlertTriangle, Package,
+  Wrench, AlertTriangle, Package, FileDown,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import KpiCard from '../components/Dashboard/KpiCard.jsx';
@@ -26,7 +26,10 @@ import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
+  revenuePerCityBreakdown,
 } from '../utils/revenueCalculations.js';
+import { forecastTrend } from '../utils/forecasting.js';
+import { exportDashboardToPDF } from '../utils/exportData.js';
 import {
   calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
   calcPaybackPeriod, calcCostRecoveryRate, calcRevGrowthMoM,
@@ -69,6 +72,7 @@ export default function Dashboard() {
     lowStockParts,
     tickets,
     parts,
+    scooters,
     config: maintConfig,
   } = useMaintenance();
   const navigate = useNavigate();
@@ -76,11 +80,13 @@ export default function Dashboard() {
   const hasMaintenanceData   = tickets.length > 0 || parts.length > 0;
   const maxActiveTickets     = maintConfig?.maxActiveTickets ?? 3;
 
-  const [viewMode,      setViewMode]      = useState('month'); // 'month' | 'range' | 'all'
-  const [selectedMonth, setSelectedMonth] = useState(todayMonthStr);
-  const [rangeFrom,     setRangeFrom]     = useState('');
-  const [rangeTo,       setRangeTo]       = useState('');
+  const [viewMode,       setViewMode]       = useState('month'); // 'month' | 'range' | 'all'
+  const [selectedMonth,  setSelectedMonth]  = useState(todayMonthStr);
+  const [rangeFrom,      setRangeFrom]      = useState('');
+  const [rangeTo,        setRangeTo]        = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
+  const [showForecast,   setShowForecast]   = useState(false);
+  const [exportingPDF,   setExportingPDF]   = useState(false);
   const locations = config.locations || [];
 
   // ── Location-filtered base arrays ─────────────────────────────────────────
@@ -165,11 +171,23 @@ export default function Dashboard() {
   const revPerTrip         = revenuePerTrip(periodRevenue);
   const utilization        = vehicleUtilization(periodRevenue, config.fleetSize);
   const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, config.fleetSize);
-  const combinedTrend      = hasRevenue
+  const rawCombinedTrend   = hasRevenue
     ? (viewMode === 'all'
         ? allTimeCombinedTrend(filteredCosts, filteredRevenue)
         : combinedMonthlyTrend(trendData, filteredRevenue, chartYear))
     : null;
+
+  const combinedTrend = useMemo(() => {
+    if (!rawCombinedTrend) return null;
+    if (showForecast && viewMode !== 'month') return forecastTrend(rawCombinedTrend, 3);
+    return rawCombinedTrend;
+  }, [rawCombinedTrend, showForecast, viewMode]);
+
+  // C2 — Revenue by city breakdown
+  const cityBreakdown = useMemo(() => {
+    if (!hasRevenue || !locations.length) return [];
+    return revenuePerCityBreakdown(periodRevenue, scooters, locations);
+  }, [periodRevenue, scooters, locations, hasRevenue]);
 
   // Daily breakdown — only computed for "By Month" view
   const dailyTrendData = useMemo(
@@ -204,6 +222,12 @@ export default function Dashboard() {
   const costRecovery= hasPeriodData ? calcCostRecoveryRate(usedCosts, periodRevenue) : null;
 
   const isEmpty = costs.length === 0;
+
+  async function handleExportPDF() {
+    setExportingPDF(true);
+    await exportDashboardToPDF(`xslide-dashboard-${periodLabel.replace(/\s/g, '-').toLowerCase()}.pdf`);
+    setExportingPDF(false);
+  }
 
   // ── Period label for card titles ─────────────────────────────────────────
   const periodLabel = viewMode === 'month'
@@ -261,6 +285,28 @@ export default function Dashboard() {
             )}
 
             <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
+
+            {/* Forecast toggle */}
+            {hasRevenue && viewMode !== 'month' && (
+              <Button
+                variant={showForecast ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setShowForecast((v) => !v)}
+                title="Toggle 3-month linear regression forecast"
+              >
+                <TrendingUp size={14} /> {showForecast ? 'Forecast On' : 'Forecast'}
+              </Button>
+            )}
+
+            {/* PDF export */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
+              disabled={exportingPDF}
+            >
+              <FileDown size={14} /> {exportingPDF ? 'Exporting…' : 'Export PDF'}
+            </Button>
           </div>
         }
       />
@@ -305,7 +351,7 @@ export default function Dashboard() {
               {hasRevenue && viewMode === 'month'
                 ? <DailyRevenueTrend data={dailyTrendData} />
                 : hasRevenue
-                  ? <RevenueCostTrend data={combinedTrend} />
+                  ? <RevenueCostTrend data={combinedTrend} showForecast={showForecast && viewMode !== 'month'} />
                   : <MonthlyCostTrend data={trendData} />
               }
             </div>
@@ -396,6 +442,39 @@ export default function Dashboard() {
               value={formatPercent(utilization)}
               sub={`of ${config.fleetSize} scooters active`}
             />
+          </div>
+        )}
+
+        {/* ── Revenue by City (C2) ── */}
+        {cityBreakdown.length > 1 && (
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h2 className={styles.chartTitle}>Revenue by City · {periodLabel}</h2>
+              <span className={styles.chartSub}>Performance breakdown per location</span>
+            </div>
+            <div className={styles.cityTable}>
+              <div className={styles.cityRow} style={{ fontWeight: 600, color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <span>City</span>
+                <span style={{ textAlign: 'right' }}>Revenue</span>
+                <span style={{ textAlign: 'right' }}>Trips</span>
+                <span style={{ textAlign: 'right' }}>Active Scooters</span>
+                <span style={{ textAlign: 'right' }}>Rev / Scooter</span>
+              </div>
+              {cityBreakdown.map((row) => (
+                <div key={row.city} className={styles.cityRow}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-brand)', display: 'inline-block', flexShrink: 0 }} />
+                    {row.city}
+                  </span>
+                  <span style={{ textAlign: 'right', fontWeight: 600 }}>{formatEUR(row.revenue)}</span>
+                  <span style={{ textAlign: 'right', color: 'var(--color-text-secondary)' }}>{row.trips.toLocaleString()}</span>
+                  <span style={{ textAlign: 'right', color: 'var(--color-text-secondary)' }}>{row.activeScooters}</span>
+                  <span style={{ textAlign: 'right', color: row.revenuePerScooter != null ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                    {row.revenuePerScooter != null ? formatEUR(row.revenuePerScooter) : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

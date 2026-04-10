@@ -1,37 +1,31 @@
-import { CURRENT_VERSION } from './constants.js';
-import { todayISO } from './formatters.js';
-
-/** Download costs + config as a JSON backup file */
+/**
+ * Export costs + config to a JSON backup file.
+ */
 export function exportToJSON(costs, config) {
-  const payload = {
-    version: CURRENT_VERSION,
-    exportedAt: new Date().toISOString(),
-    config,
-    costs,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `xslide-costs-${new Date().toISOString().split('T')[0]}.json`;
+  const payload = JSON.stringify({ costs, config, exportedAt: new Date().toISOString() }, null, 2);
+  const blob = new Blob([payload], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `xslide-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-/** Parse and validate an imported JSON backup */
+/**
+ * Import a JSON backup file produced by exportToJSON.
+ * Returns { costs, config } or throws on invalid format.
+ */
 export function importFromJSON(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target.result);
-        if (!data.costs || !Array.isArray(data.costs)) {
-          reject(new Error('Invalid backup file: missing costs array.'));
-          return;
-        }
+        if (!Array.isArray(data.costs)) throw new Error('Invalid backup file — no costs array found.');
         resolve(data);
-      } catch {
-        reject(new Error('Failed to parse file. Make sure it is a valid JSON backup.'));
+      } catch (err) {
+        reject(new Error('Could not parse file: ' + err.message));
       }
     };
     reader.onerror = () => reject(new Error('Failed to read file.'));
@@ -39,76 +33,88 @@ export function importFromJSON(file) {
   });
 }
 
-/** Helper: trigger a CSV string download */
-function downloadCSV(csvString, filename) {
-  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
+/**
+ * Export costs as CSV.
+ */
+export function exportCostsCSV(costs) {
+  const headers = ['name','category','frequency','amount','startDate','endDate','location','notes'];
+  const rows = costs.map((c) =>
+    headers.map((h) => {
+      const val = c[h] ?? '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }).join(',')
+  );
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `xslide-costs-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-/** Quote a CSV field value (escapes internal quotes) */
-function csvField(v) {
-  const str = v == null ? '' : String(v);
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-const COST_CSV_HEADERS = ['Name', 'Category', 'Frequency', 'Amount (EUR)', 'Start Date', 'End Date', 'Notes'];
-
-/** Export costs array to a CSV file download */
-export function exportCostsCSV(costs) {
-  const rows = costs.map((c) => [
-    csvField(c.name),
-    csvField(c.category),
-    csvField(c.frequency),
-    csvField(c.amount),
-    csvField(c.startDate ?? ''),
-    csvField(c.endDate ?? ''),
-    csvField(c.notes ?? ''),
-  ].join(','));
-  const csv = [COST_CSV_HEADERS.map(csvField).join(','), ...rows].join('\n');
-  downloadCSV(csv, `xslide-costs-${todayISO()}.csv`);
-}
-
-/** Download a blank cost CSV template with one example row */
+/**
+ * Download a blank CSV template for cost import.
+ */
 export function downloadCostTemplate() {
+  const headers = ['name','category','frequency','amount','startDate','endDate','location','notes'];
   const example = [
-    csvField('Insurance'),
-    csvField('fixed'),
-    csvField('monthly'),
-    csvField('250'),
-    csvField('2025-01-01'),
-    csvField(''),
-    csvField('Annual premium paid monthly'),
-  ].join(',');
-  const csv = [COST_CSV_HEADERS.map(csvField).join(','), example].join('\n');
-  downloadCSV(csv, 'xslide-costs-template.csv');
+    '"Monthly Parking Fee"', '"fixed"', '"monthly"', '"150"',
+    '"2025-01-01"', '""', '"Nafplion"', '"Parking lot near port"',
+  ];
+  const csv  = [headers.join(','), example.join(',')].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'xslide-cost-template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-/** Export dashboard section to PDF using html2canvas + jsPDF */
-export async function exportDashboardToPDF(elementId, filename) {
-  const { default: html2canvas } = await import('html2canvas');
-  const { default: jsPDF } = await import('jspdf');
+/**
+ * PDF export utility — captures the #dashboard-export element via html2canvas,
+ * then writes it to a jsPDF document in landscape A4.
+ */
+export async function exportDashboardToPDF(filename = 'xslide-dashboard.pdf') {
+  try {
+    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas'),
+    ]);
 
-  const element = document.getElementById(elementId);
-  if (!element) return;
+    const el = document.getElementById('dashboard-export');
+    if (!el) {
+      console.warn('exportDashboardToPDF: #dashboard-export element not found');
+      return;
+    }
 
-  const canvas = await html2canvas(element, {
-    backgroundColor: '#000000',
-    scale: 2,
-    useCORS: true,
-  });
+    const canvas = await html2canvas(el, {
+      scale:           2,
+      useCORS:         true,
+      backgroundColor: '#0f0f0f',
+      logging:         false,
+    });
 
-  const imgData = canvas.toDataURL('image/png');
-  const pdf = new jsPDF({
-    orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-    unit: 'px',
-    format: [canvas.width / 2, canvas.height / 2],
-  });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf     = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW   = pdf.internal.pageSize.getWidth();
+    const pageH   = pdf.internal.pageSize.getHeight();
 
-  pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
-  pdf.save(filename || `xslide-dashboard-${new Date().toISOString().split('T')[0]}.pdf`);
+    const imgW = pageW;
+    const imgH = (canvas.height * pageW) / canvas.width;
+    let yPos   = 0;
+
+    while (yPos < imgH) {
+      if (yPos > 0) pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, -yPos, imgW, imgH);
+      yPos += pageH;
+    }
+
+    pdf.save(filename);
+  } catch (err) {
+    console.error('PDF export failed:', err);
+    alert('PDF export failed. Check the browser console for details.');
+  }
 }

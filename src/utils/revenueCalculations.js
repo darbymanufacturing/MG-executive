@@ -205,3 +205,33 @@ export function actualRevenuePerScooterMonthly(revenueData, fleetSize) {
   const avgMonthlyRev = activeMths.reduce((s, m) => s + m.revenue, 0) / activeMths.length;
   return avgMonthlyRev / fleetSize;
 }
+
+/**
+ * Revenue breakdown per city for a given period.
+ * Returns array of { city, revenue, trips, activeScooters, revenuePerScooter }
+ * sorted by revenue descending.
+ *
+ * @param {Array}  periodRevenue  - revenue docs already filtered to a time period
+ * @param {Array}  scooters       - scooter docs from Firestore (have city + status)
+ * @param {Array}  cities         - list of city names to iterate
+ */
+export function revenuePerCityBreakdown(periodRevenue, scooters, cities) {
+  if (!cities || cities.length === 0) return [];
+
+  return cities.map((city) => {
+    const cityRevenue = periodRevenue.filter(
+      (r) => (r.location || '').toLowerCase() === city.toLowerCase(),
+    );
+    const revenue = cityRevenue.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+    const trips   = cityRevenue.reduce((s, r) => s + (r.totalTrips || 0), 0);
+
+    const activeScooters = scooters.filter(
+      (s) => s.city === city && s.status === 'Active',
+    ).length;
+
+    const revenuePerScooter = activeScooters > 0 ? revenue / activeScooters : null;
+
+    return { city, revenue, trips, activeScooters, revenuePerScooter };
+  }).filter((row) => row.revenue > 0 || row.activeScooters > 0)
+    .sort((a, b) => b.revenue - a.revenue);
+}

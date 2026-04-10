@@ -8,9 +8,11 @@ import styles from './Chart.module.css';
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
-  const rev    = payload.find((p) => p.dataKey === 'revenue');
-  const profit = payload.find((p) => p.dataKey === 'profit');
-  const costs  = payload.filter((p) => ['fixed','variable','one-off','investment','loan','credit-card'].includes(p.dataKey));
+  const rev      = payload.find((p) => p.dataKey === 'revenue');
+  const profit   = payload.find((p) => p.dataKey === 'profit');
+  const fcastRev = payload.find((p) => p.dataKey === 'forecastRevenue');
+  const fcastCst = payload.find((p) => p.dataKey === 'forecastCost');
+  const costs    = payload.filter((p) => ['fixed','variable','one-off','investment','loan','credit-card'].includes(p.dataKey));
   const totalCost = costs.reduce((s, p) => s + (p.value || 0), 0);
 
   return (
@@ -37,11 +39,23 @@ function CustomTooltip({ active, payload, label }) {
           {profit.value >= 0 ? '▲ Profit' : '▼ Loss'}: {formatEUR(Math.abs(profit.value))}
         </div>
       )}
+      {fcastRev && fcastRev.value !== null && (
+        <div className={styles.tooltipRow} style={{ borderTop: '1px solid #333', marginTop: 4, paddingTop: 4 }}>
+          <span style={{ color: '#7dd3fc' }}>▸ Forecast Revenue</span>
+          <span>{formatEUR(fcastRev.value)}</span>
+        </div>
+      )}
+      {fcastCst && fcastCst.value !== null && (
+        <div className={styles.tooltipRow}>
+          <span style={{ color: '#f9a8d4' }}>▸ Forecast Costs</span>
+          <span>{formatEUR(fcastCst.value)}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function RevenueCostTrend({ data }) {
+export default function RevenueCostTrend({ data, showForecast = false }) {
   const angled = data.length > 7;
   return (
     <div className={styles.chartWrap}>
@@ -93,6 +107,31 @@ export default function RevenueCostTrend({ data }) {
             fillOpacity={0.15}
             name="Net Profit/Loss"
           />
+          {/* Forecast dashed lines (only when showForecast=true) */}
+          {showForecast && (
+            <Line
+              type="monotone"
+              dataKey="forecastRevenue"
+              stroke="#7dd3fc"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+              name="Forecast Revenue"
+              connectNulls
+            />
+          )}
+          {showForecast && (
+            <Line
+              type="monotone"
+              dataKey="forecastCost"
+              stroke="#f9a8d4"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+              name="Forecast Costs"
+              connectNulls
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
