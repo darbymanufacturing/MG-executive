@@ -203,12 +203,12 @@ export default function DecisionGatesTab() {
       />
 
       <ConfirmDialog
-        open={!!deleting}
+        isOpen={!!deleting}
+        onClose={() => setDeleting(null)}
         title="Delete Decision Gate"
         message="This will permanently delete this decision gate."
         confirmLabel="Delete"
         onConfirm={async () => { await deleteGate(deleting); setDeleting(null); }}
-        onCancel={() => setDeleting(null)}
       />
     </div>
   );

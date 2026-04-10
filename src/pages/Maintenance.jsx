@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive,
+  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive, Bike,
 } from 'lucide-react';
 // Package, BarChart2, Settings used in TABS icon array below
 import Header from '../components/Layout/Header.jsx';
@@ -11,6 +11,7 @@ import RepairLogTab from '../components/Maintenance/tabs/RepairLogTab.jsx';
 import PartsTab from '../components/Maintenance/tabs/PartsTab.jsx';
 import AnalyticsTab from '../components/Maintenance/tabs/AnalyticsTab.jsx';
 import ArchivedTab from '../components/Maintenance/tabs/ArchivedTab.jsx';
+import FleetTab    from '../components/Maintenance/tabs/FleetTab.jsx';
 import SettingsTab from '../components/Maintenance/tabs/SettingsTab.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
@@ -18,6 +19,7 @@ import styles from './Maintenance.module.css';
 
 const TABS = [
   { id: 'overview',    label: 'Overview',        icon: LayoutDashboard },
+  { id: 'fleet',       label: 'Fleet',           icon: Bike },
   { id: 'repairlog',   label: 'Repair Log',       icon: Wrench },
   { id: 'parts',       label: 'Parts Pipeline',   icon: Package },
   { id: 'analytics',   label: 'Analytics',        icon: BarChart2 },
@@ -108,6 +110,9 @@ export default function Maintenance() {
         <div className={styles.tabContent}>
           {activeTab === 'overview' && (
             <OverviewTab filteredTickets={filteredTickets} />
+          )}
+          {activeTab === 'fleet' && (
+            <FleetTab />
           )}
           {activeTab === 'repairlog' && (
             <RepairLogTab filteredTickets={filteredTickets} city={city} setCity={setCity} />

@@ -86,6 +86,7 @@ export const DEFAULT_CONFIG = {
   currency: 'EUR',
   targetCostPerScooter: null,
   locations: [],
+  categoryBudgets: {},   // { 'fixed': 2000, 'variable': 1500, ... } monthly EUR
 };
 
 export const STORAGE_KEYS = {

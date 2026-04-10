@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
-  DollarSign, TrendingUp, MapPin, Plus, X, Link2,
+  DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart,
 } from 'lucide-react';
+import { CATEGORIES } from '../utils/constants.js';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
@@ -110,6 +111,42 @@ export default function Settings() {
                 />
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Monthly Category Budgets */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <PieChart size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Monthly Category Budgets</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Set a monthly spend budget per cost category. The Dashboard will show actual vs budget variance for each.
+            Leave blank to skip tracking for that category.
+          </p>
+          <div className={styles.grid}>
+            {Object.entries(CATEGORIES).map(([key, cat]) => (
+              <div key={key} className={styles.field}>
+                <label className={styles.label}>{cat.fullLabel} / month (€)</label>
+                <div className={styles.amountWrap}>
+                  <span className={styles.eurSymbol}>€</span>
+                  <input
+                    type="number"
+                    className={`${styles.input} ${styles.amountInput}`}
+                    value={config.categoryBudgets?.[key] ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                      updateConfig({
+                        categoryBudgets: { ...(config.categoryBudgets || {}), [key]: val },
+                      });
+                    }}
+                    placeholder="No budget set"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 

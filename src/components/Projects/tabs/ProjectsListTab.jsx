@@ -162,12 +162,12 @@ export default function ProjectsListTab() {
       />
 
       <ConfirmDialog
-        open={!!deleting}
+        isOpen={!!deleting}
+        onClose={() => setDeleting(null)}
         title="Delete Project"
         message="This will permanently delete the project, all milestones, blockers, and update logs. This cannot be undone."
         confirmLabel="Delete"
         onConfirm={handleDelete}
-        onCancel={() => setDeleting(null)}
       />
     </div>
   );

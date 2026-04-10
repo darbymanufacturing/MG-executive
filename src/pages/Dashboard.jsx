@@ -513,6 +513,37 @@ export default function Dashboard() {
               <span className={styles.chartSub}>By category · {periodLabel}</span>
             </div>
             <CostBreakdownChart breakdown={breakdown} />
+
+            {/* Budget vs Actual bars */}
+            {config.categoryBudgets && Object.keys(config.categoryBudgets).some((k) => config.categoryBudgets[k] != null) && (
+              <div className={styles.budgetSection}>
+                <h3 className={styles.budgetTitle}>Budget vs Actual</h3>
+                {Object.entries(config.categoryBudgets)
+                  .filter(([, budget]) => budget != null && budget > 0)
+                  .map(([cat, budget]) => {
+                    const actual = breakdown[cat] || 0;
+                    const pct    = Math.min(100, Math.round((actual / budget) * 100));
+                    const over   = actual > budget;
+                    return (
+                      <div key={cat} className={styles.budgetRow}>
+                        <span className={styles.budgetCat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
+                        <div className={styles.budgetBarWrap}>
+                          <div
+                            className={styles.budgetBarFill}
+                            style={{
+                              width: `${pct}%`,
+                              background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e',
+                            }}
+                          />
+                        </div>
+                        <span className={`${styles.budgetAmt} ${over ? styles.budgetOver : ''}`}>
+                          {formatEUR(actual)} / {formatEUR(budget)}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
 
           <div className={styles.chartCard}>

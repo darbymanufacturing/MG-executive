@@ -9,6 +9,7 @@ import { SEED_TICKETS, SEED_PARTS, SEED_CONFIG } from '../utils/maintenanceSeedD
 // ── Firestore paths ───────────────────────────────────────────────────────────
 const TICKETS_COL  = 'maintenanceTickets';
 const PARTS_COL    = 'maintenanceParts';
+const SCOOTERS_COL = 'scooters';
 const CONFIG_DOC   = 'config/maintenance';
 const BATCH_SIZE   = 450;
 
@@ -123,13 +124,14 @@ export function computeDaysOpen(ticket) {
 const MaintenanceContext = createContext(null);
 
 export function MaintenanceProvider({ children }) {
-  const [tickets, setTickets] = useState([]);
-  const [parts,   setParts]   = useState([]);
-  const [config,  setConfig]  = useState(DEFAULT_CONFIG);
-  const [loading, setLoading] = useState(true);
+  const [tickets,  setTickets]  = useState([]);
+  const [parts,    setParts]    = useState([]);
+  const [scooters, setScooters] = useState([]);
+  const [config,   setConfig]   = useState(DEFAULT_CONFIG);
+  const [loading,  setLoading]  = useState(true);
 
   // Track which listeners have fired at least once
-  const [loaded, setLoaded] = useState({ tickets: false, parts: false, config: false });
+  const [loaded, setLoaded] = useState({ tickets: false, parts: false, config: false, scooters: false });
   const markLoaded = (key) => setLoaded((prev) => ({ ...prev, [key]: true }));
 
   // ── Real-time listeners ───────────────────────────────────────────────────
@@ -142,6 +144,10 @@ export function MaintenanceProvider({ children }) {
       setParts(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
       markLoaded('parts');
     });
+    const unsubScooters = onSnapshot(collection(db, SCOOTERS_COL), (snap) => {
+      setScooters(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+      markLoaded('scooters');
+    });
     const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
       if (snap.exists()) {
         setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
@@ -150,11 +156,11 @@ export function MaintenanceProvider({ children }) {
       }
       markLoaded('config');
     });
-    return () => { unsubTickets(); unsubParts(); unsubConfig(); };
+    return () => { unsubTickets(); unsubParts(); unsubScooters(); unsubConfig(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (loaded.tickets && loaded.parts && loaded.config) setLoading(false);
+    if (loaded.tickets && loaded.parts && loaded.config && loaded.scooters) setLoading(false);
   }, [loaded]);
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -254,6 +260,21 @@ export function MaintenanceProvider({ children }) {
     }
   }, []);
 
+  // ── Scooter CRUD ─────────────────────────────────────────────────────────────
+  const addScooter = useCallback(async (data) => {
+    const docId = String(data.scooterId).trim();
+    const now   = new Date().toISOString();
+    await setDoc(doc(db, SCOOTERS_COL, docId), { ...data, createdAt: now, updatedAt: now });
+  }, []);
+
+  const updateScooter = useCallback(async (docId, data) => {
+    await updateDoc(doc(db, SCOOTERS_COL, docId), { ...data, updatedAt: new Date().toISOString() });
+  }, []);
+
+  const deleteScooter = useCallback(async (docId) => {
+    await deleteDoc(doc(db, SCOOTERS_COL, docId));
+  }, []);
+
   // ── Custom tags ───────────────────────────────────────────────────────────────
   const addCustomTag = useCallback(async (type, tag) => {
     const key = type === 'primary' ? 'customPrimaryTags' : 'customSecondaryTags';
@@ -312,6 +333,7 @@ export function MaintenanceProvider({ children }) {
       value={{
         tickets: ticketsWithCalc,
         parts,
+        scooters,
         config,
         loading,
         // Computed
@@ -325,6 +347,10 @@ export function MaintenanceProvider({ children }) {
         updateTicket,
         deleteTicket,
         completeTicket,
+        // Scooter ops
+        addScooter,
+        updateScooter,
+        deleteScooter,
         // Part ops
         addPart,
         updatePart,
