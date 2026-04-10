@@ -41,7 +41,7 @@ export default function ProjectForm({ open, onClose, onSave, initial }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={initial ? 'Edit Project' : 'New Project'}>
+    <Modal isOpen={open} onClose={onClose} title={initial ? 'Edit Project' : 'New Project'}>
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.field}>
           <label>Project Name *</label>

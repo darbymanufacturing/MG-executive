@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Wand2 } from 'lucide-react';
 import { useProjects } from '../../../context/ProjectContext.jsx';
 import ProjectCard from '../ProjectCard.jsx';
 import ProjectForm from '../ProjectForm.jsx';
+import ProjectWizard from '../ProjectWizard.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
 import Button from '../../Shared/Button.jsx';
 import styles from './ProjectsListTab.module.css';
@@ -14,8 +15,9 @@ const OWNER_FILTERS = ['All', 'Kostas', 'Panos', 'Both'];
 export default function ProjectsListTab() {
   const { activeProjects, addProject, updateProject, deleteProject } = useProjects();
 
-  const [formOpen, setFormOpen]   = useState(false);
-  const [editing, setEditing]     = useState(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [formOpen, setFormOpen]     = useState(false);
+  const [editing, setEditing]       = useState(null);
   const [deleting, setDeleting]   = useState(null);
   const [statusF, setStatusF]     = useState('All');
   const [categoryF, setCategoryF] = useState('All');
@@ -110,8 +112,11 @@ export default function ProjectsListTab() {
           ))}
         </div>
 
-        <Button variant="primary" size="sm" onClick={openNew}>
-          <Plus size={14} /> New Project
+        <Button variant="outline" size="sm" onClick={openNew}>
+          <Plus size={14} /> Quick Add
+        </Button>
+        <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>
+          <Wand2 size={14} /> Guided Setup
         </Button>
       </div>
 
@@ -127,7 +132,7 @@ export default function ProjectsListTab() {
         <div className={styles.empty}>
           <p>{activeProjects.length === 0 ? 'No projects yet. Click "New Project" to get started.' : 'No projects match the current filters.'}</p>
           {activeProjects.length === 0 && (
-            <Button variant="primary" onClick={openNew}><Plus size={14} /> New Project</Button>
+            <Button variant="primary" onClick={() => setWizardOpen(true)}><Wand2 size={14} /> Guided Setup</Button>
           )}
         </div>
       ) : (
@@ -142,6 +147,12 @@ export default function ProjectsListTab() {
           ))}
         </div>
       )}
+
+      <ProjectWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onSave={async (form) => { await addProject(form); }}
+      />
 
       <ProjectForm
         open={formOpen}

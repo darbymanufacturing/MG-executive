@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, CheckCircle } from 'lucide-react';
 import { useProjects } from '../../../context/ProjectContext.jsx';
 import Modal from '../../Shared/Modal.jsx';
@@ -28,7 +28,7 @@ function GateForm({ open, onClose, onSave, initial }) {
   const [form, setForm] = useState(EMPTY_GATE);
   const [saving, setSaving] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     if (open) setForm(initial ? { ...EMPTY_GATE, ...initial } : EMPTY_GATE);
   }, [open, initial]);
 
@@ -48,7 +48,7 @@ function GateForm({ open, onClose, onSave, initial }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={initial ? 'Edit Decision Gate' : 'New Decision Gate'}>
+    <Modal isOpen={open} onClose={onClose} title={initial ? 'Edit Decision Gate' : 'New Decision Gate'}>
       <form onSubmit={handleSubmit} className={styles.gateForm}>
         <div className={styles.field}>
           <label>Gate Name *</label>
