@@ -39,6 +39,7 @@ export default function PartsTable({ parts, onEdit, onDelete }) {
             <tr>
               <th>SKU</th>
               <th>Part Name</th>
+              <th>Model</th>
               <th className={styles.right}>Unit Cost</th>
               <th className={styles.right}>Lead Time</th>
               <th className={styles.right}>Stock</th>
@@ -61,6 +62,7 @@ export default function PartsTable({ parts, onEdit, onDelete }) {
                 <tr key={part._docId || part.sku} className={isLow ? styles.rowWarn : ''}>
                   <td className={styles.sku}>{part.sku}</td>
                   <td className={styles.name}>{part.partName}</td>
+                  <td className={styles.model}>{part.model || 'Shared'}</td>
                   <td className={styles.right}>€{fmt(part.unitCost)}</td>
                   <td className={styles.right}>
                     {part.leadTime != null ? `${part.leadTime}d` : '—'}

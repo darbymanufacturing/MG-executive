@@ -78,6 +78,12 @@
   font-weight: 600;
 }
 
+.model {
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 .supplier {
   color: var(--color-text-secondary);
   max-width: 140px;

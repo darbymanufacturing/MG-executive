@@ -4,6 +4,7 @@ import Button from '../../Shared/Button.jsx';
 import styles from './PartForm.module.css';
 
 const STATUS_OPTIONS = ['In Stock', 'Low Stock', 'Out of Stock', 'On Order', 'Discontinued'];
+const MODEL_OPTIONS = ['Shared', 'ES400B 2022', 'ES400B 2023'];
 
 const EMPTY = {
   sku: '',
@@ -17,6 +18,7 @@ const EMPTY = {
   eta: '',
   supplier: '',
   status: 'In Stock',
+  model: 'Shared',
   notes: '',
 };
 
@@ -50,6 +52,7 @@ export default function PartForm({ isOpen, onClose, onSave, initialData }) {
           eta: initialData.eta ?? '',
           supplier: initialData.supplier ?? '',
           status: initialData.status ?? 'In Stock',
+          model: initialData.model ?? 'Shared',
           notes: initialData.notes ?? '',
         });
       } else {
@@ -100,6 +103,7 @@ export default function PartForm({ isOpen, onClose, onSave, initialData }) {
       eta: form.eta || null,
       supplier: form.supplier.trim() || null,
       status: form.status,
+      model: form.model,
       notes: form.notes.trim() || null,
     });
   }
@@ -245,9 +249,22 @@ export default function PartForm({ isOpen, onClose, onSave, initialData }) {
           </div>
         </div>
 
-        {/* Row 6: Status */}
-        <div className={styles.field}>
-          <label className={styles.label}>Status</label>
+        {/* Row 6: Model + Status */}
+        <div className={styles.grid2}>
+          <div className={styles.field}>
+            <label className={styles.label}>Model</label>
+            <select
+              className={styles.select}
+              value={form.model}
+              onChange={(e) => set('model', e.target.value)}
+            >
+              {MODEL_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Status</label>
           <div className={styles.statusRow}>
             <select
               className={styles.select}
@@ -272,6 +289,7 @@ export default function PartForm({ isOpen, onClose, onSave, initialData }) {
                 Suggest: {statusSuggestion}
               </button>
             )}
+          </div>
           </div>
         </div>
 

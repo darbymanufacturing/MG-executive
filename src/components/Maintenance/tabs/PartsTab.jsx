@@ -6,7 +6,7 @@ import PartsTable from '../parts/PartsTable.jsx';
 import PartForm from '../parts/PartForm.jsx';
 import styles from './PartsTab.module.css';
 
-const INITIAL_FILTERS = { search: '', status: '', supplier: '' };
+const INITIAL_FILTERS = { search: '', status: '', model: '', supplier: '' };
 
 export default function PartsTab() {
   const { parts, addPart, updatePart, deletePart } = useMaintenance();
@@ -32,6 +32,7 @@ export default function PartsTab() {
       if (!matchesSku && !matchesName) return false;
     }
     if (filters.status && p.status !== filters.status) return false;
+    if (filters.model && p.model !== filters.model) return false;
     if (filters.supplier) {
       const q = filters.supplier.toLowerCase();
       if (!(p.supplier || '').toLowerCase().includes(q)) return false;

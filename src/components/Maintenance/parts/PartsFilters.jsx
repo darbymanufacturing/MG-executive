@@ -9,9 +9,11 @@ const STATUS_OPTIONS = [
   'Discontinued',
 ];
 
+const MODEL_OPTIONS = ['Shared', 'ES400B 2022', 'ES400B 2023'];
+
 export default function PartsFilters({ filters, onChange, onClear }) {
   const hasActive =
-    filters.search || (filters.status && filters.status !== 'All') || filters.supplier;
+    filters.search || (filters.status && filters.status !== 'All') || filters.supplier || filters.model;
 
   return (
     <div className={styles.bar}>
@@ -39,6 +41,17 @@ export default function PartsFilters({ filters, onChange, onClear }) {
             <option key={s} value={s === 'All' ? '' : s}>
               {s}
             </option>
+          ))}
+        </select>
+
+        <select
+          className={styles.select}
+          value={filters.model}
+          onChange={(e) => onChange('model', e.target.value)}
+        >
+          <option value="">All Models</option>
+          {MODEL_OPTIONS.map((m) => (
+            <option key={m} value={m}>{m}</option>
           ))}
         </select>
 
