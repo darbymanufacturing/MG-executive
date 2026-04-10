@@ -436,7 +436,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2010800084",
@@ -450,7 +451,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2010900037",
@@ -464,7 +466,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2010900050",
@@ -478,7 +481,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011000076",
@@ -492,7 +496,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011000086",
@@ -506,7 +511,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011000097",
@@ -520,7 +526,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300103",
@@ -534,7 +541,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300108",
@@ -548,7 +556,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300117",
@@ -562,7 +571,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300127",
@@ -576,7 +586,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300128",
@@ -590,7 +601,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011300150",
@@ -604,7 +616,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011400060",
@@ -618,7 +631,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011600002",
@@ -632,7 +646,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011600005",
@@ -646,7 +661,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011800024",
@@ -660,7 +676,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2011800043",
@@ -674,7 +691,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020100038",
@@ -688,7 +706,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020100039",
@@ -702,7 +721,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020100040",
@@ -716,7 +736,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020100046",
@@ -730,7 +751,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020200040",
@@ -744,7 +766,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020600003",
@@ -758,7 +781,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020700034",
@@ -772,7 +796,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020700043",
@@ -786,7 +811,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020700100",
@@ -800,7 +826,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020800002",
@@ -814,7 +841,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020800007",
@@ -828,7 +856,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020900037",
@@ -842,7 +871,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020900039",
@@ -856,7 +886,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2020900066",
@@ -870,7 +901,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021000064",
@@ -884,7 +916,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021000065",
@@ -898,7 +931,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021000072",
@@ -912,7 +946,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021000073",
@@ -926,7 +961,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021000080",
@@ -940,7 +976,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021300006",
@@ -954,7 +991,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021300007",
@@ -968,7 +1006,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021300060",
@@ -982,7 +1021,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021500154",
@@ -996,7 +1036,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021700008",
@@ -1010,7 +1051,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2021700009",
@@ -1024,7 +1066,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2022100022",
@@ -1038,7 +1081,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2022100025",
@@ -1052,7 +1096,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2030500135",
@@ -1066,7 +1111,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2030700020",
@@ -1080,7 +1126,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2030800002",
@@ -1094,7 +1141,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031000017",
@@ -1108,7 +1156,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031400014",
@@ -1122,7 +1171,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031400026",
@@ -1136,7 +1186,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031400027",
@@ -1150,7 +1201,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031600021",
@@ -1164,7 +1216,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031700024",
@@ -1178,7 +1231,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031700054",
@@ -1192,7 +1246,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2031800100",
@@ -1206,7 +1261,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2036300005",
@@ -1220,7 +1276,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100107",
@@ -1234,7 +1291,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100213",
@@ -1248,7 +1306,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100241",
@@ -1262,7 +1321,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100272",
@@ -1276,7 +1336,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100276",
@@ -1290,7 +1351,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100304",
@@ -1304,7 +1366,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100305",
@@ -1318,7 +1381,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100310",
@@ -1332,7 +1396,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100326",
@@ -1346,7 +1411,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100328",
@@ -1360,7 +1426,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100330",
@@ -1374,7 +1441,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100343",
@@ -1388,7 +1456,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100346",
@@ -1402,7 +1471,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100347",
@@ -1416,7 +1486,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100350",
@@ -1430,7 +1501,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100369",
@@ -1444,7 +1516,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100370",
@@ -1458,7 +1531,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100380",
@@ -1472,7 +1546,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100395",
@@ -1486,7 +1561,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100396",
@@ -1500,7 +1576,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100397",
@@ -1514,7 +1591,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100398",
@@ -1528,7 +1606,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100407",
@@ -1542,7 +1621,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100410",
@@ -1556,7 +1636,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100413",
@@ -1570,7 +1651,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100418",
@@ -1584,7 +1666,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100420",
@@ -1598,7 +1681,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100425",
@@ -1612,7 +1696,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100427",
@@ -1626,7 +1711,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100431",
@@ -1640,7 +1726,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100446",
@@ -1654,7 +1741,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100503",
@@ -1668,7 +1756,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100517",
@@ -1682,7 +1771,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100519",
@@ -1696,7 +1786,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100567",
@@ -1710,7 +1801,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040100851",
@@ -1724,7 +1816,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040200027",
@@ -1738,7 +1831,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040200028",
@@ -1752,7 +1846,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040200035",
@@ -1766,7 +1861,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040300038",
@@ -1780,7 +1876,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040500041",
@@ -1794,7 +1891,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040500048",
@@ -1808,7 +1906,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040500050",
@@ -1822,7 +1921,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040800002",
@@ -1836,7 +1936,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040800006",
@@ -1850,7 +1951,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040900041",
@@ -1864,7 +1966,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040900049",
@@ -1878,7 +1981,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040900051",
@@ -1892,7 +1996,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040900058",
@@ -1906,7 +2011,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2040900060",
@@ -1920,7 +2026,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2041000173",
@@ -1934,7 +2041,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2041000174",
@@ -1948,7 +2056,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2042600002",
@@ -1962,7 +2071,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2042800003",
@@ -1976,7 +2086,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2050100009",
@@ -1990,7 +2101,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "4060000060",
@@ -2004,7 +2116,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "4100000016",
@@ -2018,7 +2131,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "Shared"
   },
   {
     sku: "2010100184.0",
@@ -2032,7 +2146,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2010200058",
@@ -2046,7 +2161,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2010400033",
@@ -2060,7 +2176,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2010600027",
@@ -2074,7 +2191,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2010700438",
@@ -2088,7 +2206,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011000110",
@@ -2102,7 +2221,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011000155",
@@ -2116,7 +2236,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011000156",
@@ -2130,7 +2251,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011200052",
@@ -2144,7 +2266,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011300132",
@@ -2158,7 +2281,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2011300141",
@@ -2172,7 +2296,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2020500059",
@@ -2186,7 +2311,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2020700033",
@@ -2200,7 +2326,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2030900059",
@@ -2214,7 +2341,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2031400019",
@@ -2228,7 +2356,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2031900106",
@@ -2242,7 +2371,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2032500058",
@@ -2256,7 +2386,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2040100511",
@@ -2270,7 +2401,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "2041100098",
@@ -2284,7 +2416,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "3040100652",
@@ -2298,7 +2431,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "3040200102",
@@ -2312,7 +2446,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "4020000335",
@@ -2326,7 +2461,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "4040000165",
@@ -2340,7 +2476,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   },
   {
     sku: "4040001297",
@@ -2354,7 +2491,8 @@ export const SEED_PARTS = [
     eta: null,
     supplier: "",
     status: "",
-    notes: ""
+    notes: "",
+    model: "ES400B 2022"
   }
 ];
 
