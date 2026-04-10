@@ -6,6 +6,7 @@ import { CostProvider, useCosts } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
+import { ProjectProvider } from './context/ProjectContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import CostManager from './pages/CostManager.jsx';
@@ -14,6 +15,7 @@ import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
+import Projects from './pages/Projects.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -66,9 +68,10 @@ function AppShell() {
 
       <main className={styles.main}>
         <Routes>
-          <Route path="/"         element={<Dashboard />} />
-          <Route path="/costs"    element={<CostManager />} />
-          <Route path="/revenue"  element={<Revenue />} />
+          <Route path="/"            element={<Dashboard />} />
+          <Route path="/projects"    element={<Projects />} />
+          <Route path="/costs"       element={<CostManager />} />
+          <Route path="/revenue"     element={<Revenue />} />
           <Route path="/spr"         element={<Spr />} />
           <Route path="/maintenance" element={<Maintenance />} />
           <Route path="/settings"    element={<Settings />} />
@@ -95,7 +98,9 @@ export default function App() {
                   <RevenueProvider>
                     <SprProvider>
                       <MaintenanceProvider>
-                        <AppShell />
+                        <ProjectProvider>
+                          <AppShell />
+                        </ProjectProvider>
                       </MaintenanceProvider>
                     </SprProvider>
                   </RevenueProvider>
