@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
+import Button from '../../Shared/Button.jsx';
 import ConfigEditor from '../settings/ConfigEditor.jsx';
 import SeasonalityEditor from '../settings/SeasonalityEditor.jsx';
 import CsvImporter from '../settings/CsvImporter.jsx';
@@ -15,16 +16,24 @@ function SectionHeader({ title, subtitle }) {
 }
 
 export default function SettingsTab() {
-  const { importTickets, importParts } = useMaintenance();
+  const { importTickets, importParts, patchPartModels } = useMaintenance();
 
   const [ticketsSuccess, setTicketsSuccess] = useState(null);
   const [partsSuccess, setPartsSuccess] = useState(null);
+  const [patchState, setPatchState] = useState('idle'); // idle | loading | done
 
   async function handleImportTickets(rows) {
     setTicketsSuccess(null);
     await importTickets(rows);
     setTicketsSuccess(rows.length);
     setTimeout(() => setTicketsSuccess(null), 4000);
+  }
+
+  async function handlePatchModels() {
+    setPatchState('loading');
+    await patchPartModels();
+    setPatchState('done');
+    setTimeout(() => setPatchState('idle'), 4000);
   }
 
   async function handleImportParts(rows) {
@@ -52,6 +61,29 @@ export default function SettingsTab() {
           subtitle="Monthly average daily revenue values used to weight seasonal revenue loss estimates."
         />
         <SeasonalityEditor />
+      </section>
+
+      {/* Sync Part Models */}
+      <section className={styles.section}>
+        <SectionHeader
+          title="Sync Part Models"
+          subtitle="Re-assigns each part's Model field (Shared / ES400B 2022 / ES400B 2023) from the master Excel mapping. Run this once to fix any incorrect model labels."
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handlePatchModels}
+            disabled={patchState === 'loading'}
+          >
+            {patchState === 'loading' ? 'Syncing…' : patchState === 'done' ? 'Synced ✓' : 'Sync Part Models'}
+          </Button>
+          {patchState === 'done' && (
+            <span style={{ fontSize: '0.875rem', color: 'var(--color-success)' }}>
+              All part models updated successfully.
+            </span>
+          )}
+        </div>
       </section>
 
       {/* Import */}

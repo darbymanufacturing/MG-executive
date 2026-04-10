@@ -114,7 +114,7 @@ export default function Maintenance() {
             <PartsTab />
           )}
           {activeTab === 'analytics' && (
-            <AnalyticsTab />
+            <AnalyticsTab filteredTickets={filteredTickets} />
           )}
           {activeTab === 'settings' && (
             <SettingsTab />

@@ -22,6 +22,90 @@ const DEFAULT_CONFIG = {
   },
 };
 
+// ── SKU → Model mapping (sourced from Xslide Maintenance Master V2.xlsx) ────
+const SKU_MODEL_MAP = {
+  "2010100184": "ES400B 2022", "2010200058": "ES400B 2022",
+  "2010200117": "ES400B 2023", "2010400006": "ES400B 2023",
+  "2010400033": "ES400B 2022", "2010500214": "Shared",
+  "2010600027": "ES400B 2022", "2010600066": "ES400B 2023",
+  "2010700097": "ES400B 2023", "2010700438": "ES400B 2022",
+  "2010800084": "Shared",      "2010900037": "Shared",
+  "2010900050": "Shared",      "2011000076": "Shared",
+  "2011000086": "Shared",      "2011000097": "Shared",
+  "2011000110": "ES400B 2022", "2011000155": "ES400B 2022",
+  "2011000156": "ES400B 2022", "2011000173": "ES400B 2023",
+  "2011000174": "ES400B 2023", "2011000188": "ES400B 2023",
+  "2011200052": "ES400B 2022", "2011200067": "ES400B 2023",
+  "2011300103": "Shared",      "2011300108": "Shared",
+  "2011300117": "Shared",      "2011300127": "Shared",
+  "2011300128": "Shared",      "2011300132": "ES400B 2022",
+  "2011300141": "ES400B 2022", "2011300150": "Shared",
+  "2011400060": "Shared",      "2011600002": "Shared",
+  "2011600005": "Shared",      "2011800024": "Shared",
+  "2011800043": "Shared",      "2020100038": "Shared",
+  "2020100039": "Shared",      "2020100040": "Shared",
+  "2020100046": "Shared",      "2020100144": "ES400B 2023",
+  "2020100145": "ES400B 2023", "2020200040": "Shared",
+  "2020500059": "ES400B 2022", "2020500091": "ES400B 2023",
+  "2020600003": "Shared",      "2020700033": "ES400B 2022",
+  "2020700034": "Shared",      "2020700043": "Shared",
+  "2020700092": "ES400B 2023", "2020700100": "Shared",
+  "2020800002": "Shared",      "2020800007": "Shared",
+  "2020900037": "Shared",      "2020900039": "Shared",
+  "2020900066": "Shared",      "2021000064": "Shared",
+  "2021000065": "Shared",      "2021000072": "Shared",
+  "2021000073": "Shared",      "2021000080": "Shared",
+  "2021300006": "Shared",      "2021300007": "Shared",
+  "2021300060": "Shared",      "2021500154": "Shared",
+  "2021700008": "Shared",      "2021700009": "Shared",
+  "2022100022": "Shared",      "2022100025": "Shared",
+  "2030500135": "Shared",      "2030700020": "Shared",
+  "2030800002": "Shared",      "2030900059": "ES400B 2022",
+  "2030900090": "ES400B 2023", "2031000017": "Shared",
+  "2031400014": "Shared",      "2031400019": "ES400B 2022",
+  "2031400026": "Shared",      "2031400027": "Shared",
+  "2031600021": "Shared",      "2031700024": "Shared",
+  "2031700054": "Shared",      "2031800100": "Shared",
+  "2031900070": "ES400B 2023", "2031900106": "ES400B 2022",
+  "2032500003": "ES400B 2023", "2032500058": "ES400B 2022",
+  "2036300005": "Shared",      "2040100107": "Shared",
+  "2040100213": "Shared",      "2040100241": "Shared",
+  "2040100272": "Shared",      "2040100276": "Shared",
+  "2040100304": "Shared",      "2040100305": "Shared",
+  "2040100310": "Shared",      "2040100326": "Shared",
+  "2040100328": "Shared",      "2040100330": "Shared",
+  "2040100343": "Shared",      "2040100346": "Shared",
+  "2040100347": "Shared",      "2040100350": "Shared",
+  "2040100369": "Shared",      "2040100370": "Shared",
+  "2040100380": "Shared",      "2040100395": "Shared",
+  "2040100396": "Shared",      "2040100397": "Shared",
+  "2040100398": "Shared",      "2040100407": "Shared",
+  "2040100410": "Shared",      "2040100413": "Shared",
+  "2040100418": "Shared",      "2040100420": "Shared",
+  "2040100425": "Shared",      "2040100427": "Shared",
+  "2040100431": "Shared",      "2040100446": "Shared",
+  "2040100447": "ES400B 2023", "2040100503": "Shared",
+  "2040100511": "ES400B 2022", "2040100517": "Shared",
+  "2040100519": "Shared",      "2040100567": "Shared",
+  "2040100851": "Shared",      "2040200027": "Shared",
+  "2040200028": "Shared",      "2040200035": "Shared",
+  "2040300038": "Shared",      "2040500041": "Shared",
+  "2040500048": "Shared",      "2040500050": "Shared",
+  "2040800002": "Shared",      "2040800006": "Shared",
+  "2040900041": "Shared",      "2040900049": "Shared",
+  "2040900051": "Shared",      "2040900058": "Shared",
+  "2040900060": "Shared",      "2041000173": "Shared",
+  "2041000174": "Shared",      "2041100098": "ES400B 2022",
+  "2042600002": "Shared",      "2042800003": "Shared",
+  "2050100009": "Shared",      "3040100652": "ES400B 2022",
+  "3040200083": "ES400B 2023", "3040200102": "ES400B 2022",
+  "4020000233": "ES400B 2023", "4020000335": "ES400B 2022",
+  "4040000165": "ES400B 2022", "4040000236": "ES400B 2023",
+  "4040000950": "ES400B 2023", "4040001297": "ES400B 2022",
+  "4060000060": "Shared",      "4100000016": "Shared",
+  "4190001828": "ES400B 2023",
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function computeDaysOpen(ticket) {
@@ -168,6 +252,20 @@ export function MaintenanceProvider({ children }) {
     }
   }, []);
 
+  // ── Patch part models from SKU_MODEL_MAP ─────────────────────────────────────
+  const patchPartModels = useCallback(async () => {
+    const allParts = parts; // live snapshot from Firestore listener
+    for (let i = 0; i < allParts.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      allParts.slice(i, i + BATCH_SIZE).forEach((p) => {
+        const sku = String(p.sku || p._docId || '').replace(/\.0$/, '').trim();
+        const model = SKU_MODEL_MAP[sku] ?? 'Shared';
+        batch.update(doc(db, PARTS_COL, p._docId), { model });
+      });
+      await batch.commit();
+    }
+  }, [parts]);
+
   // ── Seed data loader ──────────────────────────────────────────────────────────
   const loadSeedData = useCallback(async () => {
     // Write config first
@@ -225,6 +323,7 @@ export function MaintenanceProvider({ children }) {
         importParts,
         // Seed
         loadSeedData,
+        patchPartModels,
       }}
     >
       {children}
