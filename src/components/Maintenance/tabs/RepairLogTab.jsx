@@ -49,7 +49,9 @@ export default function RepairLogTab({ filteredTickets }) {
     }
 
     if (filters.tag) {
-      result = result.filter((t) => t.primaryTag === filters.tag);
+      result = result.filter((t) =>
+        (t.primaryTag || '').split(',').map((s) => s.trim()).includes(filters.tag),
+      );
     }
 
     return result;

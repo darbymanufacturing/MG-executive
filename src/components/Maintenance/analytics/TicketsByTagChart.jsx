@@ -5,8 +5,12 @@ import {
 function buildData(tickets) {
   const counts = {};
   tickets.forEach((t) => {
-    const tag = t.primaryTag || 'Untagged';
-    counts[tag] = (counts[tag] || 0) + 1;
+    const tags = t.primaryTag
+      ? t.primaryTag.split(',').map((s) => s.trim())
+      : ['Untagged'];
+    tags.forEach((tag) => {
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
   });
   return Object.entries(counts)
     .map(([name, count]) => ({ name, count }))
