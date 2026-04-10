@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../Shared/Modal.jsx';
 import Button from '../../Shared/Button.jsx';
+import TagPicker from './TagPicker.jsx';
 import { useCosts } from '../../../context/CostContext.jsx';
+import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import styles from './TicketForm.module.css';
 
 const PRIMARY_TAGS = [
@@ -14,7 +16,7 @@ const SECONDARY_TAGS = [
   'Routine Maintenance', 'Parts Required', 'Bolt Extractor Kit Required', 'Donor',
 ];
 
-const CATEGORIES = { Q: 'Quoted', M: 'Medium/Estimated', C: 'Complex', B: 'Basic', F: 'Finished' };
+const CATEGORIES = { Q: 'Quick (<2hr)', M: 'Medium/Estimated', C: 'Complex', B: 'Blocked', F: 'Finished' };
 const STATUSES   = ['Active', 'Backlog', 'Investigation', 'Blocked', 'Donor', 'Completed'];
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -36,6 +38,7 @@ function blank() {
 
 export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtMaxActive }) {
   const { config } = useCosts();
+  const { config: mConfig, addCustomTag } = useMaintenance();
   const cities = config.locations?.length ? config.locations : ['Corinth', 'Nafplion'];
 
   const [form,   setForm]   = useState(blank());
@@ -164,30 +167,29 @@ export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtM
             )}
           </div>
 
-          {/* Primary Tag */}
-          <div className={styles.field}>
-            <label className={styles.label}>Primary Tag <span className={styles.req}>*</span></label>
-            <select
-              className={`${styles.select} ${errors.primaryTag ? styles.inputError : ''}`}
+          {/* Primary Tags */}
+          <div className={`${styles.field} ${styles.fullWidth}`}>
+            <label className={styles.label}>Primary Tags <span className={styles.req}>*</span></label>
+            <TagPicker
               value={form.primaryTag}
-              onChange={(e) => set('primaryTag', e.target.value)}
-            >
-              {PRIMARY_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+              onChange={(v) => set('primaryTag', v)}
+              presetTags={PRIMARY_TAGS}
+              customTags={mConfig.customPrimaryTags || []}
+              onAddTag={(tag) => addCustomTag('primary', tag)}
+            />
             {errors.primaryTag && <span className={styles.errorMsg}>{errors.primaryTag}</span>}
           </div>
 
-          {/* Secondary Tag */}
-          <div className={styles.field}>
-            <label className={styles.label}>Secondary Tag</label>
-            <select
-              className={styles.select}
+          {/* Secondary Tags */}
+          <div className={`${styles.field} ${styles.fullWidth}`}>
+            <label className={styles.label}>Secondary Tags</label>
+            <TagPicker
               value={form.secondaryTag}
-              onChange={(e) => set('secondaryTag', e.target.value)}
-            >
-              <option value="">None</option>
-              {SECONDARY_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+              onChange={(v) => set('secondaryTag', v)}
+              presetTags={SECONDARY_TAGS}
+              customTags={mConfig.customSecondaryTags || []}
+              onAddTag={(tag) => addCustomTag('secondary', tag)}
+            />
           </div>
 
           {/* Date Completed — only when status is Completed */}

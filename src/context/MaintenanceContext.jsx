@@ -15,6 +15,8 @@ const BATCH_SIZE   = 450;
 const DEFAULT_CONFIG = {
   revenueRatePerDay: 3.67,
   maxActiveTickets:  3,
+  customPrimaryTags:   [],
+  customSecondaryTags: [],
   seasonalityIndex: {
     jan: 2.39, feb: 2.68, mar: 3.58, apr: 3.54,
     may: 3.57, jun: 4.83, jul: 5.95, aug: 5.76,
@@ -252,6 +254,17 @@ export function MaintenanceProvider({ children }) {
     }
   }, []);
 
+  // ── Custom tags ───────────────────────────────────────────────────────────────
+  const addCustomTag = useCallback(async (type, tag) => {
+    const key = type === 'primary' ? 'customPrimaryTags' : 'customSecondaryTags';
+    const current = config[key] || [];
+    if (current.includes(tag)) return;
+    const updated = [...current, tag];
+    const next = { ...config, [key]: updated };
+    setConfig(next);
+    await updateDoc(doc(db, CONFIG_DOC), { [key]: updated });
+  }, [config]);
+
   // ── Patch part models from SKU_MODEL_MAP ─────────────────────────────────────
   const patchPartModels = useCallback(async () => {
     const allParts = parts; // live snapshot from Firestore listener
@@ -321,6 +334,8 @@ export function MaintenanceProvider({ children }) {
         // Import
         importTickets,
         importParts,
+        // Custom tags
+        addCustomTag,
         // Seed
         loadSeedData,
         patchPartModels,

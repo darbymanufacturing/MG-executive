@@ -2,9 +2,13 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 
+const ARCHIVED_STATUSES = ['Completed', 'Donor'];
+
 function buildData(tickets) {
   const counts = {};
-  tickets.forEach((t) => {
+  tickets
+    .filter((t) => !ARCHIVED_STATUSES.includes(t.status))
+    .forEach((t) => {
     const tags = t.primaryTag
       ? t.primaryTag.split(',').map((s) => s.trim())
       : ['Untagged'];

@@ -11,12 +11,16 @@ const STATUS_COLORS = {
   Completed: '#4CAF50',
 };
 
+const ARCHIVED_STATUSES = ['Completed', 'Donor'];
+
 function buildData(tickets) {
   const counts = {};
-  tickets.forEach((t) => {
-    const s = t.status || 'Unknown';
-    counts[s] = (counts[s] || 0) + 1;
-  });
+  tickets
+    .filter((t) => !ARCHIVED_STATUSES.includes(t.status))
+    .forEach((t) => {
+      const s = t.status || 'Unknown';
+      counts[s] = (counts[s] || 0) + 1;
+    });
   return Object.entries(counts).map(([name, value]) => ({ name, value }));
 }
 

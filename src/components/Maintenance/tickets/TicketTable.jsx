@@ -12,7 +12,7 @@ const STATUS_COLORS = {
   Completed:     '#4CAF50',
 };
 
-const CATEGORIES = { Q: 'Quoted', M: 'Medium/Est.', C: 'Complex', B: 'Basic', F: 'Finished' };
+const CATEGORIES = { Q: 'Quick', M: 'Medium/Est.', C: 'Complex', B: 'Blocked', F: 'Finished' };
 
 function truncate(str, max = 40) {
   if (!str) return '—';

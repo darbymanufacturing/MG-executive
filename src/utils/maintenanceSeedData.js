@@ -420,7 +420,7 @@ export const SEED_TICKETS = [
     secondaryTag: "",
     dateCompleted: null,
     notes: "Needs close inspection, headlight was dim and then it stopped working,"
-  }
+  },
 ];
 
 export const SEED_PARTS = [
@@ -2493,6 +2493,139 @@ export const SEED_PARTS = [
     status: "",
     notes: "",
     model: "ES400B 2022"
+  }
+,
+  {
+    sku: "2010100185",
+    partName: "Lithium-ion battery pack (with lithium-ion battery intelligent protection board BMS-13 series to 15 series software V1.0)",
+    unitCost: 301.23, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2010200117",
+    partName: "motor",
+    unitCost: 52.34, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2010400006",
+    partName: "Charging port",
+    unitCost: 2.33, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2010600066",
+    partName: "Meter",
+    unitCost: 20.93, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2010700097",
+    partName: "central control system",
+    unitCost: 104.67, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2011000173",
+    partName: "Front turn signal left",
+    unitCost: 2.33, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2011000174",
+    partName: "Front turn signal right",
+    unitCost: 2.33, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2011000188",
+    partName: "taillight",
+    unitCost: 4.58, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2011200067",
+    partName: "electronic lock",
+    unitCost: 10.90, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2020100144",
+    partName: "Handlebar tube left plug cover",
+    unitCost: 0.58, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2020100145",
+    partName: "Handlebar tube right plug cover",
+    unitCost: 0.58, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2020500091",
+    partName: "Grip",
+    unitCost: 1.39, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2020700092",
+    partName: "Fixed seat",
+    unitCost: 3.49, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2030900090",
+    partName: "handlebar pipe",
+    unitCost: 4.65, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2031900070",
+    partName: "front wheel set",
+    unitCost: 20.80, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2032500003",
+    partName: "Hub brake assembly",
+    unitCost: 3.49, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "2040100447",
+    partName: "Semi-round head torx screws with column",
+    unitCost: 0.11, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "3040200083",
+    partName: "QR code",
+    unitCost: 0.35, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "4020000233",
+    partName: "Phone holder with wireless charging",
+    unitCost: 5.24, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "4040000236",
+    partName: "ES400B pedal cover (plastic spray)",
+    unitCost: 5.24, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "4040000950",
+    partName: "ES400B frame (spray molded)",
+    unitCost: 63.97, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
+  },
+  {
+    sku: "4190001828",
+    partName: "ES400A front straight rod (plastic spraying + labeling)",
+    unitCost: 16.28, leadTime: 0, stockOnHand: 0, reorderPoint: 0, unitsOnOrder: 0,
+    orderDate: null, eta: null, supplier: "", status: "", notes: "", model: "ES400B 2023"
   }
 ];
 

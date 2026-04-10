@@ -16,6 +16,10 @@
   gap: var(--space-1);
 }
 
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
 .label {
   font-size: var(--text-xs);
   font-weight: 600;

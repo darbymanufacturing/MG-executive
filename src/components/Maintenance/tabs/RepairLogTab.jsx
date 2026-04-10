@@ -8,7 +8,8 @@ import TicketTable from '../tickets/TicketTable.jsx';
 import TicketForm from '../tickets/TicketForm.jsx';
 import styles from './RepairLogTab.module.css';
 
-const EMPTY_FILTERS = { search: '', status: '', category: '', tag: '' };
+const ARCHIVED_STATUSES = ['Completed', 'Donor'];
+const EMPTY_FILTERS = { search: '', statuses: [], categories: [], tags: [] };
 
 export default function RepairLogTab({ filteredTickets }) {
   const {
@@ -20,8 +21,18 @@ export default function RepairLogTab({ filteredTickets }) {
   const [showForm,      setShowForm]      = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
 
-  function handleFilterChange(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  function handleSearch(val) {
+    setFilters((prev) => ({ ...prev, search: val }));
+  }
+
+  function handleToggle(key, value) {
+    setFilters((prev) => {
+      const current = prev[key] || [];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, [key]: next };
+    });
   }
 
   function handleClearFilters() {
@@ -29,7 +40,8 @@ export default function RepairLogTab({ filteredTickets }) {
   }
 
   const displayTickets = useMemo(() => {
-    let result = filteredTickets;
+    // Exclude archived tickets — those live in the Archived tab
+    let result = filteredTickets.filter((t) => !ARCHIVED_STATUSES.includes(t.status));
 
     if (filters.search.trim()) {
       const q = filters.search.trim().toLowerCase();
@@ -40,18 +52,19 @@ export default function RepairLogTab({ filteredTickets }) {
       );
     }
 
-    if (filters.status) {
-      result = result.filter((t) => t.status === filters.status);
+    if (filters.statuses.length > 0) {
+      result = result.filter((t) => filters.statuses.includes(t.status));
     }
 
-    if (filters.category) {
-      result = result.filter((t) => t.category === filters.category);
+    if (filters.categories.length > 0) {
+      result = result.filter((t) => filters.categories.includes(t.category));
     }
 
-    if (filters.tag) {
-      result = result.filter((t) =>
-        (t.primaryTag || '').split(',').map((s) => s.trim()).includes(filters.tag),
-      );
+    if (filters.tags.length > 0) {
+      result = result.filter((t) => {
+        const ticketTags = (t.primaryTag || '').split(',').map((s) => s.trim());
+        return filters.tags.some((tag) => ticketTags.includes(tag));
+      });
     }
 
     return result;
@@ -94,7 +107,8 @@ export default function RepairLogTab({ filteredTickets }) {
 
       <TicketFilters
         filters={filters}
-        onChange={handleFilterChange}
+        onSearch={handleSearch}
+        onToggle={handleToggle}
         onClear={handleClearFilters}
       />
 
