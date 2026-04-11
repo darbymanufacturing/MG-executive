@@ -24,7 +24,7 @@ export default function ProjectCard({ project, onEdit, onDelete }) {
   const [showAddUpdate, setShowAddUpdate]   = useState(false);
 
   const {
-    toggleMilestone, addMilestone, deleteMilestone,
+    toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
     addBlocker, toggleBlocker, deleteBlocker,
     addUpdate, archiveProject,
   } = useProjects();
@@ -107,9 +107,10 @@ export default function ProjectCard({ project, onEdit, onDelete }) {
           {/* Milestones */}
           <MilestoneList
             milestones={project.milestones || []}
-            onToggle={(mid)   => toggleMilestone(project._docId, mid)}
-            onAdd={(m)        => addMilestone(project._docId, m)}
-            onDelete={(mid)   => deleteMilestone(project._docId, mid)}
+            onToggle={(mid)        => toggleMilestone(project._docId, mid)}
+            onAdd={(m)             => addMilestone(project._docId, m)}
+            onDelete={(mid)        => deleteMilestone(project._docId, mid)}
+            onUpdate={(mid, changes) => updateMilestone(project._docId, mid, changes)}
           />
 
           {/* Blockers */}

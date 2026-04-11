@@ -102,6 +102,15 @@ export function ProjectProvider({ children }) {
     await updateDoc(doc(db, PROJECTS_COL, docId), { milestones, updatedAt: serverTimestamp() });
   }, [projects]);
 
+  const updateMilestone = useCallback(async (docId, milestoneId, changes) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return;
+    const milestones = project.milestones.map((m) =>
+      m.id === milestoneId ? { ...m, ...changes } : m,
+    );
+    await updateDoc(doc(db, PROJECTS_COL, docId), { milestones, updatedAt: serverTimestamp() });
+  }, [projects]);
+
   // ── Blocker helpers ───────────────────────────────────────────────────────
   const addBlocker = useCallback(async (docId, text) => {
     const project = projects.find((p) => p._docId === docId);
@@ -170,7 +179,7 @@ export function ProjectProvider({ children }) {
       projects, activeProjects, archivedProjects,
       gates, loading,
       addProject, updateProject, deleteProject, archiveProject,
-      toggleMilestone, addMilestone, deleteMilestone,
+      toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
       addBlocker, toggleBlocker, deleteBlocker,
       addUpdate,
       addGate, updateGate, deleteGate,
