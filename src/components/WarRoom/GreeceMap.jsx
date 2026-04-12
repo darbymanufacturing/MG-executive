@@ -8,9 +8,9 @@ import styles from './GreeceMap.module.css';
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const INITIAL_VIEW = {
-  longitude: 22.5,
-  latitude:  38.8,
-  zoom:      5.6,
+  longitude: 23.2,
+  latitude:  38.3,
+  zoom:      7.2,
 };
 
 /**
@@ -57,9 +57,12 @@ export default function GreeceMap({ cityData = [] }) {
         initialViewState={INITIAL_VIEW}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
-        interactive={false}
         id="warRoomMap"
         attributionControl={true}
+        scrollZoom={true}
+        dragPan={true}
+        doubleClickZoom={true}
+        touchZoomRotate={true}
       >
         {/* Animated connection lines between all active city pairs */}
         {activeCities.length >= 2 && (

@@ -3,7 +3,6 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
 @keyframes warRoomOut {
   from { opacity: 1; }
   to   { opacity: 0; }
@@ -18,42 +17,43 @@
   flex-direction: column;
   animation: warRoomIn 600ms ease forwards;
 }
-
 .overlay.exiting {
   animation: warRoomOut 400ms ease forwards;
   pointer-events: none;
 }
 
-/* ── Top bar ── */
+/* ── Top bar — Victoria 3 style resource strip ── */
 .topBar {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
-  border-bottom: 1px solid rgba(160, 82, 29, 0.2);
-  background: rgba(6, 10, 12, 0.95);
+  padding: 0 16px;
+  height: 44px;
+  border-bottom: 1px solid rgba(160, 82, 29, 0.25);
+  background: rgba(5, 7, 9, 0.95);
   backdrop-filter: blur(12px);
   flex-shrink: 0;
-  z-index: 10;
+  z-index: 100;
 }
 
 .backBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: none;
   border: 1px solid rgba(160, 82, 29, 0.3);
-  border-radius: 6px;
-  color: rgba(201, 125, 73, 0.7);
+  border-radius: 5px;
+  color: rgba(201, 125, 73, 0.65);
   font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 6px 12px;
+  padding: 5px 10px;
   cursor: pointer;
-  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  flex-shrink: 0;
+  transition: border-color 150ms, color 150ms, background 150ms;
 }
 .backBtn:hover {
   border-color: #A0521D;
@@ -61,7 +61,7 @@
   background: rgba(160, 82, 29, 0.08);
 }
 
-/* Centred title block */
+/* Centred title */
 .titleBlock {
   position: absolute;
   left: 50%;
@@ -69,80 +69,87 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
   pointer-events: none;
 }
-
 .title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
   color: #C97D49;
-  text-shadow: 0 0 20px rgba(201, 125, 73, 0.5);
+  text-shadow: 0 0 16px rgba(201,125,73,0.45);
   line-height: 1;
 }
-
 .subtitle {
-  font-size: 9px;
-  letter-spacing: 0.2em;
+  font-size: 8px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(160, 82, 29, 0.55);
+  color: rgba(160, 82, 29, 0.5);
   line-height: 1;
+  margin-top: 2px;
 }
 
-/* Right side info */
-.topRight {
+/* Right stats bar — Victoria 3 resource icons */
+.statsBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.statItem {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  padding: 0 8px;
+}
+.statLabel {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(201,125,73,0.45);
+  line-height: 1;
+}
+.statValue {
+  font-size: 13px;
+  font-weight: 700;
+  color: #C97D49;
+  line-height: 1.2;
+  text-shadow: 0 0 8px rgba(201,125,73,0.35);
+}
+
+.statDivider {
+  width: 1px;
+  height: 22px;
+  background: rgba(160,82,29,0.2);
+  flex-shrink: 0;
 }
 
 .dateLabel {
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(201, 125, 73, 0.55);
-  letter-spacing: 0.06em;
-}
-
-.cityCount {
   font-size: 10px;
-  color: rgba(201, 125, 73, 0.35);
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: rgba(201,125,73,0.4);
+  letter-spacing: 0.06em;
+  padding-left: 8px;
 }
 
-/* ── Map container ── */
+/* ── Map area ── */
 .mapContainer {
   flex: 1;
   position: relative;
   overflow: hidden;
 }
 
-/* ── Scan-line overlay for CRT / tactical aesthetic ── */
-.scanlines {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(0, 0, 0, 0.06) 3px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-  pointer-events: none;
-  z-index: 20;
-}
-
-/* ── Vignette ── */
+/* Vignette */
 .vignette {
   position: absolute;
   inset: 0;
   background: radial-gradient(
     ellipse at center,
-    transparent 55%,
-    rgba(4, 6, 8, 0.7) 100%
+    transparent 50%,
+    rgba(4, 6, 8, 0.55) 100%
   );
   pointer-events: none;
-  z-index: 21;
+  z-index: 30;
 }
