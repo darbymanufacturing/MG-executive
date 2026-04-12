@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Environment variables (contains API keys — never commit)
+.env
+.env.local
+.env.*.local

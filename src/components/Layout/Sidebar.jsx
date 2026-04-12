@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, FolderKanban } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import styles from './Sidebar.module.css';
 
 const NAV = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/projects',   icon: FolderKanban,    label: 'Projects' },
+  { to: '/projects',   icon: Crosshair,       label: 'War Room' },
   { to: '/costs',      icon: ListChecks,      label: 'Cost Manager' },
   { to: '/revenue',    icon: Receipt,         label: 'Revenue' },
   { to: '/spr',        icon: Radar,           label: 'SPR' },

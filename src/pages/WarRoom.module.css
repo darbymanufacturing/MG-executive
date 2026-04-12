@@ -1,0 +1,148 @@
+/* ── Full-screen overlay ── */
+@keyframes warRoomIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes warRoomOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #060a0c;
+  display: flex;
+  flex-direction: column;
+  animation: warRoomIn 600ms ease forwards;
+}
+
+.overlay.exiting {
+  animation: warRoomOut 400ms ease forwards;
+  pointer-events: none;
+}
+
+/* ── Top bar ── */
+.topBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(160, 82, 29, 0.2);
+  background: rgba(6, 10, 12, 0.95);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid rgba(160, 82, 29, 0.3);
+  border-radius: 6px;
+  color: rgba(201, 125, 73, 0.7);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+.backBtn:hover {
+  border-color: #A0521D;
+  color: #C97D49;
+  background: rgba(160, 82, 29, 0.08);
+}
+
+/* Centred title block */
+.titleBlock {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #C97D49;
+  text-shadow: 0 0 20px rgba(201, 125, 73, 0.5);
+  line-height: 1;
+}
+
+.subtitle {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(160, 82, 29, 0.55);
+  line-height: 1;
+}
+
+/* Right side info */
+.topRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.dateLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(201, 125, 73, 0.55);
+  letter-spacing: 0.06em;
+}
+
+.cityCount {
+  font-size: 10px;
+  color: rgba(201, 125, 73, 0.35);
+  letter-spacing: 0.04em;
+}
+
+/* ── Map container ── */
+.mapContainer {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Scan-line overlay for CRT / tactical aesthetic ── */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.06) 3px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ── Vignette ── */
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(4, 6, 8, 0.7) 100%
+  );
+  pointer-events: none;
+  z-index: 21;
+}
