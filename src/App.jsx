@@ -7,6 +7,8 @@ import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
 import { ProjectProvider } from './context/ProjectContext.jsx';
+import { DiaryProvider } from './context/DiaryContext.jsx';
+import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import CostManager from './pages/CostManager.jsx';
@@ -88,6 +90,9 @@ function AppShell() {
           <Route path="/settings"    element={<Settings />} />
         </Routes>
       </main>
+
+      {/* Diary bubble — floats above all content including War Room (z-index 300) */}
+      <DiaryBubble />
     </div>
   );
 }
@@ -110,7 +115,9 @@ export default function App() {
                     <SprProvider>
                       <MaintenanceProvider>
                         <ProjectProvider>
-                          <AppShell />
+                          <DiaryProvider>
+                            <AppShell />
+                          </DiaryProvider>
                         </ProjectProvider>
                       </MaintenanceProvider>
                     </SprProvider>

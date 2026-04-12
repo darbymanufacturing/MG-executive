@@ -1,0 +1,93 @@
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
+
+const SYSTEM_PROMPT = `You are a data entry assistant for XSlide, a Greek micromobility company that operates electric scooters.
+You receive natural-language diary entries from the operator and convert them into structured data actions.
+
+Return ONLY valid JSON in this exact shape — no markdown, no explanation:
+{
+  "summary": "one-line description of what this entry does",
+  "actions": [
+    {
+      "module": "scooter|cost|revenue|ticket|part|project|milestone|blocker|update|gate",
+      "operation": "add|update|delete",
+      "data": { ... }
+    }
+  ],
+  "unresolved": ["list of assumptions made or missing info"]
+}
+
+Module data shapes:
+- scooter add: { scooterId, city, status("Active"|"In Repair"|"Retired"|"Donor"), purchaseDate(YYYY-MM-DD or null), batteryHealth(0-100 or null) }
+- cost add: { name, category("fixed"|"variable"|"loan"|"credit-card"), amount, frequency("monthly"|"weekly"|"annual"|"once"|"daily"|"quarterly"), startDate(YYYY-MM-DD), notes(or null), location(or null) }
+- revenue add: { date(YYYY-MM-DD), location, revenue(number), trips(number or null) }
+- ticket add: { scooterId, city, dateEntered(YYYY-MM-DD), category("Q"|"M"|"C"|"B"|"F"), status("Active"), primaryTag, issueDescription, notes(or null) }
+  ticket categories: Q=Quality, M=Mechanical, C=Cosmetic, B=Battery, F=Fleet
+- part add: { sku, name, stockOnHand, reorderPoint, unitCost }
+- project add: { name, description, owner("Kostas"|"Panos"|"Both"), status("Green"|"Amber"|"Red"), category("Expansion"|"Operations"|"Technology"|"Finance"|"Legal"), startDate(YYYY-MM-DD or null), targetDate(YYYY-MM-DD or null) }
+- milestone add: { projectName(match from context), title, dueDate(YYYY-MM-DD or null) }
+- blocker add: { projectName(match from context), text }
+- update add: { projectName(match from context), text }
+- gate add: { name, question, threshold(number), currentValue(number), unit(string), decisionDate(YYYY-MM-DD or null), status("On Track"|"At Risk") }
+
+Use context.today as today's date. Use context.locations to match city names (fuzzy ok). Use context.projectNames to match project references.
+If something is ambiguous, make a reasonable default and add it to unresolved[].`;
+
+function buildPrompt(text, context) {
+  return `Context:
+- Today: ${context.today}
+- Known locations: ${(context.locations || []).join(', ')}
+- Known scooter IDs: ${(context.scooterIds || []).slice(0, 20).join(', ')}${context.scooterIds?.length > 20 ? '...' : ''}
+- Known projects: ${(context.projectNames || []).join(', ')}
+
+Diary entry:
+"${text}"`;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { text, context = {} } = req.body || {};
+
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+
+  if (!process.env.ANTHROPIC_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_KEY not configured on server' });
+  }
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildPrompt(text, context) }],
+    });
+
+    const raw = message.content[0]?.text || '{}';
+
+    // Strip any accidental markdown fences
+    const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    // Validate shape
+    if (!parsed.actions || !Array.isArray(parsed.actions)) {
+      parsed.actions = [];
+    }
+    if (!parsed.unresolved || !Array.isArray(parsed.unresolved)) {
+      parsed.unresolved = [];
+    }
+    if (!parsed.summary) {
+      parsed.summary = 'Diary entry';
+    }
+
+    return res.status(200).json(parsed);
+  } catch (err) {
+    console.error('diary-parse error:', err);
+    return res.status(500).json({ error: err.message || 'Parse failed' });
+  }
+}
