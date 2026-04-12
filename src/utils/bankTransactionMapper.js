@@ -22,9 +22,15 @@ export function inferCategory(tx) {
   return 'variable';
 }
 
+/** Returns true only for outgoing payments (debits have negative amount in Salt Edge) */
+export function isDebitTransaction(tx) {
+  return (tx.amount ?? 0) < 0;
+}
+
 export function mapTransactionToCost(tx) {
-  // Salt Edge: negative amount = debit (outgoing payment)
-  const amount = Math.abs(tx.amount ?? 0);
+  // Salt Edge: negative amount = debit (outgoing payment); credits are skipped by caller
+  if ((tx.amount ?? 0) >= 0) return null; // guard: ignore credits/zero-amount transactions
+  const amount = Math.abs(tx.amount);
   const name   = tx.extra?.payee || tx.extra?.payee_information || tx.description || 'Bank Transaction';
 
   return {

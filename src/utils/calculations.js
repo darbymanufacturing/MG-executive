@@ -31,9 +31,9 @@ export function costPerScooterMonthly(costs, fleetSize) {
   return totalMonthlyCost(costs) / fleetSize;
 }
 
-/** Cost per scooter per day (~30 days) */
+/** Cost per scooter per day (uses 365/12 ≈ 30.44 days/month) */
 export function costPerScooterDaily(costs, fleetSize) {
-  return costPerScooterMonthly(costs, fleetSize) / 30;
+  return costPerScooterMonthly(costs, fleetSize) / (365 / 12);
 }
 
 /** Cost per scooter annually */
@@ -132,7 +132,7 @@ export function getCostStatus(cost) {
 }
 
 /** What-if: cost per scooter at a different fleet size */
-export function projectedCostPerScooter(costs, newFleetSize) {
+export function projectedCostPerScooter(costs, newFleetSize, currentFleetSize) {
   if (!newFleetSize || newFleetSize === 0) return 0;
   const fixedMonthly = costs
     .filter((c) => c.category === 'fixed' || c.category === 'investment')
@@ -140,9 +140,9 @@ export function projectedCostPerScooter(costs, newFleetSize) {
   const variableMonthly = costs
     .filter((c) => c.category === 'variable' || c.category === 'one-off')
     .reduce((s, c) => s + normalizeToMonthly(c), 0);
-  // Fixed costs stay the same regardless of fleet size; variable scale per scooter
-  const currentFleetSize = costs.length > 0 ? null : 1; // handled by caller
-  return (fixedMonthly + variableMonthly * newFleetSize) / newFleetSize;
+  // Fixed costs stay constant; variable costs scale per scooter from current base
+  const variablePerScooter = currentFleetSize > 0 ? variableMonthly / currentFleetSize : 0;
+  return (fixedMonthly + variablePerScooter * newFleetSize) / newFleetSize;
 }
 
 /** Simpler projection used by the slider: fixed stays, variable per scooter is kept constant */

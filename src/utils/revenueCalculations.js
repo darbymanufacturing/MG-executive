@@ -21,9 +21,12 @@ export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
     tripsByDate[r.date] = (tripsByDate[r.date] || 0) + (r.totalTrips       || 0);
   });
 
-  // Spread monthly costs evenly across all days
+  // Spread monthly costs evenly across all days; also include one-time costs in this month
   const monthlyCost  = totalMonthlyCost(costs);
-  const dailyCostRate = monthlyCost / daysInMonth;
+  const oneTimeCost  = costs
+    .filter((c) => c.frequency === 'one-time' && c.startDate?.startsWith(selectedMonth))
+    .reduce((s, c) => s + (c.amount || 0), 0);
+  const dailyCostRate = (monthlyCost + oneTimeCost) / daysInMonth;
 
   return Array.from({ length: daysInMonth }, (_, i) => {
     const dayNum  = i + 1;
@@ -67,9 +70,10 @@ export function currentMonthRevenue(revenueData) {
 /** Revenue per scooter for a given period (total revenue / fleet size) */
 export function revenuePerScooter(revenueData, fleetSize) {
   if (!fleetSize) return 0;
-  const days = revenueData.length;
-  if (!days) return 0;
-  const months = days / 30;
+  // Use distinct dates to avoid over-counting multi-location rows
+  const distinctDates = new Set(revenueData.map((r) => r.date)).size;
+  if (!distinctDates) return 0;
+  const months = distinctDates / (365 / 12);
   return totalRevenue(revenueData) / fleetSize / months;
 }
 
@@ -78,8 +82,10 @@ export function profitLoss(revenueData, costs) {
   const rev = totalRevenue(revenueData);
   // Use the same monthly normalization as the cost side
   const monthlyCost = totalMonthlyCost(costs);
-  const days = revenueData.length || 30;
-  const months = days / 30;
+  // Use distinct dates for accurate period length
+  const distinctDates = new Set(revenueData.map((r) => r.date)).size;
+  const days = distinctDates || 30;
+  const months = days / (365 / 12);
   const costForPeriod = monthlyCost * months;
   return rev - costForPeriod;
 }
@@ -98,11 +104,11 @@ export function revenuePerTrip(revenueData) {
   return totalRevenue(revenueData) / trips;
 }
 
-/** Vehicle utilization: avg unique vehicles / fleet size × 100 */
+/** Vehicle utilization: avg unique vehicles / fleet size × 100 (capped at 100%) */
 export function vehicleUtilization(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return 0;
   const avgVehicles = revenueData.reduce((s, r) => s + (r.uniqueVehiclesCount || 0), 0) / revenueData.length;
-  return (avgVehicles / fleetSize) * 100;
+  return Math.min(100, (avgVehicles / fleetSize) * 100);
 }
 
 /** Total trip distance across all rows (km) */
@@ -137,16 +143,15 @@ export function monthlyRevenueSummary(revenueData, year) {
 
 /**
  * Merge monthly cost trend data with monthly revenue for the combined chart.
- * Matches by 3-char month abbreviation (cost labels are now 'Jan 2025' format).
+ * Matches by full month label ('Jan 2025') to avoid cross-year collisions.
  */
 export function combinedMonthlyTrend(costTrendData, revenueData, year) {
   const revSummary = monthlyRevenueSummary(revenueData, year);
-  // Build lookup: 'Jan' → summary entry
-  const revByMonth = Object.fromEntries(revSummary.map((r) => [r.month.slice(0, 3), r]));
+  // Build lookup: 'Jan 2025' → summary entry (full label avoids year collision)
+  const revByMonth = Object.fromEntries(revSummary.map((r) => [r.month, r]));
   return costTrendData.map((costMonth) => {
-    // costMonth.month is 'Jan 2025' — extract 3-char abbreviation
-    const abbr = costMonth.month.slice(0, 3);
-    const rev  = revByMonth[abbr];
+    // costMonth.month is already 'Jan 2025' — match directly
+    const rev = revByMonth[costMonth.month];
     return {
       ...costMonth,
       revenue: parseFloat(((rev?.revenue) || 0).toFixed(2)),
@@ -196,13 +201,19 @@ export function allTimeCombinedTrend(costs, revenueData) {
 
 /**
  * Actual monthly revenue per scooter (revenue / fleet size for that month).
+ * Uses YYYY-MM grouping to correctly handle multi-year data.
  */
 export function actualRevenuePerScooterMonthly(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return null;
-  const monthlyData = monthlyRevenueSummary(revenueData);
-  const activeMths = monthlyData.filter((m) => m.revenue > 0);
+  // Aggregate by YYYY-MM key to avoid silently dropping prior-year data
+  const byMonth = {};
+  revenueData.forEach((r) => {
+    const key = r.date.slice(0, 7);
+    byMonth[key] = (byMonth[key] || 0) + (r.totalPaidRevenue || 0);
+  });
+  const activeMths = Object.values(byMonth).filter((v) => v > 0);
   if (!activeMths.length) return null;
-  const avgMonthlyRev = activeMths.reduce((s, m) => s + m.revenue, 0) / activeMths.length;
+  const avgMonthlyRev = activeMths.reduce((s, v) => s + v, 0) / activeMths.length;
   return avgMonthlyRev / fleetSize;
 }
 

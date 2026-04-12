@@ -33,18 +33,30 @@ export function importFromJSON(file) {
   });
 }
 
+// Column headers that match parseCostsCSV's EXPECTED_HEADERS exactly (round-trip compatible)
+const CSV_HEADERS   = ['Name', 'Category', 'Frequency', 'Amount (EUR)', 'Start Date', 'End Date', 'Notes'];
+const CSV_FIELD_MAP = {
+  'Name':         'name',
+  'Category':     'category',
+  'Frequency':    'frequency',
+  'Amount (EUR)': 'amount',
+  'Start Date':   'startDate',
+  'End Date':     'endDate',
+  'Notes':        'notes',
+};
+
 /**
- * Export costs as CSV.
+ * Export costs as CSV (headers match the import parser for a lossless round-trip).
  */
 export function exportCostsCSV(costs) {
-  const headers = ['name','category','frequency','amount','startDate','endDate','location','notes'];
+  const headerRow = CSV_HEADERS.map((h) => `"${h}"`).join(',');
   const rows = costs.map((c) =>
-    headers.map((h) => {
-      const val = c[h] ?? '';
+    CSV_HEADERS.map((h) => {
+      const val = c[CSV_FIELD_MAP[h]] ?? '';
       return `"${String(val).replace(/"/g, '""')}"`;
     }).join(',')
   );
-  const csv  = [headers.join(','), ...rows].join('\n');
+  const csv  = [headerRow, ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -56,14 +68,15 @@ export function exportCostsCSV(costs) {
 
 /**
  * Download a blank CSV template for cost import.
+ * Headers are identical to exportCostsCSV for round-trip compatibility.
  */
 export function downloadCostTemplate() {
-  const headers = ['name','category','frequency','amount','startDate','endDate','location','notes'];
+  const headerRow = CSV_HEADERS.map((h) => `"${h}"`).join(',');
   const example = [
     '"Monthly Parking Fee"', '"fixed"', '"monthly"', '"150"',
-    '"2025-01-01"', '""', '"Nafplion"', '"Parking lot near port"',
+    '"2025-01-01"', '""', '"Parking lot near port"',
   ];
-  const csv  = [headers.join(','), example.join(',')].join('\n');
+  const csv  = [headerRow, example.join(',')].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

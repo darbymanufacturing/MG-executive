@@ -39,7 +39,9 @@ function parseRow(line) {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
-      inQuotes = !inQuotes;
+      // Handle escaped double-quotes ("") within quoted fields
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
     } else if (ch === ',' && !inQuotes) {
       values.push(current.trim());
       current = '';

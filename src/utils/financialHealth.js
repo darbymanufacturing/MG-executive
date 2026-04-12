@@ -6,16 +6,38 @@ import { normalizeToAnnual, normalizeToMonthly, totalMonthlyCost, totalAnnualCos
 import { monthlyRevenueSummary } from './revenueCalculations.js';
 
 /**
- * Annualized revenue: average of months that have data × 12.
- * Consistent with actualRevenuePerScooterMonthly pattern.
+ * Annualized revenue based on the actual data span.
+ * - If ≥12 months of history exist: sums the last 12 calendar months exactly
+ *   (zero months for off-season are included, so seasonal businesses aren't overstated).
+ * - If <12 months: scales total by (12 / spanMonths) for a fair extrapolation.
  */
 export function annualizedRevenue(revenueData) {
   if (!revenueData.length) return 0;
-  const summary = monthlyRevenueSummary(revenueData);
-  const active = summary.filter((m) => m.revenue > 0);
-  if (!active.length) return 0;
-  const avgMonthly = active.reduce((s, m) => s + m.revenue, 0) / active.length;
-  return avgMonthly * 12;
+
+  // Determine data span in months
+  const dates    = revenueData.map((r) => r.date).sort();
+  const earliest = new Date(dates[0]   + 'T12:00:00Z');
+  const latest   = new Date(dates[dates.length - 1] + 'T12:00:00Z');
+  const spanMonths = (latest.getUTCFullYear() - earliest.getUTCFullYear()) * 12
+    + (latest.getUTCMonth() - earliest.getUTCMonth()) + 1;
+
+  if (spanMonths >= 12) {
+    // Sum the last 12 complete calendar months (including off-season zeros)
+    const now = new Date();
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      total += revenueData
+        .filter((r) => r.date.startsWith(key))
+        .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+    }
+    return total;
+  }
+
+  // Less than 12 months of data: scale by actual span
+  const totalRev = revenueData.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  return (totalRev / spanMonths) * 12;
 }
 
 /** Total annualized cost of investment-category items only */

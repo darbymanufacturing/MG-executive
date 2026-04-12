@@ -111,6 +111,8 @@ const SKU_MODEL_MAP = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const MONTH_KEYS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
 export function computeDaysOpen(ticket) {
   if (!ticket.dateEntered) return 0;
   const start = new Date(ticket.dateEntered);
@@ -166,11 +168,16 @@ export function MaintenanceProvider({ children }) {
   // ── Computed ──────────────────────────────────────────────────────────────
   const ticketsWithCalc = useMemo(() =>
     tickets.map((t) => {
-      const daysOpen   = computeDaysOpen(t);
-      const revenueLost = daysOpen * (config.revenueRatePerDay ?? 3.67);
+      const daysOpen  = computeDaysOpen(t);
+      // Use the per-month seasonality rate for the ticket's entry month,
+      // falling back to the flat revenueRatePerDay if not configured.
+      const entryDate = t.dateEntered ? new Date(t.dateEntered) : new Date();
+      const monthKey  = MONTH_KEYS[entryDate.getMonth()];
+      const dailyRate = config.seasonalityIndex?.[monthKey] ?? config.revenueRatePerDay ?? 3.67;
+      const revenueLost = daysOpen * dailyRate;
       return { ...t, daysOpen, revenueLost };
     }),
-  [tickets, config.revenueRatePerDay]);
+  [tickets, config]);
 
   const activeTickets   = useMemo(() => ticketsWithCalc.filter((t) => t.status === 'Active'), [ticketsWithCalc]);
   const activeCount     = activeTickets.length;

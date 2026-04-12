@@ -153,7 +153,23 @@ export default function Dashboard() {
 
   // ── Cost metrics ─────────────────────────────────────────────────────────
   const monthlyCostRate   = totalMonthlyCost(viewMode === 'month' ? periodCosts : filteredCosts);
-  const displayTotal      = monthlyCostRate * periodMonths;
+  // Include one-time costs for the selected period (excluded from normalizeToMonthly)
+  const oneTimeInPeriod   = useMemo(() => {
+    if (viewMode === 'month') {
+      return periodCosts
+        .filter((c) => c.frequency === 'one-time')
+        .reduce((s, c) => s + (c.amount || 0), 0);
+    }
+    if (viewMode === 'range' && rangeFrom && rangeTo) {
+      return filteredCosts
+        .filter((c) => c.frequency === 'one-time' && c.startDate >= rangeFrom + '-01' && c.startDate <= rangeTo + '-31')
+        .reduce((s, c) => s + (c.amount || 0), 0);
+    }
+    return filteredCosts
+      .filter((c) => c.frequency === 'one-time')
+      .reduce((s, c) => s + (c.amount || 0), 0);
+  }, [viewMode, periodCosts, filteredCosts, rangeFrom, rangeTo]);
+  const displayTotal      = monthlyCostRate * periodMonths + oneTimeInPeriod;
   const annualTotal       = totalAnnualCost(filteredCosts);
   const perScooterMonthly = costPerScooterMonthly(filteredCosts, config.fleetSize);
   const perScooterDaily   = costPerScooterDaily(filteredCosts, config.fleetSize);
@@ -225,7 +241,9 @@ export default function Dashboard() {
 
   async function handleExportPDF() {
     setExportingPDF(true);
-    await exportDashboardToPDF(`xslide-dashboard-${periodLabel.replace(/\s/g, '-').toLowerCase()}.pdf`);
+    // Replace em-dashes, en-dashes and spaces with hyphens (em dash from period range label)
+    const safeLabel = periodLabel.replace(/[–—\s/]/g, '-').replace(/-+/g, '-').toLowerCase();
+    await exportDashboardToPDF(`xslide-dashboard-${safeLabel}.pdf`);
     setExportingPDF(false);
   }
 
@@ -281,6 +299,11 @@ export default function Dashboard() {
                     <option key={m} value={m}>{fmtMonth(m)}</option>
                   ))}
                 </select>
+                {rangeFrom && rangeTo && rangeFrom > rangeTo && (
+                  <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                    ⚠ "From" must be before "To"
+                  </span>
+                )}
               </>
             )}
 

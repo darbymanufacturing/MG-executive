@@ -11,6 +11,7 @@ import { SAMPLE_COSTS, SAMPLE_CONFIG } from '../utils/sampleData.js';
 // Firestore paths
 const COSTS_COL = 'costs';
 const CONFIG_DOC = 'config/fleet';
+const BATCH_SIZE = 450; // safely below Firestore's 500-op batch limit
 
 const CostContext = createContext(null);
 
@@ -18,6 +19,13 @@ export function CostProvider({ children }) {
   const [costs, setCosts] = useState([]);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
+  // Track each listener independently to avoid premature loading=false
+  const [costsLoaded,  setCostsLoaded]  = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    if (costsLoaded && configLoaded) setLoading(false);
+  }, [costsLoaded, configLoaded]);
 
   // ── Real-time listeners ───────────────────────────────────────────────────
 
@@ -26,7 +34,7 @@ export function CostProvider({ children }) {
     const unsubCosts = onSnapshot(collection(db, COSTS_COL), (snap) => {
       const items = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
       setCosts(items);
-      setLoading(false);
+      setCostsLoaded(true);
     });
 
     // Listen to config document
@@ -37,6 +45,7 @@ export function CostProvider({ children }) {
         // First time — write defaults
         setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
       }
+      setConfigLoaded(true);
     });
 
     return () => { unsubCosts(); unsubConfig(); };
@@ -81,27 +90,34 @@ export function CostProvider({ children }) {
   // ── Sample data ───────────────────────────────────────────────────────────
 
   const loadSampleData = useCallback(async () => {
-    const batch = writeBatch(db);
-
-    // Delete existing costs first
+    // Delete existing costs in chunks (Firestore batch limit = 500)
     const existingSnap = await getDocs(collection(db, COSTS_COL));
-    existingSnap.docs.forEach((d) => batch.delete(d.ref));
+    for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
 
-    // Add sample costs
-    SAMPLE_COSTS.forEach((cost) => {
-      const ref = doc(collection(db, COSTS_COL));
-      batch.set(ref, cost);
-    });
+    // Add sample costs in chunks
+    for (let i = 0; i < SAMPLE_COSTS.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      SAMPLE_COSTS.slice(i, i + BATCH_SIZE).forEach((cost) => {
+        const ref = doc(collection(db, COSTS_COL));
+        batch.set(ref, cost);
+      });
+      await batch.commit();
+    }
 
-    await batch.commit();
     await setDoc(doc(db, CONFIG_DOC), SAMPLE_CONFIG);
   }, []);
 
   const clearAllData = useCallback(async () => {
-    const batch = writeBatch(db);
     const existingSnap = await getDocs(collection(db, COSTS_COL));
-    existingSnap.docs.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
+    for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
     await setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
   }, []);
 
