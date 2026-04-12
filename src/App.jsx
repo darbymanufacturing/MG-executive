@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
@@ -42,6 +42,17 @@ function ProtectedRoute({ children }) {
 function AppShell() {
   const { loading } = useCosts();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Preload Mapbox + WarRoom chunk in the background after app is ready
+  // so War Room opens near-instantly when the user navigates there
+  useEffect(() => {
+    if (loading) return;
+    const t = setTimeout(() => {
+      // Pull the mapbox-gl chunk into the browser cache while user is on Dashboard
+      import('mapbox-gl').catch(() => {});
+    }, 2000); // 2s delay — let the UI settle first
+    return () => clearTimeout(t);
+  }, [loading]);
 
   if (loading) return <LoadingScreen />;
 

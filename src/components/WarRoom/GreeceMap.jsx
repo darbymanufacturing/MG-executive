@@ -75,7 +75,7 @@ export default function GreeceMap({ cityData = [] }) {
             key={city.city}
             longitude={city.lng}
             latitude={city.lat}
-            anchor="bottom"
+            anchor="center"
           >
             <CityNode data={city} index={city.index} />
           </Marker>

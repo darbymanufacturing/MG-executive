@@ -29,6 +29,10 @@ export default function Sidebar({ open, onClose }) {
             to={to}
             end={to === '/'}
             onClick={onClose}
+            onMouseEnter={to === '/projects' ? () => {
+              // Ensure mapbox-gl chunk is cached before the click lands
+              import('mapbox-gl').catch(() => {});
+            } : undefined}
             className={({ isActive }) =>
               `${styles.navItem} ${isActive ? styles.active : ''}`
             }
