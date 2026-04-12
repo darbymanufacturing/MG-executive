@@ -1,18 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useMap } from 'react-map-gl/mapbox';
 
 /**
- * ConnectionLines — draws animated SVG lines between all active city pairs.
- * Rendered as a position:absolute SVG overlay on top of the Mapbox canvas.
- * Uses map.project() to convert lat/lng → screen pixel coordinates.
+ * ConnectionLines — animated SVG lines between city pairs.
+ * Listens to map 'move' events so lines stay locked to dots
+ * during every pan, zoom, and rotation.
  */
 export default function ConnectionLines({ cities }) {
   const { current: map } = useMap();
-  const [lines, setLines]     = useState([]);
-  const rafRef                = useRef(null);
+  const [lines, setLines] = useState([]);
+  const [size,  setSize]  = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  function computeLines() {
+  const computeLines = useCallback(() => {
     if (!map) return;
+    const canvas = map.getCanvas();
+    setSize({ w: canvas.width, h: canvas.height });
+
     const pairs = [];
     for (let i = 0; i < cities.length; i++) {
       for (let j = i + 1; j < cities.length; j++) {
@@ -22,21 +25,27 @@ export default function ConnectionLines({ cities }) {
       }
     }
     setLines(pairs);
-  }
+  }, [map, cities]);
 
   useEffect(() => {
     if (!map || cities.length < 2) return;
-    // Recompute once map is idle and whenever the window resizes
-    map.once('idle', computeLines);
-    window.addEventListener('resize', computeLines);
-    return () => window.removeEventListener('resize', computeLines);
-  }, [map, cities]);
+
+    // Initial render + re-render on every map movement
+    map.on('move', computeLines);
+    map.on('load', computeLines);
+    computeLines(); // fire immediately if map already loaded
+
+    const onResize = () => computeLines();
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      map.off('move', computeLines);
+      map.off('load', computeLines);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [map, cities, computeLines]);
 
   if (!lines.length) return null;
-
-  const canvas = map?.getCanvas();
-  const w = canvas?.width  || window.innerWidth;
-  const h = canvas?.height || window.innerHeight;
 
   return (
     <svg
@@ -49,19 +58,20 @@ export default function ConnectionLines({ cities }) {
         zIndex: 5,
         overflow: 'visible',
       }}
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`0 0 ${size.w} ${size.h}`}
       preserveAspectRatio="none"
     >
       <defs>
         <style>{`
           @keyframes linePulse {
-            0%   { stroke-opacity: 0.06; }
-            50%  { stroke-opacity: 0.45; }
-            100% { stroke-opacity: 0.06; }
+            0%   { stroke-opacity: 0.12; }
+            50%  { stroke-opacity: 0.65; }
+            100% { stroke-opacity: 0.12; }
           }
           .war-line {
             stroke: #C97D49;
-            stroke-width: 1.5;
+            stroke-width: 3.5;
+            stroke-linecap: round;
             animation: linePulse 3.2s ease-in-out infinite;
           }
         `}</style>

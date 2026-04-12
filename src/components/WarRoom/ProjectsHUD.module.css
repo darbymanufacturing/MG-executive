@@ -115,6 +115,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 12px 10px;
 
   /* Override the child tab components' light-mode assumptions */
   --color-surface:    rgba(6, 8, 10, 0.0);
@@ -128,6 +129,11 @@
   --color-success:    #22c55e;
   --color-warning:    #f59e0b;
   --color-danger:     #ef4444;
+  /* Tighten spacing tokens so content fits the narrow panel */
+  --space-6: 12px;
+  --space-5: 10px;
+  --space-4: 8px;
+  --space-3: 6px;
 }
 
 .body::-webkit-scrollbar { width: 3px; }

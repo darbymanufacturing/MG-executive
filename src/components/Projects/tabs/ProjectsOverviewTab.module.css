@@ -2,6 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  /* Container query — lets children respond to the panel width, not viewport */
+  container-type: inline-size;
+  container-name: overview;
 }
 
 /* ── Stat row ── */
@@ -154,11 +157,19 @@
   text-align: center;
 }
 
+/* Viewport-based fallback */
 @media (max-width: 900px) {
-  .statRow  { grid-template-columns: repeat(2, 1fr); }
-  .panels   { grid-template-columns: 1fr; }
+  .statRow   { grid-template-columns: repeat(2, 1fr); }
+  .panels    { grid-template-columns: 1fr; }
   .panelWide { grid-column: 1; }
 }
-@media (max-width: 500px) {
-  .statRow { grid-template-columns: 1fr 1fr; }
+
+/* Container queries — fire when the component's own container is narrow
+   (e.g. inside the 420px War Room HUD panel) regardless of viewport size */
+@container overview (max-width: 450px) {
+  .statRow   { grid-template-columns: repeat(2, 1fr); gap: var(--space-2); }
+  .panels    { grid-template-columns: 1fr; }
+  .panelWide { grid-column: 1; }
+  .statCard  { padding: var(--space-3); }
+  .statValue { font-size: 1.5rem; }
 }
