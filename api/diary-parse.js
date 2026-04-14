@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   try {
     const message = await client.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildPrompt(text, context) }],
     });
@@ -72,7 +72,19 @@ export default async function handler(req, res) {
 
     // Strip any accidental markdown fences
     const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      // Response was truncated or malformed — return what we can with an error note
+      console.error('diary-parse JSON error:', parseErr.message, '\nRaw (first 500):', cleaned.slice(0, 500));
+      return res.status(200).json({
+        summary: 'Parse error — response may have been truncated',
+        actions: [],
+        unresolved: [`Could not parse AI response: ${parseErr.message}. Try splitting the entry into smaller batches.`],
+      });
+    }
 
     // Validate shape
     if (!parsed.actions || !Array.isArray(parsed.actions)) {
