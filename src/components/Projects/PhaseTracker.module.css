@@ -1,4 +1,4 @@
-/* PhaseTracker — horizontal desktop / vertical mobile */
+/* PhaseTracker — vertical list, no horizontal scroll */
 
 .tracker {
   display: flex;
@@ -6,74 +6,155 @@
   gap: var(--space-3);
 }
 
-/* Horizontal scroll wrapper on desktop */
-.timeline {
+/* ── Phase list ── */
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
-  gap: var(--space-3);
-  overflow-x: auto;
-  padding-bottom: var(--space-2);
+  flex-direction: column;
+  gap: 2px;
 }
 
-.phaseCard {
+/* ── Each phase row ── */
+.phaseRow {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
-  min-width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  position: relative;
+  overflow: hidden;
+  transition: border-color var(--transition-fast);
 }
-.phaseCard.done    { border-color: rgba(0,200,150,0.3); }
-.phaseCard.current { border-color: rgba(0,200,150,0.6); box-shadow: 0 0 0 1px rgba(0,200,150,0.2); }
-.phaseCard.collapsed {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: unset;
-  padding: var(--space-3) var(--space-4);
-  opacity: 0.6;
+.phaseRow.rowDone {
+  border-color: rgba(0, 200, 150, 0.2);
+  opacity: 0.75;
+}
+.phaseRow.rowCurrent {
+  border-color: rgba(245, 166, 35, 0.5);
+  box-shadow: 0 0 0 1px rgba(245, 166, 35, 0.15);
 }
 
-.phaseNum {
+/* ── Summary bar (always visible) ── */
+.rowHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: 44px;
+}
+
+.rowIcon {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.rowDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Clickable title area */
+.rowTitle {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  min-width: 0;
+}
+.rowNum {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.phaseName {
+.rowName {
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.phaseStatus {
-  font-size: var(--text-xs);
+.rowTitle:hover .rowName {
+  color: var(--color-primary-light);
+}
+
+/* Status badge */
+.phaseBadge {
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  display: inline-block;
-  width: fit-content;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.statusDone       { background: rgba(0,200,150,0.15); color: #00C896; }
+.statusDone       { background: rgba(0,200,150,0.15);  color: #00C896; }
 .statusInProgress { background: rgba(245,166,35,0.15); color: #F5A623; }
 .statusNotStarted { background: rgba(136,136,136,0.1); color: #888; }
+
+/* Controls (reorder + edit) */
+.rowControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ctrlBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+.ctrlBtn:hover:not(:disabled) {
+  background: var(--color-surface);
+  color: var(--color-primary-light);
+}
+.ctrlBtn:disabled {
+  opacity: 0.2;
+  cursor: default;
+}
+
+/* ── Expanded detail ── */
+.rowDetail {
+  padding: 0 var(--space-4) var(--space-4);
+  padding-left: calc(var(--space-4) + 20px + var(--space-3)); /* align under name */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+}
 
 .doneCriteria {
   list-style: none;
   padding: 0;
-  margin: var(--space-2) 0 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .doneCriteriaItem {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: 6px;
 }
 .doneCriteriaItem::before {
   content: '✓';
@@ -83,28 +164,40 @@
   margin-top: 1px;
 }
 
+.dateLine {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+.parallelTag {
+  font-size: 10px;
+  background: rgba(160, 82, 29, 0.15);
+  color: var(--color-primary-light);
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+  font-weight: 600;
+}
+
 .scopeCap {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   border-left: 2px solid var(--color-border);
   padding-left: var(--space-2);
-  margin-top: var(--space-2);
   font-style: italic;
-}
-
-.phaseDate {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
 .phaseActions {
   display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
 }
 .phaseBtn {
-  font-size: 11px;
-  padding: 3px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: none;
@@ -116,12 +209,45 @@
   border-color: #00C896;
   color: #00C896;
 }
-.phaseBtn.danger:hover {
-  border-color: #E84545;
-  color: #E84545;
-}
 
-/* Add phase button */
+/* ── Edit form ── */
+.editForm {
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+}
+.editLabel {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.deleteTxt {
+  background: none;
+  border: none;
+  color: #E84545;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  margin-right: auto;
+  padding: 0;
+  text-decoration: underline;
+  opacity: 0.8;
+}
+.deleteTxt:hover { opacity: 1; }
+
+/* ── Add phase ── */
 .addPhaseBtn {
   display: inline-flex;
   align-items: center;
@@ -132,17 +258,15 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   cursor: pointer;
-  padding: var(--space-3) var(--space-4);
-  min-width: 140px;
-  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
   transition: all var(--transition-fast);
+  width: fit-content;
 }
 .addPhaseBtn:hover {
   border-color: var(--color-primary-light);
   color: var(--color-primary-light);
 }
 
-/* Add phase form */
 .addPhaseForm {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
@@ -151,14 +275,4 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-
-/* Mobile: vertical stack */
-@media (max-width: 600px) {
-  .timeline {
-    flex-direction: column;
-    overflow-x: visible;
-  }
-  .phaseCard { min-width: unset; }
 }

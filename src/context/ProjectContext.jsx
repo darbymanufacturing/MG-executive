@@ -137,6 +137,16 @@ export function ProjectProvider({ children }) {
     await updateDoc(doc(db, PROJECTS_COL, docId), { phases, updatedAt: serverTimestamp() });
   }, [projects]);
 
+  const reorderPhases = useCallback(async (docId, fromIndex, toIndex) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return;
+    const phases = [...(project.phases || [])];
+    const [moved] = phases.splice(fromIndex, 1);
+    phases.splice(toIndex, 0, moved);
+    const renumbered = phases.map((ph, i) => ({ ...ph, number: i + 1 }));
+    await updateDoc(doc(db, PROJECTS_COL, docId), { phases: renumbered, updatedAt: serverTimestamp() });
+  }, [projects]);
+
   // ── Next Action helpers ───────────────────────────────────────────────────
   const setNextAction = useCallback(async (docId, nextAction) => {
     await updateDoc(doc(db, PROJECTS_COL, docId), {
@@ -335,7 +345,7 @@ export function ProjectProvider({ children }) {
       addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
       setStatus,
       // Phases
-      addPhase, updatePhase, deletePhase,
+      addPhase, updatePhase, deletePhase, reorderPhases,
       // Next Action
       setNextAction, completeNextAction,
       // Blockers
