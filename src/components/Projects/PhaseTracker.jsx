@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, ChevronUp, ChevronDown, Check, X } from 'lucide-react';
+import { Plus, Pencil, ChevronUp, ChevronDown, Check, X, Trash2 } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import styles from './PhaseTracker.module.css';
 import sharedStyles from './Projects.module.css';
@@ -9,6 +9,79 @@ const STATUS_LABELS = {
   inProgress: 'In Progress',
   notStarted: 'Not Started',
 };
+
+function TaskList({ phase, projectId }) {
+  const { updatePhase } = useProjects();
+  const [newTask, setNewTask] = useState('');
+
+  const tasks = phase.tasks || [];
+
+  async function handleToggle(taskId) {
+    const updated = tasks.map((t) => t.id === taskId ? { ...t, done: !t.done } : t);
+    await updatePhase(projectId, phase.id, { tasks: updated });
+  }
+
+  async function handleRemove(taskId) {
+    const updated = tasks.filter((t) => t.id !== taskId);
+    await updatePhase(projectId, phase.id, { tasks: updated });
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    const text = newTask.trim();
+    if (!text) return;
+    const updated = [...tasks, { id: crypto.randomUUID(), text, done: false }];
+    await updatePhase(projectId, phase.id, { tasks: updated });
+    setNewTask('');
+  }
+
+  return (
+    <div className={styles.taskSection}>
+      <div className={styles.taskSectionHeader}>
+        <span>Tasks</span>
+        {tasks.length > 0 && (
+          <span className={`${styles.taskPill} ${tasks.every((t) => t.done) ? styles.taskPillDone : ''}`}>
+            {tasks.filter((t) => t.done).length}/{tasks.length} done
+          </span>
+        )}
+      </div>
+
+      {tasks.length > 0 && (
+        <ul className={styles.taskList}>
+          {tasks.map((task) => (
+            <li key={task.id} className={styles.taskItem}>
+              <button
+                className={`${styles.taskCheck} ${task.done ? styles.taskCheckDone : ''}`}
+                onClick={() => handleToggle(task.id)}
+                title={task.done ? 'Mark incomplete' : 'Mark complete'}
+              >
+                {task.done && <Check size={10} />}
+              </button>
+              <span className={`${styles.taskText} ${task.done ? styles.taskTextDone : ''}`}>
+                {task.text}
+              </span>
+              <button className={styles.taskRemove} onClick={() => handleRemove(task.id)} title="Remove task">
+                <X size={11} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form className={styles.addTaskForm} onSubmit={handleAdd}>
+        <input
+          className={styles.addTaskInput}
+          placeholder="Add a task…"
+          value={newTask}
+          onChange={(e) => setNewTask(e.target.value)}
+        />
+        <button type="submit" className={styles.addTaskBtn} disabled={!newTask.trim()}>
+          <Plus size={13} />
+        </button>
+      </form>
+    </div>
+  );
+}
 
 function PhaseRow({ phase, phases, projectId, index, total }) {
   const { updatePhase, deletePhase, reorderPhases } = useProjects();
@@ -21,6 +94,11 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
     doneCriteria: (phase.doneCriteria || []).join('\n'),
     parallel:     phase.parallel || false,
   });
+
+  const tasks      = phase.tasks || [];
+  const doneTasks  = tasks.filter((t) => t.done).length;
+  const allDone    = tasks.length > 0 && doneTasks === tasks.length;
+  const pendingCount = tasks.length - doneTasks;
 
   const isDone    = phase.status === 'done';
   const isCurrent = phase.status === 'inProgress';
@@ -37,7 +115,8 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
   }
 
   async function handleMarkInProgress() {
-    if (index > 0 && !phases[index - 1].parallel && phases[index - 1].status !== 'done') return;
+    // Fix: check current phase's parallel flag, not previous phase's
+    if (index > 0 && !phase.parallel && phases[index - 1].status !== 'done') return;
     await updatePhase(projectId, phase.id, { status: 'inProgress' });
     setExpanded(true);
   }
@@ -61,24 +140,28 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
 
   const rowClass = [
     styles.phaseRow,
-    isDone    ? styles.rowDone    : '',
-    isCurrent ? styles.rowCurrent : '',
+    isDone      ? styles.rowDone    : '',
+    isCurrent   ? styles.rowCurrent : '',
+    phase.parallel && index > 0 ? styles.rowParallel : '',
   ].join(' ');
 
   return (
     <li className={rowClass}>
-      {/* ── Collapsed / summary bar ── */}
+      {/* Parallel connector line */}
+      {phase.parallel && index > 0 && (
+        <div className={styles.parallelConnector}>
+          <span className={styles.parallelLabel}>runs in parallel</span>
+        </div>
+      )}
+
+      {/* ── Summary bar ── */}
       <div className={styles.rowHeader}>
-        {/* Status icon */}
         <span className={styles.rowIcon}>
           {isDone ? <Check size={13} color="#00C896" /> : (
-            <span className={styles.rowDot} style={{
-              background: isCurrent ? '#F5A623' : '#444',
-            }} />
+            <span className={styles.rowDot} style={{ background: isCurrent ? '#F5A623' : '#444' }} />
           )}
         </span>
 
-        {/* Phase number + name */}
         <button
           className={styles.rowTitle}
           onClick={() => !editing && setExpanded((v) => !v)}
@@ -87,12 +170,17 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
           <span className={styles.rowName}>{phase.name}</span>
         </button>
 
-        {/* Status badge */}
+        {/* Task count badge */}
+        {tasks.length > 0 && (
+          <span className={`${styles.taskCountBadge} ${allDone ? styles.taskCountBadgeDone : ''}`}>
+            {doneTasks}/{tasks.length}
+          </span>
+        )}
+
         <span className={`${styles.phaseBadge} ${statusClass}`}>
           {STATUS_LABELS[phase.status]}
         </span>
 
-        {/* Reorder + Edit controls */}
         <div className={styles.rowControls}>
           <button
             className={styles.ctrlBtn}
@@ -145,7 +233,7 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
             </div>
           </div>
           <div>
-            <label className={styles.editLabel}>Done criteria (one per line)</label>
+            <label className={styles.editLabel}>Acceptance criteria (one per line — displayed as green ✓)</label>
             <textarea
               className={sharedStyles.input}
               rows={3}
@@ -170,7 +258,7 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
               checked={form.parallel}
               onChange={(e) => setForm((f) => ({ ...f, parallel: e.target.checked }))}
             />
-            <span>Parallel phase (can run simultaneously with previous)</span>
+            <span>Parallel — runs simultaneously with previous phase</span>
           </label>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
             <button
@@ -182,7 +270,7 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
                 }
               }}
             >
-              Delete phase
+              <Trash2 size={12} /> Delete phase
             </button>
             <button type="button" className={sharedStyles.btnGhost} onClick={() => setEditing(false)}>
               <X size={13} /> Cancel
@@ -195,7 +283,7 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
       {/* ── Expanded detail ── */}
       {!editing && expanded && (
         <div className={styles.rowDetail}>
-          {/* Done criteria */}
+          {/* Acceptance criteria */}
           {phase.doneCriteria?.length > 0 && (
             <ul className={styles.doneCriteria}>
               {phase.doneCriteria.map((c, i) => (
@@ -204,7 +292,10 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
             </ul>
           )}
 
-          {/* Dates */}
+          {/* Interactive task checklist */}
+          <TaskList phase={phase} projectId={projectId} />
+
+          {/* Dates + parallel tag */}
           <div className={styles.dateLine}>
             {phase.targetDate && <span>Target: {phase.targetDate}</span>}
             {phase.actualDate && <span style={{ color: '#00C896' }}>Completed: {phase.actualDate}</span>}
@@ -219,7 +310,12 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
           {/* Status actions */}
           <div className={styles.phaseActions}>
             {phase.status !== 'done' && (
-              <button className={styles.phaseBtn} onClick={handleMarkDone}>✓ Mark Done</button>
+              <button className={styles.phaseBtn} onClick={handleMarkDone}>
+                ✓ Mark Done
+                {pendingCount > 0 && (
+                  <span className={styles.pendingWarn}> ({pendingCount} task{pendingCount > 1 ? 's' : ''} pending)</span>
+                )}
+              </button>
             )}
             {phase.status === 'notStarted' && (
               <button className={styles.phaseBtn} onClick={handleMarkInProgress}>▶ Start</button>
@@ -240,7 +336,9 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
 export default function PhaseTracker({ project }) {
   const { addPhase } = useProjects();
   const [showForm, setShowForm] = useState(false);
-  const [newPhase, setNewPhase] = useState({ name: '', targetDate: '', scopeCap: '', doneCriteria: '' });
+  const [newPhase, setNewPhase] = useState({
+    name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false,
+  });
 
   const phases = project.phases || [];
 
@@ -252,8 +350,10 @@ export default function PhaseTracker({ project }) {
       targetDate:   newPhase.targetDate || null,
       scopeCap:     newPhase.scopeCap.trim(),
       doneCriteria: newPhase.doneCriteria.split('\n').map((s) => s.trim()).filter(Boolean),
+      parallel:     newPhase.parallel,
+      tasks:        [],
     });
-    setNewPhase({ name: '', targetDate: '', scopeCap: '', doneCriteria: '' });
+    setNewPhase({ name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false });
     setShowForm(false);
   }
 
@@ -303,7 +403,7 @@ export default function PhaseTracker({ project }) {
             </div>
           </div>
           <div>
-            <label className={styles.editLabel}>Done criteria (one per line)</label>
+            <label className={styles.editLabel}>Acceptance criteria (one per line)</label>
             <textarea
               className={sharedStyles.input}
               placeholder={'Fleet deployed\nApp live in zone'}
@@ -322,6 +422,14 @@ export default function PhaseTracker({ project }) {
               onChange={(e) => setNewPhase((f) => ({ ...f, scopeCap: e.target.value }))}
             />
           </div>
+          <label className={styles.checkRow}>
+            <input
+              type="checkbox"
+              checked={newPhase.parallel}
+              onChange={(e) => setNewPhase((f) => ({ ...f, parallel: e.target.checked }))}
+            />
+            <span>Parallel — runs simultaneously with previous phase</span>
+          </label>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button type="button" className={sharedStyles.btnGhost} onClick={() => setShowForm(false)}>Cancel</button>
             <button type="submit" className={sharedStyles.btnPrimary}>Add Phase</button>

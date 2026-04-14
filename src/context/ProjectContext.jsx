@@ -114,6 +114,7 @@ export function ProjectProvider({ children }) {
         actualDate:   null,
         scopeCap:     phase.scopeCap || '',
         parallel:     phase.parallel || false,
+        tasks:        phase.tasks || [],
       },
     ];
     await updateDoc(doc(db, PROJECTS_COL, docId), { phases, updatedAt: serverTimestamp() });
