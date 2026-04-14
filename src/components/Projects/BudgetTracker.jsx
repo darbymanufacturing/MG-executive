@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
@@ -10,15 +12,61 @@ function fmt(n) {
   return `€${Number(n || 0).toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function TxTable({ rows, emptyText }) {
+  if (!rows.length) return <p className={styles.txEmpty}>{emptyText}</p>;
+  return (
+    <table className={styles.txTable}>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Description</th>
+          <th>Amount</th>
+          <th>Category</th>
+          <th>Frequency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((tx, i) => (
+          <tr key={i}>
+            <td>{tx.date || '—'}</td>
+            <td>{tx.label}</td>
+            <td style={{ color: tx.type === 'Revenue' ? '#00C896' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+              {tx.type === 'Revenue' ? '+' : ''}{fmt(tx.amount)}
+            </td>
+            <td>{tx.category || '—'}</td>
+            <td>{tx.frequency || '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function CollapsibleSection({ title, count, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={styles.collapsible}>
+      <button className={styles.collapseToggle} onClick={() => setOpen((v) => !v)}>
+        <span>{title}</span>
+        {count != null && <span className={styles.collapseCount}>{count}</span>}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && <div className={styles.collapseBody}>{children}</div>}
+    </div>
+  );
+}
+
 export default function BudgetTracker({ project }) {
   const { costs } = useCosts();
   const { revenueData } = useRevenue();
   const { updateProject } = useProjects();
 
-  const { revenue, expenses, net, transactions } = budgetFromCity(costs, revenueData, project.linkedCity);
-  const planned = project.plannedBudget || 0;
-  const pct = planned > 0 ? Math.min((expenses / planned) * 100, 100) : 0;
-  const barColor = pct >= 90 ? '#E84545' : pct >= 70 ? '#F5A623' : '#00C896';
+  const { revenue, expenses, net, revTransactions, costTransactions } =
+    budgetFromCity(costs, revenueData, project.linkedCity);
+
+  const planned   = project.plannedBudget || 0;
+  const pct       = planned > 0 ? Math.min((expenses / planned) * 100, 100) : 0;
+  const barColor  = pct >= 90 ? '#E84545' : pct >= 70 ? '#F5A623' : '#00C896';
   const overBudget = planned > 0 && expenses > planned;
 
   return (
@@ -29,25 +77,33 @@ export default function BudgetTracker({ project }) {
         </div>
       )}
 
+      {/* ── Stats grid ── */}
       <div className={styles.grid}>
         <div className={styles.statRow}>
           <span className={styles.statLabel}>Planned</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {planned > 0 ? (
+          {planned > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span className={styles.statValue}>{fmt(planned)}</span>
-            ) : (
-              <input
-                type="number"
-                className={sharedStyles.input}
-                style={{ width: 120 }}
-                placeholder="Set budget…"
-                onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  if (val > 0) updateProject(project._docId, { plannedBudget: val });
-                }}
-              />
-            )}
-          </div>
+              <button
+                className={styles.resetBudgetBtn}
+                onClick={() => updateProject(project._docId, { plannedBudget: null })}
+                title="Change planned budget"
+              >
+                Edit
+              </button>
+            </div>
+          ) : (
+            <input
+              type="number"
+              className={sharedStyles.input}
+              style={{ width: 130 }}
+              placeholder="Set budget…"
+              onBlur={(e) => {
+                const val = Number(e.target.value);
+                if (val > 0) updateProject(project._docId, { plannedBudget: val });
+              }}
+            />
+          )}
         </div>
 
         {planned > 0 && (
@@ -60,15 +116,25 @@ export default function BudgetTracker({ project }) {
         )}
 
         <div className={styles.statRow}>
-          <span className={styles.statLabel}>Revenue</span>
+          <span className={styles.statLabel}>
+            Revenue
+            {!project.linkedCity && <span className={styles.statHint}> — link a city to see actuals</span>}
+          </span>
           <span className={styles.statValue} style={{ color: '#00C896' }}>{fmt(revenue)}</span>
         </div>
+
         <div className={styles.statRow}>
-          <span className={styles.statLabel}>Expenses</span>
-          <span className={styles.statValue} style={{ color: pct >= 90 ? '#E84545' : pct >= 70 ? '#F5A623' : 'var(--color-text-primary)' }}>
+          <span className={styles.statLabel}>
+            Expenses
+            <span className={styles.statHint}> — all fleet costs</span>
+          </span>
+          <span className={styles.statValue} style={{
+            color: pct >= 90 ? '#E84545' : pct >= 70 ? '#F5A623' : 'var(--color-text-primary)',
+          }}>
             {fmt(expenses)}
           </span>
         </div>
+
         <div className={`${styles.statRow} ${styles.netRow}`}>
           <span className={styles.statLabel}>Net</span>
           <span className={styles.statValue} style={{ color: net >= 0 ? '#00C896' : '#E84545', fontWeight: 700 }}>
@@ -77,24 +143,25 @@ export default function BudgetTracker({ project }) {
         </div>
       </div>
 
-      {/* Linked city selector */}
-      <div className={styles.cityRow}>
-        <span className={styles.cityLabel}>Data source (city):</span>
-        <select
-          className={sharedStyles.select}
-          style={{ width: 'auto' }}
-          value={project.linkedCity || ''}
-          onChange={(e) => updateProject(project._docId, { linkedCity: e.target.value || null })}
-        >
-          <option value="">None</option>
-          {CITIES.filter(Boolean).map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+      {/* ── Data source + notes ── */}
+      <div className={styles.configRow}>
+        <div className={styles.cityRow}>
+          <span className={styles.cityLabel}>Revenue source:</span>
+          <select
+            className={sharedStyles.select}
+            style={{ width: 'auto' }}
+            value={project.linkedCity || ''}
+            onChange={(e) => updateProject(project._docId, { linkedCity: e.target.value || null })}
+          >
+            <option value="">No city linked</option>
+            {CITIES.filter(Boolean).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
       </div>
 
-      {/* Notes */}
       <textarea
         className={sharedStyles.input}
-        style={{ resize: 'vertical', minHeight: 60, marginTop: 8 }}
+        style={{ resize: 'vertical', minHeight: 56 }}
         placeholder="Budget notes — assumptions, caveats, forward-looking context…"
         defaultValue={project.budgetNotes || ''}
         onBlur={(e) => {
@@ -104,37 +171,28 @@ export default function BudgetTracker({ project }) {
         }}
       />
 
-      {/* Linked transactions */}
-      {transactions.length > 0 && (
-        <div className={styles.transactions}>
-          <p className={styles.txHeader}>Linked Transactions</p>
-          <table className={styles.txTable}>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.slice(0, 20).map((tx, i) => (
-                <tr key={i}>
-                  <td>{tx.date}</td>
-                  <td>{tx.label}</td>
-                  <td style={{ color: tx.type === 'Revenue' ? '#00C896' : 'var(--color-text-primary)' }}>
-                    {fmt(tx.amount)}
-                  </td>
-                  <td>{tx.type}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {transactions.length > 20 && (
-            <p className={styles.txMore}>+{transactions.length - 20} more transactions</p>
-          )}
-        </div>
-      )}
+      {/* ── Linked transactions (collapsible) ── */}
+      <CollapsibleSection
+        title={project.linkedCity ? `Revenue — ${project.linkedCity}` : 'Revenue transactions'}
+        count={revTransactions.length}
+      >
+        <TxTable
+          rows={revTransactions}
+          emptyText={project.linkedCity
+            ? `No revenue found for ${project.linkedCity}. Check that revenue rows use "${project.linkedCity}" as the location.`
+            : 'Link a city above to see revenue transactions.'}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Fleet costs"
+        count={costTransactions.length}
+      >
+        <p className={styles.costsNote}>
+          These are all costs in the Cost Manager. Costs are fleet-wide and not filtered by city — use categories and notes to understand what each line is.
+        </p>
+        <TxTable rows={costTransactions} emptyText="No costs found in Cost Manager." />
+      </CollapsibleSection>
     </div>
   );
 }

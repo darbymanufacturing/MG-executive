@@ -1,57 +1,70 @@
 /**
  * Derives budget actuals for a project from the existing Cost + Revenue contexts.
  *
- * Each project can be linked to a city (e.g. 'Nafplion', 'Corinth').
- * We filter the live cost/revenue arrays by that city to get actuals.
+ * Revenue rows (RevenueContext) shape:
+ *   { date, location, totalPaidRevenue, totalTrips, ... }
  *
- * Revenue rows use a `location` field.
- * Cost rows use a `city` or `location` field (depending on import format).
+ * Cost rows (CostContext) shape:
+ *   { name, category, amount, frequency, startDate, notes, ... }
+ *   NOTE: costs have NO city/location field — they are fleet-wide.
+ *         We return all costs so the Budget Tracker can display them with
+ *         a clear "fleet-wide" note rather than silently showing €0.
  */
+
+import { CATEGORIES } from './constants.js';
+
+const FREQ_LABELS = {
+  monthly:   'Monthly',
+  'one-time': 'One-time',
+  quarterly: 'Quarterly',
+  annual:    'Annual',
+};
 
 /**
- * @param {object[]} costs     - array from CostContext
+ * @param {object[]} costs       - array from CostContext
  * @param {object[]} revenueData - array from RevenueContext
- * @param {string|null} linkedCity  - e.g. 'Nafplion', 'Corinth', or null
- * @returns {{ revenue: number, expenses: number, net: number, transactions: object[] }}
+ * @param {string|null} linkedCity
+ * @returns {{ revenue, expenses, net, revTransactions, costTransactions }}
  */
 export function budgetFromCity(costs, revenueData, linkedCity) {
-  if (!linkedCity) {
-    return { revenue: 0, expenses: 0, net: 0, transactions: [] };
-  }
+  // ── Revenue: filter by city (location field), sum totalPaidRevenue ──
+  const revRows = linkedCity
+    ? revenueData.filter(
+        (r) => (r.location || '').toLowerCase() === linkedCity.toLowerCase(),
+      )
+    : [];
 
-  const cityLower = linkedCity.toLowerCase();
+  const revenue = revRows.reduce((sum, r) => sum + (r.totalPaidRevenue || 0), 0);
 
-  // Revenue: sum amount for rows matching this city
-  const revRows = revenueData.filter(
-    (r) => (r.location || r.city || '').toLowerCase() === cityLower,
-  );
-  const revenue = revRows.reduce((sum, r) => sum + (Number(r.amount) || Number(r.revenue) || 0), 0);
+  const revTransactions = revRows.map((r) => ({
+    date:      r.date || '',
+    label:     r.location ? `Revenue — ${r.location}` : 'Revenue',
+    amount:    r.totalPaidRevenue || 0,
+    type:      'Revenue',
+    category:  '',
+    frequency: '',
+    trips:     r.totalTrips || 0,
+  })).sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  // Costs: sum amount for rows matching this city
-  const costRows = costs.filter(
-    (c) =>
-      (c.city || c.location || '').toLowerCase() === cityLower ||
-      (c.tags || []).some((t) => t.toLowerCase() === cityLower),
-  );
-  const expenses = costRows.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  // ── Costs: fleet-wide (no city field exists) ──
+  // Monthly costs annualised to a daily rate would be complex; instead
+  // we show the raw cost entries with their frequency so the user understands scale.
+  const expenses = costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
-  // Combined transaction list for the linked-transactions section
-  const transactions = [
-    ...costRows.map((c) => ({
-      date: c.date || c.startDate || '',
-      label: c.name || c.description || '',
-      amount: Number(c.amount) || 0,
-      type: 'Expense',
-      frequency: c.frequency || 'One-time',
-    })),
-    ...revRows.map((r) => ({
-      date: r.date || '',
-      label: r.location || 'Revenue',
-      amount: Number(r.amount) || Number(r.revenue) || 0,
-      type: 'Revenue',
-      frequency: 'One-time',
-    })),
-  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const costTransactions = costs.map((c) => ({
+    date:      c.startDate || c.date || '',
+    label:     c.name || '—',
+    amount:    Number(c.amount) || 0,
+    type:      'Expense',
+    category:  CATEGORIES[c.category]?.label || c.category || '—',
+    frequency: FREQ_LABELS[c.frequency] || c.frequency || '—',
+  })).sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  return { revenue, expenses, net: revenue - expenses, transactions };
+  return {
+    revenue,
+    expenses,
+    net: revenue - expenses,
+    revTransactions,
+    costTransactions,
+  };
 }
