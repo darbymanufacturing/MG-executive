@@ -8,6 +8,7 @@ import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
 import { ProjectProvider } from './context/ProjectContext.jsx';
 import { DiaryProvider } from './context/DiaryContext.jsx';
+import { NotificationProvider } from './context/NotificationContext.jsx';
 import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -18,6 +19,7 @@ import Login from './pages/Login.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
+import WarRoomPage from './pages/WarRoom.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -46,13 +48,12 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Preload Mapbox + WarRoom chunk in the background after app is ready
-  // so War Room opens near-instantly when the user navigates there
+  // so War Room opens near-instantly when the user navigates to /war-room
   useEffect(() => {
     if (loading) return;
     const t = setTimeout(() => {
-      // Pull the mapbox-gl chunk into the browser cache while user is on Dashboard
       import('mapbox-gl').catch(() => {});
-    }, 2000); // 2s delay — let the UI settle first
+    }, 2000);
     return () => clearTimeout(t);
   }, [loading]);
 
@@ -81,13 +82,15 @@ function AppShell() {
 
       <main className={styles.main}>
         <Routes>
-          <Route path="/"            element={<Dashboard />} />
-          <Route path="/projects"    element={<Projects />} />
-          <Route path="/costs"       element={<CostManager />} />
-          <Route path="/revenue"     element={<Revenue />} />
-          <Route path="/spr"         element={<Spr />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/settings"    element={<Settings />} />
+          <Route path="/"              element={<Dashboard />} />
+          <Route path="/projects"      element={<Projects />} />
+          <Route path="/projects/:id"  element={<Projects />} />
+          <Route path="/war-room"      element={<WarRoomPage />} />
+          <Route path="/costs"         element={<CostManager />} />
+          <Route path="/revenue"       element={<Revenue />} />
+          <Route path="/spr"           element={<Spr />} />
+          <Route path="/maintenance"   element={<Maintenance />} />
+          <Route path="/settings"      element={<Settings />} />
         </Routes>
       </main>
 
@@ -115,9 +118,11 @@ export default function App() {
                     <SprProvider>
                       <MaintenanceProvider>
                         <ProjectProvider>
-                          <DiaryProvider>
-                            <AppShell />
-                          </DiaryProvider>
+                          <NotificationProvider>
+                            <DiaryProvider>
+                              <AppShell />
+                            </DiaryProvider>
+                          </NotificationProvider>
                         </ProjectProvider>
                       </MaintenanceProvider>
                     </SprProvider>

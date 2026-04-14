@@ -1,20 +1,23 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useNotifications } from '../../context/NotificationContext.jsx';
 import styles from './Sidebar.module.css';
 
 const NAV = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/projects',   icon: Crosshair,       label: 'War Room' },
-  { to: '/costs',      icon: ListChecks,      label: 'Cost Manager' },
-  { to: '/revenue',    icon: Receipt,         label: 'Revenue' },
-  { to: '/spr',        icon: Radar,           label: 'SPR' },
-  { to: '/maintenance', icon: Wrench,         label: 'Maintenance' },
-  { to: '/settings',   icon: Settings,        label: 'Settings' },
+  { to: '/',            icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/projects',    icon: ClipboardList,   label: 'Projects' },
+  { to: '/war-room',    icon: Crosshair,       label: 'War Room' },
+  { to: '/costs',       icon: ListChecks,      label: 'Cost Manager' },
+  { to: '/revenue',     icon: Receipt,         label: 'Revenue' },
+  { to: '/spr',         icon: Radar,           label: 'SPR' },
+  { to: '/maintenance', icon: Wrench,          label: 'Maintenance' },
+  { to: '/settings',    icon: Settings,        label: 'Settings' },
 ];
 
 export default function Sidebar({ open, onClose }) {
   const { user, signOut } = useAuth();
+  const { badgeCount } = useNotifications();
 
   return (
     <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
@@ -29,7 +32,7 @@ export default function Sidebar({ open, onClose }) {
             to={to}
             end={to === '/'}
             onClick={onClose}
-            onMouseEnter={to === '/projects' ? () => {
+            onMouseEnter={to === '/war-room' ? () => {
               // Ensure mapbox-gl chunk is cached before the click lands
               import('mapbox-gl').catch(() => {});
             } : undefined}
@@ -39,6 +42,9 @@ export default function Sidebar({ open, onClose }) {
           >
             <Icon size={18} />
             <span>{label}</span>
+            {to === '/projects' && badgeCount > 0 && (
+              <span className={styles.badge}>{badgeCount}</span>
+            )}
           </NavLink>
         ))}
       </nav>

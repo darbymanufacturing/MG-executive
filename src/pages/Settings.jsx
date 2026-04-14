@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
-  DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart,
+  DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart, ClipboardList,
 } from 'lucide-react';
+import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
 import { CATEGORIES } from '../utils/constants.js';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
@@ -303,6 +304,18 @@ export default function Settings() {
                   {importMsg.text}
                 </div>
               )}
+            </div>
+
+            <div className={styles.dataCard}>
+              <div className={styles.dataCardHeader}>
+                <ClipboardList size={16} />
+                <span>Seed Projects</span>
+              </div>
+              <p className={styles.dataCardDesc}>Load the 7 launch projects into the Projects module (skips if projects already exist).</p>
+              <Button variant="secondary" size="sm" onClick={async () => {
+                const seeded = await seedProjectsIfEmpty();
+                alert(seeded ? '✓ 7 projects seeded.' : 'Projects already exist — nothing changed.');
+              }}>Seed Launch Projects</Button>
             </div>
 
             <div className={styles.dataCard}>

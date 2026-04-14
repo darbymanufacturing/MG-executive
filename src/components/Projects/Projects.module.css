@@ -1,0 +1,191 @@
+/* ── Shared Projects module styles ───────────────────────────────────────── */
+
+/* Status dot — 12px filled circle per spec */
+.statusDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Phase progress circles — 16px per spec */
+.phaseDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--phase-color, #555);
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+}
+.phaseDot.done {
+  background: var(--phase-color, #00C896);
+  border-color: var(--phase-color, #00C896);
+}
+.phaseDot.current {
+  background: linear-gradient(135deg, var(--phase-color, #00C896) 50%, transparent 50%);
+  border-color: var(--phase-color, #00C896);
+}
+
+/* Section separator */
+.divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0;
+}
+
+/* Thin budget progress bar */
+.budgetBar {
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  overflow: hidden;
+  margin-top: var(--space-1);
+}
+.budgetBarFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+/* Generic form controls */
+.input {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  width: 100%;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.input:focus {
+  border-color: var(--color-primary-light);
+}
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.textarea {
+  composes: input;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.select {
+  composes: input;
+  cursor: pointer;
+}
+
+/* Section header pattern */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.sectionTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Icon button */
+.iconBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.iconBtn:hover {
+  border-color: var(--color-primary-light);
+  color: var(--color-primary-light);
+}
+
+/* Pill / tag */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+/* Amber / red staleness labels */
+.staleAmber { color: #F5A623; }
+.staleRed   { color: #E84545; }
+.staleNone  { color: var(--color-text-muted); }
+
+/* Warning prompt (no next action) */
+.warnPrompt {
+  font-size: var(--text-xs);
+  color: #E84545;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Empty state text */
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+  padding: var(--space-3) 0;
+}
+
+/* Primary action button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity var(--transition-fast);
+}
+.btn:hover { opacity: 0.85; }
+.btnPrimary {
+  composes: btn;
+  background: var(--gradient-primary);
+  color: #fff;
+}
+.btnGhost {
+  composes: btn;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+.btnGhost:hover {
+  border-color: var(--color-primary-light);
+  color: var(--color-primary-light);
+  opacity: 1;
+}
+.btnDanger {
+  composes: btn;
+  background: transparent;
+  border: 1px solid #E84545;
+  color: #E84545;
+}
+.btnDanger:hover { background: rgba(232, 69, 69, 0.08); opacity: 1; }

@@ -1,10 +1,12 @@
 /**
- * Projects route — now renders the War Room full-screen experience.
- * The old Projects/RAG tracker functionality is preserved inside WarRoom
- * via the top bar and can be expanded in future with a drawer/panel.
+ * Projects — the executive decision-support module.
+ * Routes: /projects (dashboard) and /projects/:id (detail).
  */
-import WarRoom from './WarRoom.jsx';
+import { useParams } from 'react-router-dom';
+import ProjectsDashboard from '../components/Projects/ProjectsDashboard.jsx';
+import ProjectDetail from '../components/Projects/ProjectDetail.jsx';
 
 export default function Projects() {
-  return <WarRoom />;
+  const { id } = useParams();
+  return id ? <ProjectDetail projectId={id} /> : <ProjectsDashboard />;
 }
