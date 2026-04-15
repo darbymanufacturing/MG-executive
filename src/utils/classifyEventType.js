@@ -24,27 +24,39 @@ const CHARGING_STATES = new Set([
  * @param {string} reason      - raw "Reason" column value (may be empty)
  * @returns {string}           - one of the eventType enum values
  */
+const TRIP_STATES   = new Set(['trip', 'on trip']);
+const PAUSED_STATES = new Set(['paused', 'trip paused', 'pause']);
+
 export function classifyEventType(beforeState, afterState, reason = '') {
   const after  = (afterState  || '').trim().toLowerCase();
   const before = (beforeState || '').trim().toLowerCase();
   const rsn    = (reason      || '').trim().toLowerCase();
 
-  // Trip events
-  if (after === 'trip' || after === 'on trip')                     return 'trip_start';
-  if (before === 'trip' || before === 'on trip') {
-    if (after === 'available' || after === 'ready')                return 'trip_end';
-    return 'trip_end'; // any state after trip counts as ended
-  }
-
-  // Overturn detection (platform may use "Overturned" or "Overturn")
-  if (after.includes('overturn') || after.includes('fallen'))     return 'overturned';
-  if (before.includes('overturn') && (after === 'available' || after === 'ready' || after === 'rebalancing')) {
+  // Overturn detection — MUST run before trip/trip_end checks so that
+  // "Trip → Overturned" is caught as an overturn rather than mis-classified
+  // as a trip end. This was the cause of overturns-always-zero in the UI.
+  if (after.includes('overturn') || after.includes('fallen'))      return 'overturned';
+  if (before.includes('overturn') &&
+      (after === 'available' || after === 'ready' || after === 'rebalancing')) {
     return 'raised'; // overturn cleared
   }
 
-  // Rebalance
-  if (REBALANCE_STATES.has(afterState?.trim()))                    return 'rebalance_start';
-  if (REBALANCE_STATES.has(beforeState?.trim()) &&
+  // Trip events — treat pause/resume as NOT creating new trips.
+  // This prevents double-counting trips when a rider pauses mid-ride.
+  if (TRIP_STATES.has(after)) {
+    // Resuming from pause or continuing an ongoing trip state isn't a new trip
+    if (TRIP_STATES.has(before) || PAUSED_STATES.has(before))      return 'trip_resume';
+    return 'trip_start';
+  }
+  if (TRIP_STATES.has(before) || PAUSED_STATES.has(before)) {
+    if (PAUSED_STATES.has(after))                                  return 'trip_pause';
+    // Leaving a trip/paused state to anything resting = trip ended
+    return 'trip_end';
+  }
+
+  // Rebalance (case-insensitive on the raw state check)
+  if (REBALANCE_LOWER.has(after))                                  return 'rebalance_start';
+  if (REBALANCE_LOWER.has(before) &&
       (after === 'available' || after === 'ready'))                return 'rebalance_end';
 
   // Battery operations

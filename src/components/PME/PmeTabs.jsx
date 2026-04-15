@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTelemetry } from '../../context/TelemetryContext.jsx';
 import StatusLogImporter  from './ingest/StatusLogImporter.jsx';
 import RepairLogImporter  from './ingest/RepairLogImporter.jsx';
+import DataLoadedSummary  from './ingest/DataLoadedSummary.jsx';
 import FleetKpiStrip      from './fleet/FleetKpiStrip.jsx';
 import FleetRiskTable     from './fleet/FleetRiskTable.jsx';
 import OutlierCallouts    from './fleet/OutlierCallouts.jsx';
@@ -65,6 +66,8 @@ export default function PmeTabs() {
             <StatusLogImporter />
             <hr className={styles.divider} />
             <RepairLogImporter />
+            <hr className={styles.divider} />
+            <DataLoadedSummary />
           </div>
         )}
 

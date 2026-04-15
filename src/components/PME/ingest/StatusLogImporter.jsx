@@ -27,22 +27,41 @@ export default function StatusLogImporter() {
     setErrors([]);
     setProgress(0);
 
-    const text = await file.text();
-    const { events, errors: parseErrors, total } = parseStatusLogCsv(
-      text,
-      defaultId.trim() || null,
-      scooterCityMap,
-    );
+    try {
+      const text = await file.text();
+      const { events, errors: parseErrors } = parseStatusLogCsv(
+        text,
+        defaultId.trim() || null,
+        scooterCityMap,
+      );
 
-    setErrors(parseErrors);
-    if (!events.length && parseErrors.length) {
+      setErrors(parseErrors);
+      if (!events.length) {
+        setProgress(null);
+        setResult({
+          written: 0,
+          duplicates: 0,
+          errors: parseErrors.length
+            ? parseErrors
+            : ['No events parsed from the file. Check column headers match expected format.'],
+          label: 'Events',
+        });
+        return;
+      }
+
+      const { written, duplicates } = await importEvents(events, setProgress);
       setProgress(null);
-      return;
+      setResult({ written, duplicates, errors: parseErrors, label: 'Events' });
+    } catch (err) {
+      console.error('Status Log import failed:', err);
+      setProgress(null);
+      setResult({
+        written: 0,
+        duplicates: 0,
+        errors: [`Upload failed: ${err.message || String(err)}`],
+        label: 'Events',
+      });
     }
-
-    const { written, duplicates } = await importEvents(events, setProgress);
-    setProgress(null);
-    setResult({ written, duplicates, errors: parseErrors, label: 'Events' });
   }
 
   function onFileChange(e) { processFile(e.target.files[0]); }

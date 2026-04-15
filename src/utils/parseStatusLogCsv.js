@@ -88,7 +88,13 @@ function parseBattery(raw) {
  * @returns {{ events: object[], errors: string[], total: number }}
  */
 export function parseStatusLogCsv(csvText, defaultScooterId = null, scooterCityMap = {}) {
-  const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean);
+  // Strip UTF-8 BOM if present — otherwise first header column gets "\uFEFFTime"
+  // and column resolution fails silently, breaking the whole import.
+  let text = csvText || '';
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  // Accept \r\n, \n, and \r line endings
+  const lines = text.split(/\r\n|\r|\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) {
     return { events: [], errors: ['File appears empty or has no data rows.'], total: 0 };
   }
@@ -106,7 +112,12 @@ export function parseStatusLogCsv(csvText, defaultScooterId = null, scooterCityM
   if (colTime === -1 || colAfter === -1) {
     return {
       events: [],
-      errors: ['Could not find required columns (Time, After State). Check CSV format.'],
+      errors: [
+        `Could not find required columns (Time, After State) in the CSV. ` +
+        `Detected headers: ${headers.join(' | ')}. ` +
+        `Expected any of: ${COL_ALIASES.time.join(', ')} for Time, ` +
+        `${COL_ALIASES.afterState.join(', ')} for After State.`,
+      ],
       total: 0,
     };
   }

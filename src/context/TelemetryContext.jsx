@@ -14,6 +14,7 @@ import {
   collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { classifyEventType } from '../utils/classifyEventType.js';
 
 const EVENTS_COL = 'telemetryEvents';
 const BATCH_SIZE = 450; // safely below Firestore 500-op limit
@@ -32,7 +33,17 @@ export function TelemetryProvider({ children }) {
     const unsub = onSnapshot(
       collection(db, EVENTS_COL),
       (snap) => {
-        setEvents(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        // Re-classify on load so data ingested under older classifier rules
+        // picks up the latest logic (e.g. overturn-vs-trip_end ordering fix)
+        // without requiring users to re-upload.
+        setEvents(snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            _docId: d.id,
+            ...data,
+            eventType: classifyEventType(data.beforeState, data.afterState, data.reason),
+          };
+        }));
         setCount(snap.size);
         setLoading(false);
       },
