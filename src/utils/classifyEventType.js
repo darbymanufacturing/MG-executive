@@ -11,6 +11,9 @@ const REBALANCE_STATES = new Set([
   'Transport', 'In Transport',
 ]);
 
+// Lowercase variant for case-insensitive checks against raw CSV values
+const REBALANCE_LOWER = new Set([...REBALANCE_STATES].map((s) => s.toLowerCase()));
+
 const CHARGING_STATES = new Set([
   'Charging', 'In Charging', 'Battery Swap',
 ]);
@@ -63,10 +66,24 @@ export function classifyEventType(beforeState, afterState, reason = '') {
   return 'other';
 }
 
-/** Returns true if the given eventType represents an overturn in real operation
- *  (vs an overturn during transport/rebalance which doesn't count for risk scoring). */
+/**
+ * Returns true if the event represents a genuine overturn in real operation
+ * (vs an overturn during transport/rebalance, which doesn't count for risk scoring).
+ *
+ * Uses case-insensitive matching against beforeState because CSV exports from
+ * the platform may vary casing. Also falls back to checking afterState directly
+ * in case the eventType wasn't classified correctly at ingest time.
+ */
 export function isTrueOverturn(event) {
-  if (event.eventType !== 'overturned') return false;
-  const before = (event.beforeState || '').trim();
-  return !REBALANCE_STATES.has(before);
+  // Primary check via stored eventType; fallback via raw afterState for robustness
+  const isOverturn =
+    event.eventType === 'overturned' ||
+    (event.afterState || '').toLowerCase().includes('overturn') ||
+    (event.afterState || '').toLowerCase().includes('fallen');
+
+  if (!isOverturn) return false;
+
+  // Exclude overturns that happened while the scooter was being rebalanced/transported
+  const before = (event.beforeState || '').trim().toLowerCase();
+  return !REBALANCE_LOWER.has(before);
 }

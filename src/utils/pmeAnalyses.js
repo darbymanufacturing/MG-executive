@@ -8,6 +8,52 @@
 import { isTrueOverturn } from './classifyEventType.js';
 import { validTickets }   from './repairJunkFilter.js';
 
+// ─── Trip counting ───────────────────────────────────────────────────────────
+
+/**
+ * Counts real completed trips by pairing trip_start → trip_end events per scooter.
+ *
+ * Why this beats a raw trip_start count:
+ *   1. Pause/resume cycles: "Trip → Paused → Trip" creates a second trip_start for the
+ *      same physical trip. Pairing ensures we only count the FIRST start before each end.
+ *   2. Cancelled reservations: if the platform briefly transitions to "Trip" state before
+ *      reverting to "Available" (scan-and-cancel), the pairing + MIN_TRIP_SECS threshold
+ *      excludes those artefacts.
+ *
+ * Events that went RESERVED → AVAILABLE (no trip_start emitted at all) are already
+ * excluded upstream by the eventType classifier, so they never reach this function.
+ *
+ * @param {object[]} events  - flat array of telemetry events (may span multiple scooters)
+ * @param {number}   minSecs - minimum trip duration in seconds; shorter = cancelled artefact
+ * @returns {number}
+ */
+const MIN_TRIP_SECS = 60;
+
+export function countRealTrips(events, minSecs = MIN_TRIP_SECS) {
+  const byScooter = {};
+  for (const ev of events) {
+    if (!byScooter[ev.scooterId]) byScooter[ev.scooterId] = [];
+    byScooter[ev.scooterId].push(ev);
+  }
+
+  let total = 0;
+  for (const evs of Object.values(byScooter)) {
+    const sorted = [...evs].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    let tripStart = null;
+    for (const ev of sorted) {
+      if (ev.eventType === 'trip_start') {
+        // Only capture the FIRST trip_start of a trip; subsequent ones are pause resumes
+        if (!tripStart) tripStart = ev;
+      } else if (tripStart && ev.eventType === 'trip_end') {
+        const secs = (new Date(ev.timestamp) - new Date(tripStart.timestamp)) / 1000;
+        if (secs >= minSecs) total++;
+        tripStart = null; // ready for next trip
+      }
+    }
+  }
+  return total;
+}
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function daysBetween(a, b) {
@@ -264,7 +310,7 @@ export function fleetKpis(events, tickets, scooters) {
   const active  = scooters.filter((s) => s.status === 'Active').length;
   const total   = scooters.length;
 
-  const trips   = events.filter((e) => e.eventType === 'trip_start').length;
+  const trips   = countRealTrips(events);
   const dt      = downtimeByCause(events);
   const ovts    = events.filter(isTrueOverturn).length;
 
@@ -295,16 +341,19 @@ export function weeklyDigest(events, tickets) {
   const w1Start = new Date(now - 7  * 86_400_000).toISOString();
   const w2Start = new Date(now - 14 * 86_400_000).toISOString();
 
+  const thisWeekEvents = events.filter((e) => e.timestamp >= w1Start);
+  const lastWeekEvents = events.filter((e) => e.timestamp >= w2Start && e.timestamp < w1Start);
+
   const thisWeek = {
-    trips:      events.filter((e) => e.eventType === 'trip_start' && e.timestamp >= w1Start).length,
-    overturns:  events.filter((e) => isTrueOverturn(e) && e.timestamp >= w1Start).length,
-    repairs:    good.filter((t)   => t.dateEntered >= w1Start.slice(0, 10)).length,
+    trips:        countRealTrips(thisWeekEvents),
+    overturns:    thisWeekEvents.filter(isTrueOverturn).length,
+    repairs:      good.filter((t) => t.dateEntered >= w1Start.slice(0, 10)).length,
     newAnomalies: [], // filled below
   };
   const lastWeek = {
-    trips:      events.filter((e) => e.eventType === 'trip_start' && e.timestamp >= w2Start && e.timestamp < w1Start).length,
-    overturns:  events.filter((e) => isTrueOverturn(e) && e.timestamp >= w2Start && e.timestamp < w1Start).length,
-    repairs:    good.filter((t)   => t.dateEntered >= w2Start.slice(0, 10) && t.dateEntered < w1Start.slice(0, 10)).length,
+    trips:     countRealTrips(lastWeekEvents),
+    overturns: lastWeekEvents.filter(isTrueOverturn).length,
+    repairs:   good.filter((t) => t.dateEntered >= w2Start.slice(0, 10) && t.dateEntered < w1Start.slice(0, 10)).length,
   };
 
   return { thisWeek, lastWeek };

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTelemetry } from '../../../context/TelemetryContext.jsx';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
-import { trueOverturnsReport, downtimeByCause } from '../../../utils/pmeAnalyses.js';
+import { trueOverturnsReport, downtimeByCause, countRealTrips } from '../../../utils/pmeAnalyses.js';
 import { validTickets } from '../../../utils/repairJunkFilter.js';
 import { isTrueOverturn } from '../../../utils/classifyEventType.js';
 import styles from './Scooter.module.css';
@@ -27,8 +27,13 @@ export default function ScooterLifetimeStats({ scooterId }) {
     const scooterEvents = events.filter((e) => e.scooterId === scooterId);
     const good          = validTickets(tickets).filter((t) => t.scooterId === scooterId);
 
-    const trips         = scooterEvents.filter((e) => e.eventType === 'trip_start').length;
-    const allOverturns  = scooterEvents.filter((e) => e.eventType === 'overturned').length;
+    const trips         = countRealTrips(scooterEvents);
+    // allOverturns: raw count via eventType OR direct afterState check (same robustness as isTrueOverturn)
+    const allOverturns  = scooterEvents.filter(
+      (e) => e.eventType === 'overturned' ||
+             (e.afterState || '').toLowerCase().includes('overturn') ||
+             (e.afterState || '').toLowerCase().includes('fallen'),
+    ).length;
     const trueOvts      = scooterEvents.filter(isTrueOverturn).length;
     const rebalanceOvts = allOverturns - trueOvts;
 
