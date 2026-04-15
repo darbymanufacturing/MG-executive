@@ -9,6 +9,7 @@ import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
 import { ProjectProvider } from './context/ProjectContext.jsx';
 import { DiaryProvider } from './context/DiaryContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
+import { TelemetryProvider } from './context/TelemetryContext.jsx';
 import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -20,6 +21,7 @@ import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
+import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -90,6 +92,7 @@ function AppShell() {
           <Route path="/revenue"       element={<Revenue />} />
           <Route path="/spr"           element={<Spr />} />
           <Route path="/maintenance"   element={<Maintenance />} />
+          <Route path="/pme"           element={<PredictiveMaintenance />} />
           <Route path="/settings"      element={<Settings />} />
         </Routes>
       </main>
@@ -117,6 +120,7 @@ export default function App() {
                   <RevenueProvider>
                     <SprProvider>
                       <MaintenanceProvider>
+                        <TelemetryProvider>
                         <ProjectProvider>
                           <NotificationProvider>
                             <DiaryProvider>
@@ -124,6 +128,7 @@ export default function App() {
                             </DiaryProvider>
                           </NotificationProvider>
                         </ProjectProvider>
+                        </TelemetryProvider>
                       </MaintenanceProvider>
                     </SprProvider>
                   </RevenueProvider>

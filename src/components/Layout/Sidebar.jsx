@@ -1,7 +1,9 @@
+import { useState, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList, Activity } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
+import SparkleBurst from '../PME/shared/SparkleBurst.jsx';
 import styles from './Sidebar.module.css';
 
 const NAV = [
@@ -12,12 +14,20 @@ const NAV = [
   { to: '/revenue',     icon: Receipt,         label: 'Revenue' },
   { to: '/spr',         icon: Radar,           label: 'SPR' },
   { to: '/maintenance', icon: Wrench,          label: 'Maintenance' },
+  { to: '/pme',         icon: Activity,        label: 'PME',         sparkle: true },
   { to: '/settings',    icon: Settings,        label: 'Settings' },
 ];
 
 export default function Sidebar({ open, onClose }) {
   const { user, signOut } = useAuth();
   const { badgeCount } = useNotifications();
+  const [burst, setBurst] = useState(null); // { x, y } or null
+
+  const handlePmeClick = useCallback((e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setBurst({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    onClose?.();
+  }, [onClose]);
 
   return (
     <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
@@ -26,18 +36,18 @@ export default function Sidebar({ open, onClose }) {
       </div>
 
       <nav className={styles.nav}>
-        {NAV.map(({ to, icon: Icon, label }) => (
+        {NAV.map(({ to, icon: Icon, label, sparkle }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
-            onClick={onClose}
+            onClick={sparkle ? handlePmeClick : onClose}
             onMouseEnter={to === '/war-room' ? () => {
               // Ensure mapbox-gl chunk is cached before the click lands
               import('mapbox-gl').catch(() => {});
             } : undefined}
             className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
+              `${styles.navItem} ${isActive ? styles.active : ''} ${sparkle ? styles.pmeItem : ''}`
             }
           >
             <Icon size={18} />
@@ -48,6 +58,15 @@ export default function Sidebar({ open, onClose }) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Sparkle burst on PME click */}
+      {burst && (
+        <SparkleBurst
+          x={burst.x}
+          y={burst.y}
+          onDone={() => setBurst(null)}
+        />
+      )}
 
       <div className={styles.footer}>
         <div className={styles.userInfo}>

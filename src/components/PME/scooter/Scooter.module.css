@@ -1,0 +1,169 @@
+/* ── Picker ── */
+.picker { display: flex; flex-direction: column; gap: var(--space-2); }
+.pickerLabel { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.pickerRow   { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.pickerInput, .pickerSelect {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.pickerInput  { max-width: 160px; }
+.pickerSelect { flex: 1; min-width: 200px; }
+.pickerInput:focus, .pickerSelect:focus { border-color: var(--color-primary-light); }
+
+/* ── Health Card ── */
+.healthCard {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.healthTop { display: flex; align-items: flex-start; justify-content: space-between; }
+.healthScooterLabel { font-size: var(--text-base); font-weight: 700; color: var(--color-text-primary); }
+.healthMeta         { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 3px; }
+
+.gaugeRow  { display: flex; align-items: center; gap: var(--space-3); }
+.gaugeTrack {
+  flex: 1;
+  height: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.gaugeFill  { height: 100%; border-radius: var(--radius-full); transition: width 0.5s ease; }
+.gaugeScore { font-size: var(--text-xl); font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.gaugeLabel { font-size: var(--text-xs); color: var(--color-text-muted); flex-shrink: 0; }
+
+.baselineRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.baselineKey { color: var(--color-text-muted); }
+.baselineVal { font-weight: 700; }
+
+.actionBox {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.actionLabel { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); font-weight: 600; }
+.actionText  { font-size: var(--text-sm); color: var(--color-text-secondary); }
+
+.predRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+.predLabel { color: var(--color-text-muted); }
+.predVal   { font-weight: 700; color: var(--color-text-primary); font-size: var(--text-base); }
+
+/* ── Lifetime Stats ── */
+.lifetimeStats { display: flex; flex-direction: column; }
+.sectionTitle  { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-primary); margin: 0 0 var(--space-3) 0; }
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  gap: var(--space-4);
+}
+.statRow:last-child { border-bottom: none; }
+.statLabel { font-size: var(--text-xs); color: var(--color-text-muted); }
+.statRight  { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.statValue  { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.statSub    { font-size: 10px; color: var(--color-text-muted); text-align: right; }
+
+/* ── Timeline ── */
+.timeline { display: flex; flex-direction: column; gap: var(--space-3); }
+.timelineHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.typeFilter {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.eventList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.eventRow:last-child { border-bottom: none; }
+.eventDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.eventTime   { color: var(--color-text-muted); font-family: monospace; flex-shrink: 0; min-width: 110px; }
+.eventType   { font-weight: 600; flex-shrink: 0; min-width: 110px; }
+.eventDetail { flex: 1; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eventBatt   { flex-shrink: 0; font-size: 10px; color: var(--color-text-muted); }
+
+.loadMore {
+  background: none;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 6px;
+  transition: all var(--transition-fast);
+}
+.loadMore:hover { border-color: var(--color-primary-light); color: var(--color-primary-light); }
+
+/* ── Anomaly Flags ── */
+.anomalyList { display: flex; flex-direction: column; gap: var(--space-2); }
+.noAnomaly   { font-size: var(--text-xs); color: #00C896; margin: 0; }
+.anomalyItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.anomaly_high   { background: rgba(232,69,69,0.08);  border: 1px solid rgba(232,69,69,0.25); }
+.anomaly_medium { background: rgba(245,166,35,0.08); border: 1px solid rgba(245,166,35,0.25); }
+.anomaly_info   { background: var(--color-surface-2); border: 1px solid var(--color-border); color: var(--color-text-muted); }
+.anomalyIcon    { flex-shrink: 0; font-size: 14px; }
+
+/* ── Shared empty ── */
+.empty { font-size: var(--text-xs); color: var(--color-text-muted); font-style: italic; margin: 0; padding: var(--space-4) 0; }

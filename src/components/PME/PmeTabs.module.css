@@ -1,0 +1,88 @@
+.pme {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100%;
+}
+
+/* ── Tab bar ── */
+.tabBar {
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-4);
+  overflow-x: auto;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--color-text-secondary); }
+.tabActive  {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-primary-light);
+  font-weight: 600;
+}
+.tabIcon { font-size: 14px; }
+
+/* ── Tab content ── */
+.tabContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+/* ── Ingest layout ── */
+.ingestGrid { display: flex; flex-direction: column; gap: var(--space-6); max-width: 680px; }
+.divider    { border: none; border-top: 1px solid var(--color-border); margin: 0; }
+
+/* ── Fleet layout ── */
+.fleetLayout { display: flex; flex-direction: column; gap: var(--space-6); }
+
+/* ── Drilldown layout ── */
+.drilldownLayout { display: flex; flex-direction: column; gap: var(--space-4); }
+.drilldownGrid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+.drilldownLeft  { display: flex; flex-direction: column; gap: var(--space-4); }
+.drilldownRight { display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* ── Reports layout ── */
+.reportsLayout { display: flex; flex-direction: column; gap: var(--space-6); }
+
+/* ── Empty state ── */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.emptyIcon { font-size: 36px; }
+.emptyState strong { color: var(--color-primary-light); }
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .tabContent { padding: var(--space-4); }
+  .drilldownGrid { grid-template-columns: 1fr; }
+}

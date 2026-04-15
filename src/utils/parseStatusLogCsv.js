@@ -1,0 +1,160 @@
+/**
+ * parseStatusLogCsv.js
+ * Parses the platform's Status Log CSV export into telemetryEvent docs.
+ *
+ * Expected columns (exact platform export format):
+ *   Time, User, Before State, After State, Reason, Location, Battery Level
+ *
+ * The scooterId must be provided externally (the CSV is per-scooter or combined
+ * with a scooter_id column). We handle both cases.
+ *
+ * Returns: { events: [...], errors: [...], total: number }
+ */
+
+import { classifyEventType } from './classifyEventType.js';
+
+// Canonical column names — case-insensitive match
+const COL_ALIASES = {
+  time:          ['time', 'timestamp', 'date time', 'date & time', 'datetime'],
+  user:          ['user', 'operator', 'staff'],
+  beforeState:   ['before state', 'before_state', 'from state', 'from_state', 'state before'],
+  afterState:    ['after state', 'after_state', 'to state', 'to_state', 'state after', 'state'],
+  reason:        ['reason', 'reason code', 'reason_code'],
+  location:      ['location', 'city', 'zone', 'area'],
+  batteryLevel:  ['battery level', 'battery_level', 'battery', 'battery %', 'soc'],
+  scooterId:     ['scooter id', 'scooter_id', 'vehicle id', 'vehicle_id', 'id', 'device id'],
+};
+
+/** Parse a single quoted CSV row into string array. Reused from csvParser.js pattern. */
+function parseRow(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  values.push(current.trim());
+  return values;
+}
+
+function resolveColumn(headers, aliases) {
+  const lowerHeaders = headers.map((h) => h.toLowerCase().trim());
+  for (const alias of aliases) {
+    const idx = lowerHeaders.indexOf(alias);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+/** Parse "DD/MM/YYYY HH:mm" or ISO timestamp → ISO string */
+function parseTimestamp(raw) {
+  if (!raw) return null;
+  const clean = raw.replace(/"/g, '').trim();
+  // Try ISO first
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    const d = new Date(clean);
+    return isNaN(d) ? null : d.toISOString();
+  }
+  // Try "DD/MM/YYYY HH:mm" or "DD/MM/YYYY HH:mm:ss"
+  const m = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const [, d, mo, y, h, min, s = '00'] = m;
+    const iso = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${min}:${s}Z`;
+    const dt = new Date(iso);
+    return isNaN(dt) ? null : dt.toISOString();
+  }
+  return null;
+}
+
+function parseBattery(raw) {
+  if (!raw) return null;
+  const n = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? null : Math.min(100, Math.max(0, n));
+}
+
+/**
+ * @param {string} csvText   - raw CSV file content
+ * @param {string} [defaultScooterId] - scooter ID if not in CSV (per-scooter file)
+ * @param {object} [scooterCityMap]   - { scooterId: city } for city derivation at ingest
+ * @returns {{ events: object[], errors: string[], total: number }}
+ */
+export function parseStatusLogCsv(csvText, defaultScooterId = null, scooterCityMap = {}) {
+  const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) {
+    return { events: [], errors: ['File appears empty or has no data rows.'], total: 0 };
+  }
+
+  const headers    = parseRow(lines[0]);
+  const colTime    = resolveColumn(headers, COL_ALIASES.time);
+  const colUser    = resolveColumn(headers, COL_ALIASES.user);
+  const colBefore  = resolveColumn(headers, COL_ALIASES.beforeState);
+  const colAfter   = resolveColumn(headers, COL_ALIASES.afterState);
+  const colReason  = resolveColumn(headers, COL_ALIASES.reason);
+  const colLoc     = resolveColumn(headers, COL_ALIASES.location);
+  const colBatt    = resolveColumn(headers, COL_ALIASES.batteryLevel);
+  const colScooter = resolveColumn(headers, COL_ALIASES.scooterId);
+
+  if (colTime === -1 || colAfter === -1) {
+    return {
+      events: [],
+      errors: ['Could not find required columns (Time, After State). Check CSV format.'],
+      total: 0,
+    };
+  }
+
+  const events = [];
+  const errors = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseRow(lines[i]);
+    const timestamp = parseTimestamp(cols[colTime]);
+    if (!timestamp) {
+      errors.push(`Row ${i + 1}: Could not parse timestamp "${cols[colTime]}"`);
+      continue;
+    }
+
+    const scooterId  = colScooter !== -1 ? cols[colScooter]?.trim() : defaultScooterId;
+    if (!scooterId) {
+      errors.push(`Row ${i + 1}: No scooter ID found. Provide a default scooter ID or add a "Scooter ID" column.`);
+      continue;
+    }
+
+    const beforeState = colBefore !== -1 ? (cols[colBefore] || '').trim() : '';
+    const afterState  = (cols[colAfter]  || '').trim();
+    const reason      = colReason !== -1  ? (cols[colReason]  || '').trim() : '';
+    const location    = colLoc    !== -1  ? (cols[colLoc]     || '').trim() : '';
+    const batteryLevel = colBatt  !== -1  ? parseBattery(cols[colBatt]) : null;
+
+    const eventType = classifyEventType(beforeState, afterState, reason);
+    const city      = scooterCityMap[scooterId] || '';
+
+    // Fingerprint docId — deterministic, enables idempotent upsert
+    const safeAfter = afterState.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const docId     = `${scooterId}_${timestamp.replace(/[^0-9T]/g, '')}_${safeAfter}`;
+
+    events.push({
+      _docId: docId,
+      scooterId,
+      timestamp,
+      user:         colUser !== -1 ? (cols[colUser] || '').trim() : '',
+      beforeState,
+      afterState,
+      reason,
+      location,
+      batteryLevel,
+      eventType,
+      city,
+    });
+  }
+
+  return { events, errors, total: events.length };
+}

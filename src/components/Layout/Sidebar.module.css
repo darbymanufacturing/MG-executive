@@ -71,6 +71,14 @@
   box-shadow: var(--shadow-glow);
 }
 
+/* PME nav item — subtle green accent when idle */
+.pmeItem { border-left: 2px solid transparent; }
+.pmeItem:hover { border-left-color: rgba(0,200,150,0.4); }
+.pmeItem.active {
+  background: linear-gradient(135deg, #006b50 0%, #00C896 100%);
+  border-left-color: #00C896;
+}
+
 .footer {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
