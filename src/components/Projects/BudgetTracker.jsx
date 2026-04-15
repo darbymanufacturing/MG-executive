@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { budgetFromCity } from '../../utils/budgetFromCity.js';
 import { CITIES } from './constants.js';
 import styles from './BudgetTracker.module.css';
@@ -60,9 +61,20 @@ export default function BudgetTracker({ project }) {
   const { costs } = useCosts();
   const { revenueData } = useRevenue();
   const { updateProject } = useProjects();
+  const { scooters } = useMaintenance();
 
   const { revenue, expenses, net, revTransactions, costTransactions } =
     budgetFromCity(costs, revenueData, project.linkedCity);
+
+  // Fleet counts for the linked city (all statuses)
+  const cityScooters   = project.linkedCity
+    ? scooters.filter((s) => (s.city || '').toLowerCase() === project.linkedCity.toLowerCase())
+    : scooters;
+  const totalScooters  = cityScooters.length;
+  const activeScooters = cityScooters.filter((s) => s.status === 'Active').length;
+  const inRepair       = cityScooters.filter((s) => s.status === 'In Repair').length;
+  const donors         = cityScooters.filter((s) => s.status === 'Donor').length;
+  const retired        = cityScooters.filter((s) => s.status === 'Retired').length;
 
   const planned   = project.plannedBudget || 0;
   const pct       = planned > 0 ? Math.min((expenses / planned) * 100, 100) : 0;
@@ -140,6 +152,39 @@ export default function BudgetTracker({ project }) {
           <span className={styles.statValue} style={{ color: net >= 0 ? '#00C896' : '#E84545', fontWeight: 700 }}>
             {fmt(net)}
           </span>
+        </div>
+
+        {/* ── Fleet count ── */}
+        <div className={styles.statRow} style={{ borderTop: '1px solid var(--color-border)', marginTop: 4, paddingTop: 12, borderBottom: 'none' }}>
+          <span className={styles.statLabel}>
+            Fleet
+            {!project.linkedCity && <span className={styles.statHint}> — all cities</span>}
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <span className={styles.statValue}>{totalScooters} scooters</span>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {activeScooters > 0 && (
+                <span style={{ fontSize: 11, color: '#00C896', fontWeight: 600 }}>
+                  {activeScooters} active
+                </span>
+              )}
+              {inRepair > 0 && (
+                <span style={{ fontSize: 11, color: '#F5A623', fontWeight: 600 }}>
+                  {inRepair} in repair
+                </span>
+              )}
+              {donors > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                  {donors} donor
+                </span>
+              )}
+              {retired > 0 && (
+                <span style={{ fontSize: 11, color: '#E84545', fontWeight: 600, opacity: 0.7 }}>
+                  {retired} retired
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
