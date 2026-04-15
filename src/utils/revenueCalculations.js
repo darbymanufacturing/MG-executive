@@ -236,13 +236,13 @@ export function revenuePerCityBreakdown(periodRevenue, scooters, cities) {
     const revenue = cityRevenue.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
     const trips   = cityRevenue.reduce((s, r) => s + (r.totalTrips || 0), 0);
 
-    const activeScooters = scooters.filter(
-      (s) => s.city === city && s.status === 'Active',
-    ).length;
+    const cityScooters   = scooters.filter((s) => s.city === city);
+    const activeScooters = cityScooters.filter((s) => s.status === 'Active').length;
+    const totalScooters  = cityScooters.length;
 
     const revenuePerScooter = activeScooters > 0 ? revenue / activeScooters : null;
 
-    return { city, revenue, trips, activeScooters, revenuePerScooter };
-  }).filter((row) => row.revenue > 0 || row.activeScooters > 0)
+    return { city, revenue, trips, activeScooters, totalScooters, revenuePerScooter };
+  }).filter((row) => row.revenue > 0 || row.totalScooters > 0)
     .sort((a, b) => b.revenue - a.revenue);
 }

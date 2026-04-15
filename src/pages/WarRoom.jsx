@@ -35,13 +35,17 @@ export default function WarRoom() {
     const withData = new Set(cityData.map((d) => d.city));
     const scooterOnlyCities = locations
       .filter((loc) => !withData.has(loc))
-      .map((loc) => ({
-        city: loc,
-        revenue: 0,
-        trips: 0,
-        activeScooters: scooters.filter((s) => s.city === loc && s.status === 'Active').length,
-        revenuePerScooter: null,
-      }));
+      .map((loc) => {
+        const cityScooters = scooters.filter((s) => s.city === loc);
+        return {
+          city: loc,
+          revenue: 0,
+          trips: 0,
+          activeScooters:   cityScooters.filter((s) => s.status === 'Active').length,
+          totalScooters:    cityScooters.length,
+          revenuePerScooter: null,
+        };
+      });
     return [...cityData, ...scooterOnlyCities];
   }, [cityData, locations, scooters]);
 

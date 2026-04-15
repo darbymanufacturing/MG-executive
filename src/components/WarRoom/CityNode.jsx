@@ -9,8 +9,11 @@ import styles from './CityNode.module.css';
  * @param {number} index — used to stagger pulse animation delay
  */
 export default function CityNode({ data, index = 0 }) {
-  const delay = `${(index * 0.35).toFixed(2)}s`;
-  const hasData = data.revenue > 0 || data.activeScooters > 0;
+  const delay       = `${(index * 0.35).toFixed(2)}s`;
+  const total       = data.totalScooters  ?? data.activeScooters ?? 0;
+  const active      = data.activeScooters ?? 0;
+  const hasData     = data.revenue > 0 || total > 0;
+  const showBreakdown = total > 0 && active !== total;
 
   return (
     <div className={styles.wrapper}>
@@ -29,8 +32,14 @@ export default function CityNode({ data, index = 0 }) {
           <>
             <div className={styles.cardRow}>
               <span className={styles.cardKey}>Scooters</span>
-              <span className={styles.cardVal}>{data.activeScooters}</span>
+              <span className={styles.cardVal}>{total}</span>
             </div>
+            {showBreakdown && (
+              <div className={styles.cardRow}>
+                <span className={styles.cardKey} style={{ opacity: 0.65 }}>↳ Active</span>
+                <span className={styles.cardVal} style={{ color: '#00C896', opacity: 0.9 }}>{active}</span>
+              </div>
+            )}
             <div className={styles.cardRow}>
               <span className={styles.cardKey}>Revenue</span>
               <span className={styles.cardVal}>{formatEUR(data.revenue)}</span>
