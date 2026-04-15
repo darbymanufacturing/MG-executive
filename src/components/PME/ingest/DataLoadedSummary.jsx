@@ -18,7 +18,12 @@ export default function DataLoadedSummary() {
   const summary = useMemo(() => {
     if (!events.length) return null;
 
-    const byScooter = {};
+    const byScooter   = {};
+    const byEventType = {};
+    const byAfter     = {};
+    let globalFirst = events[0].timestamp;
+    let globalLast  = events[0].timestamp;
+
     for (const ev of events) {
       const id = ev.scooterId || '(unknown)';
       if (!byScooter[id]) {
@@ -27,17 +32,16 @@ export default function DataLoadedSummary() {
       byScooter[id].count++;
       if (ev.timestamp < byScooter[id].first) byScooter[id].first = ev.timestamp;
       if (ev.timestamp > byScooter[id].last)  byScooter[id].last  = ev.timestamp;
-    }
-
-    // Global date range across all events
-    let globalFirst = events[0].timestamp;
-    let globalLast  = events[0].timestamp;
-    for (const ev of events) {
       if (ev.timestamp < globalFirst) globalFirst = ev.timestamp;
       if (ev.timestamp > globalLast)  globalLast  = ev.timestamp;
+
+      const et = ev.eventType || 'other';
+      byEventType[et] = (byEventType[et] || 0) + 1;
+
+      const rawAfter = (ev.afterState || '(empty)').trim() || '(empty)';
+      byAfter[rawAfter] = (byAfter[rawAfter] || 0) + 1;
     }
 
-    // Attach city/model from scooters registry
     const rows = Object.entries(byScooter)
       .map(([scooterId, d]) => {
         const sc = scooters.find((s) => s.scooterId === scooterId);
@@ -52,7 +56,19 @@ export default function DataLoadedSummary() {
       })
       .sort((a, b) => b.count - a.count);
 
-    return { rows, globalFirst, globalLast, total: events.length };
+    const eventTypeRows = Object.entries(byEventType)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const afterStateRows = Object.entries(byAfter)
+      .map(([state, count]) => ({ state, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    return {
+      rows, eventTypeRows, afterStateRows,
+      globalFirst, globalLast, total: events.length,
+    };
   }, [events, scooters]);
 
   if (!summary) {
@@ -114,6 +130,41 @@ export default function DataLoadedSummary() {
           </tbody>
         </table>
       </div>
+
+      <details className={styles.diag}>
+        <summary>Classification diagnostics (expand if counts look wrong)</summary>
+
+        <div className={styles.diagGrid}>
+          <div>
+            <h4 className={styles.diagTitle}>Event types detected</h4>
+            <ul className={styles.diagList}>
+              {summary.eventTypeRows.map((r) => (
+                <li key={r.type}>
+                  <span>{r.type}</span>
+                  <span className={styles.numCol}>{r.count.toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className={styles.diagTitle}>Top 15 raw “After State” values</h4>
+            <ul className={styles.diagList}>
+              {summary.afterStateRows.map((r) => (
+                <li key={r.state}>
+                  <span>{r.state}</span>
+                  <span className={styles.numCol}>{r.count.toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <p className={styles.diagHint}>
+          If you see overturns under a different state name here (e.g. a platform-specific term),
+          send that term and it can be added to the classifier.
+        </p>
+      </details>
     </div>
   );
 }

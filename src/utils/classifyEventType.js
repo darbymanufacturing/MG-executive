@@ -34,9 +34,17 @@ export function classifyEventType(beforeState, afterState, reason = '') {
 
   // Overturn detection — MUST run before trip/trip_end checks so that
   // "Trip → Overturned" is caught as an overturn rather than mis-classified
-  // as a trip end. This was the cause of overturns-always-zero in the UI.
-  if (after.includes('overturn') || after.includes('fallen'))      return 'overturned';
-  if (before.includes('overturn') &&
+  // as a trip end.
+  //
+  // Broad match: different platforms (Hopp, OTORide) export this under
+  // different labels. We accept any English variant on afterState OR reason.
+  const OVERTURN_TERMS = ['overturn', 'fallen', 'fall', 'tipped', 'toppl',
+                          'crashed', 'on side', 'on_side', 'onside', 'down',
+                          'lying', 'laying', 'ανατροπ', 'πτώσ', 'πεσ'];
+  const matchesOverturn = (s) => OVERTURN_TERMS.some((t) => s.includes(t));
+
+  if (matchesOverturn(after) || matchesOverturn(rsn))              return 'overturned';
+  if (matchesOverturn(before) &&
       (after === 'available' || after === 'ready' || after === 'rebalancing')) {
     return 'raised'; // overturn cleared
   }
@@ -86,12 +94,22 @@ export function classifyEventType(beforeState, afterState, reason = '') {
  * the platform may vary casing. Also falls back to checking afterState directly
  * in case the eventType wasn't classified correctly at ingest time.
  */
+const OVERTURN_TERMS = ['overturn', 'fallen', 'fall', 'tipped', 'toppl',
+                        'crashed', 'on side', 'on_side', 'onside', 'down',
+                        'lying', 'laying', 'ανατροπ', 'πτώσ', 'πεσ'];
+
+function matchesOverturn(s) {
+  if (!s) return false;
+  const lower = String(s).toLowerCase();
+  return OVERTURN_TERMS.some((t) => lower.includes(t));
+}
+
 export function isTrueOverturn(event) {
-  // Primary check via stored eventType; fallback via raw afterState for robustness
+  // Primary via stored eventType; fallback via raw afterState / reason
   const isOverturn =
     event.eventType === 'overturned' ||
-    (event.afterState || '').toLowerCase().includes('overturn') ||
-    (event.afterState || '').toLowerCase().includes('fallen');
+    matchesOverturn(event.afterState) ||
+    matchesOverturn(event.reason);
 
   if (!isOverturn) return false;
 

@@ -27,8 +27,22 @@ import { validTickets }   from './repairJunkFilter.js';
  * @param {number}   minSecs - minimum trip duration in seconds; shorter = cancelled artefact
  * @returns {number}
  */
-const MIN_TRIP_SECS = 60;
+const MIN_TRIP_SECS = 30;
 
+const isTripState   = (s) => s === 'trip' || s === 'on trip';
+const isPausedState = (s) => s === 'paused' || s === 'trip paused' || s === 'pause';
+
+/**
+ * Counts real completed trips by tracking raw state transitions rather than
+ * eventType. This is essential because:
+ *   - "Trip → Overturned" classifies as 'overturned' (not trip_end), so relying
+ *     on trip_end events would miss trips that ended when the rider fell.
+ *   - "Trip → Maintenance" or other non-resting exits also need to count as
+ *     trip completion.
+ *
+ * Rule: a trip STARTS when we enter Trip state from a non-trip/non-paused
+ * state, and ENDS when we leave Trip/Paused to any state that isn't Trip/Paused.
+ */
 export function countRealTrips(events, minSecs = MIN_TRIP_SECS) {
   const byScooter = {};
   for (const ev of events) {
@@ -41,13 +55,20 @@ export function countRealTrips(events, minSecs = MIN_TRIP_SECS) {
     const sorted = [...evs].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     let tripStart = null;
     for (const ev of sorted) {
-      if (ev.eventType === 'trip_start') {
-        // Only capture the FIRST trip_start of a trip; subsequent ones are pause resumes
+      const before = (ev.beforeState || '').trim().toLowerCase();
+      const after  = (ev.afterState  || '').trim().toLowerCase();
+
+      // Enter trip: transition from a non-trip/non-paused state INTO trip
+      if (isTripState(after) && !isTripState(before) && !isPausedState(before)) {
         if (!tripStart) tripStart = ev;
-      } else if (tripStart && ev.eventType === 'trip_end') {
+      }
+      // Exit trip: leaving Trip/Paused to any non-trip/non-paused state
+      else if (tripStart &&
+               (isTripState(before) || isPausedState(before)) &&
+               !isTripState(after) && !isPausedState(after)) {
         const secs = (new Date(ev.timestamp) - new Date(tripStart.timestamp)) / 1000;
         if (secs >= minSecs) total++;
-        tripStart = null; // ready for next trip
+        tripStart = null;
       }
     }
   }
