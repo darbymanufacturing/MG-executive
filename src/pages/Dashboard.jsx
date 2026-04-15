@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Euro, Bike, TrendingUp, ListChecks, Target, DollarSign, Plus,
   TrendingDown, Activity, Users, BarChart2, Shield, Clock,
-  Wrench, AlertTriangle, Package, FileDown,
+  Wrench, AlertTriangle, Package, FileDown, Calendar,
 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import KpiCard from '../components/Dashboard/KpiCard.jsx';
@@ -26,7 +26,8 @@ import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
-  revenuePerCityBreakdown,
+  revenuePerCityBreakdown, revenueBreakdown, operatingRevenue as calcOperatingRevenue,
+  applyFinancialAdjustments,
 } from '../utils/revenueCalculations.js';
 import { forecastTrend } from '../utils/forecasting.js';
 import { exportDashboardToPDF } from '../utils/exportData.js';
@@ -35,6 +36,8 @@ import {
   calcPaybackPeriod, calcCostRecoveryRate, calcRevGrowthMoM,
   getHealthColor,
 } from '../utils/financialHealth.js';
+import { useProjects } from '../context/ProjectContext.jsx';
+import { isPowDay, daysSince, relativeLabel } from '../utils/powHelpers.js';
 import { formatEUR, formatEURCompact, formatPercent, formatTrips } from '../utils/formatters.js';
 import styles from './Dashboard.module.css';
 
@@ -75,7 +78,16 @@ export default function Dashboard() {
     scooters,
     config: maintConfig,
   } = useMaintenance();
+  const { activeProjects, archivedProjects } = useProjects();
   const navigate = useNavigate();
+
+  // ── Financial config (Hopp fee, VAT, SIM) ────────────────────────────────
+  const financial = config.financial || {
+    applyFranchiseFee: true,
+    franchiseRate: 0.19,
+    vatRate: 0.24,
+    monthlySimCost: 150,
+  };
 
   const hasMaintenanceData   = tickets.length > 0 || parts.length > 0;
   const maxActiveTickets     = maintConfig?.maxActiveTickets ?? 3;
@@ -181,7 +193,11 @@ export default function Dashboard() {
   const budgetVar         = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
 
   // ── Revenue metrics ───────────────────────────────────────────────────────
-  const displayRevenue     = totalRevenue(periodRevenue);
+  const revBreakdown       = useMemo(
+    () => revenueBreakdown(periodRevenue, financial, periodMonths),
+    [periodRevenue, financial, periodMonths],
+  );
+  const displayRevenue     = revBreakdown.operatingRevenue;
   const displayPnL         = displayRevenue - displayTotal;
   const tripsPerDay        = avgTripsPerDay(periodRevenue);
   const revPerTrip         = revenuePerTrip(periodRevenue);
@@ -195,9 +211,10 @@ export default function Dashboard() {
 
   const combinedTrend = useMemo(() => {
     if (!rawCombinedTrend) return null;
-    if (showForecast && viewMode !== 'month') return forecastTrend(rawCombinedTrend, 3);
-    return rawCombinedTrend;
-  }, [rawCombinedTrend, showForecast, viewMode]);
+    const adjusted = applyFinancialAdjustments(rawCombinedTrend, financial);
+    if (showForecast && viewMode !== 'month') return forecastTrend(adjusted, 3);
+    return adjusted;
+  }, [rawCombinedTrend, showForecast, viewMode, financial]);
 
   // C2 — Revenue by city breakdown
   const cityBreakdown = useMemo(() => {
@@ -230,12 +247,12 @@ export default function Dashboard() {
       .reduce((sum, c) => sum + normalizeToMonthly(c), 0),
   [usedCosts]);
 
-  const ebitda      = hasPeriodData ? calcEBITDA(usedCosts, periodRevenue)       : null;
-  const roi         = hasPeriodData ? calcROI(usedCosts, periodRevenue)           : null;
-  const dscr        = hasPeriodData ? calcDSCR(usedCosts, periodRevenue, { ...config, monthlyDebtService: autoDebtService > 0 ? autoDebtService : null }) : null;
+  const ebitda      = hasPeriodData ? calcEBITDA(usedCosts, periodRevenue, financial)       : null;
+  const roi         = hasPeriodData ? calcROI(usedCosts, periodRevenue, financial)           : null;
+  const dscr        = hasPeriodData ? calcDSCR(usedCosts, periodRevenue, { ...config, monthlyDebtService: autoDebtService > 0 ? autoDebtService : null }, financial) : null;
   const breakEven   = calcBreakEvenRevenue(usedCosts);
-  const payback     = hasPeriodData ? calcPaybackPeriod(usedCosts, periodRevenue) : null;
-  const costRecovery= hasPeriodData ? calcCostRecoveryRate(usedCosts, periodRevenue) : null;
+  const payback     = hasPeriodData ? calcPaybackPeriod(usedCosts, periodRevenue, financial) : null;
+  const costRecovery= hasPeriodData ? calcCostRecoveryRate(usedCosts, periodRevenue, financial) : null;
 
   const isEmpty = costs.length === 0;
 
@@ -431,9 +448,11 @@ export default function Dashboard() {
           <div className={styles.kpiGrid}>
             <KpiCard
               icon={TrendingUp}
-              label={`Revenue · ${periodLabel}`}
+              label={`Net Revenue · ${periodLabel}`}
               value={formatEURCompact(displayRevenue)}
-              sub={hasPeriodData ? `${formatEURCompact(totalRevenue(filteredRevenue))} all time` : 'No data for this period'}
+              sub={hasPeriodData
+                ? `Gross ${formatEURCompact(revBreakdown.gross)}${financial.applyFranchiseFee ? ` · Hopp −${formatEURCompact(revBreakdown.hoppFee)}` : ''} · SIM −${formatEURCompact(revBreakdown.simCost)}`
+                : 'No data for this period'}
               accent
             />
             <KpiCard
@@ -442,11 +461,29 @@ export default function Dashboard() {
               value={formatEURCompact(displayPnL)}
               sub={
                 totalRevenueLost > 0
-                  ? `Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)} · Adj. P&L incl. maintenance risk: ${formatEURCompact(displayPnL - totalRevenueLost)}`
-                  : `Revenue ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)}`
+                  ? `Net Rev ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)} · Adj. P&L incl. maintenance risk: ${formatEURCompact(displayPnL - totalRevenueLost)}`
+                  : `Net Rev ${formatEURCompact(displayRevenue)} − Costs ${formatEURCompact(displayTotal)}`
               }
               highlight
             />
+            {hasPeriodData && financial.applyFranchiseFee && (
+              <KpiCard
+                icon={DollarSign}
+                label={`Hopp Franchise Fee · ${periodLabel}`}
+                value={formatEURCompact(revBreakdown.hoppFee)}
+                sub={`${(financial.franchiseRate * 100).toFixed(0)}% of gross revenue`}
+                healthColor="muted"
+              />
+            )}
+            {hasPeriodData && (
+              <KpiCard
+                icon={Shield}
+                label={`VAT Collected · ${periodLabel}`}
+                value={formatEURCompact(revBreakdown.vatPortion)}
+                sub="24% · held for government remittance"
+                healthColor="muted"
+              />
+            )}
             <KpiCard
               icon={DollarSign}
               label="Revenue / Scooter / Month"
@@ -500,6 +537,101 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Projects · At a Glance ── */}
+        {activeProjects.length > 0 && (() => {
+          const blockedCount      = activeProjects.filter((p) => p.effectiveStatus === 'blocked').length;
+          const attentionCount    = activeProjects.filter((p) => p.effectiveStatus === 'needsAttention').length;
+          const needsAttentionTotal = blockedCount + attentionCount;
+
+          // POW entries this week (ISO week matching)
+          const now        = new Date();
+          const weekStart  = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay() + 1); // Mon
+          const weekKey    = weekStart.toISOString().slice(0, 10);
+          const powThisWeek = activeProjects.reduce((n, p) =>
+            n + (p.powEntries || []).filter((e) => e.weekOf >= weekKey).length, 0);
+
+          // Projects needing attention, sorted by staleness
+          const needsNow = [...activeProjects]
+            .filter((p) => p.effectiveStatus === 'blocked' || p.effectiveStatus === 'needsAttention')
+            .sort((a, b) => daysSince(a.updatedAt) - daysSince(b.updatedAt))
+            .reverse()
+            .slice(0, 3);
+
+          return (
+            <>
+              {isPowDay() && (
+                <div className={styles.powBanner}>
+                  <span style={{ fontSize: 18 }}>📋</span>
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--text-sm)' }}>Today is POW day</p>
+                    <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Log your Progress of Week before closing the app.</p>
+                  </div>
+                </div>
+              )}
+              <div className={styles.revenueDivider}>
+                <span className={styles.revenueDividerLabel}>Projects · At a Glance</span>
+              </div>
+              <div className={styles.kpiGrid}>
+                <KpiCard
+                  icon={ListChecks}
+                  label="Active Projects"
+                  value={activeProjects.length}
+                  sub={`${archivedProjects.length} archived`}
+                />
+                <KpiCard
+                  icon={AlertTriangle}
+                  label="Needs Attention"
+                  value={needsAttentionTotal}
+                  sub={blockedCount > 0 ? `${blockedCount} blocked · ${attentionCount} at risk` : `${attentionCount} at risk`}
+                  healthColor={blockedCount > 0 ? 'danger' : attentionCount > 0 ? 'warning' : 'good'}
+                />
+                <KpiCard
+                  icon={Calendar}
+                  label="POW This Week"
+                  value={powThisWeek}
+                  sub={powThisWeek === 0 ? 'No entries logged yet' : `${powThisWeek} entr${powThisWeek === 1 ? 'y' : 'ies'} this week`}
+                  healthColor={powThisWeek > 0 ? 'good' : 'muted'}
+                />
+              </div>
+              {needsNow.length > 0 && (
+                <div className={styles.chartCard}>
+                  <div className={styles.chartHeader}>
+                    <h2 className={styles.chartTitle}>Needs You Now</h2>
+                    <span className={styles.chartSub}>Projects requiring immediate attention</span>
+                  </div>
+                  <div className={styles.needsNowList}>
+                    {needsNow.map((p) => {
+                      const stale = daysSince(p.updatedAt);
+                      const chipColor = stale >= 14 ? 'var(--color-danger)' : stale >= 7 ? 'var(--color-warning)' : 'var(--color-text-muted)';
+                      const statusColor = p.effectiveStatus === 'blocked' ? 'var(--color-danger)' : 'var(--color-warning)';
+                      return (
+                        <div
+                          key={p._docId}
+                          className={styles.needsNowRow}
+                          onClick={() => navigate(`/projects/${p._docId}`)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, display: 'inline-block', flexShrink: 0, marginTop: 2 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
+                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.nextAction || 'No next action set'}
+                            </p>
+                          </div>
+                          <span style={{ fontSize: 'var(--text-xs)', color: chipColor, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {relativeLabel(p.updatedAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* ── Maintenance KPI Cards ── */}
         {hasMaintenanceData && (

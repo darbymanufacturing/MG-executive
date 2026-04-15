@@ -1,6 +1,10 @@
 /**
  * Financial health calculations for the XSlide Fleet Cost Manager dashboard.
  * All functions return null when insufficient data is available.
+ *
+ * All revenue-consuming functions accept an optional `financial` param (config.financial).
+ * When provided, annualizedRevenue applies franchise fee and SIM deductions so that
+ * P&L metrics reflect operating revenue, not gross paid revenue.
  */
 import { normalizeToAnnual, normalizeToMonthly, totalMonthlyCost, totalAnnualCost } from './calculations.js';
 import { monthlyRevenueSummary } from './revenueCalculations.js';
@@ -10,9 +14,26 @@ import { monthlyRevenueSummary } from './revenueCalculations.js';
  * - If ≥12 months of history exist: sums the last 12 calendar months exactly
  *   (zero months for off-season are included, so seasonal businesses aren't overstated).
  * - If <12 months: scales total by (12 / spanMonths) for a fair extrapolation.
+ *
+ * When `financial` (config.financial) is provided, applies franchise fee and monthly
+ * SIM deductions so downstream health metrics reflect operating revenue, not gross.
  */
-export function annualizedRevenue(revenueData) {
+export function annualizedRevenue(revenueData, financial) {
   if (!revenueData.length) return 0;
+
+  const fin = financial ? {
+    applyFranchiseFee: true,
+    franchiseRate: 0.19,
+    vatRate: 0.24,
+    monthlySimCost: 150,
+    ...financial,
+  } : null;
+
+  const applyFin = (grossAnnual, months) => {
+    if (!fin) return grossAnnual;
+    const revenueMultiplier = fin.applyFranchiseFee ? (1 - fin.franchiseRate) : 1;
+    return grossAnnual * revenueMultiplier - fin.monthlySimCost * months;
+  };
 
   // Determine data span in months
   const dates    = revenueData.map((r) => r.date).sort();
@@ -24,20 +45,21 @@ export function annualizedRevenue(revenueData) {
   if (spanMonths >= 12) {
     // Sum the last 12 complete calendar months (including off-season zeros)
     const now = new Date();
-    let total = 0;
+    let grossTotal = 0;
     for (let i = 0; i < 12; i++) {
       const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      total += revenueData
+      grossTotal += revenueData
         .filter((r) => r.date.startsWith(key))
         .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
     }
-    return total;
+    return applyFin(grossTotal, 12);
   }
 
   // Less than 12 months of data: scale by actual span
   const totalRev = revenueData.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
-  return (totalRev / spanMonths) * 12;
+  const annualGross = (totalRev / spanMonths) * 12;
+  return applyFin(annualGross, 12);
 }
 
 /** Total annualized cost of investment-category items only */
@@ -51,8 +73,8 @@ export function annualInvestmentCost(costs) {
  * EBITDA ≈ Revenue − Operating Costs (all except investment category).
  * Returns { ebitda, ebitdaMargin } or { ebitda: null, ebitdaMargin: null }.
  */
-export function calcEBITDA(costs, revenueData) {
-  const annualRev = annualizedRevenue(revenueData);
+export function calcEBITDA(costs, revenueData, financial) {
+  const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return { ebitda: null, ebitdaMargin: null };
 
   const annualOpsCost = costs
@@ -68,10 +90,10 @@ export function calcEBITDA(costs, revenueData) {
  * ROI = (Annual Net Profit / Total Annual Investment Costs) × 100.
  * Returns null if no investment costs or no revenue.
  */
-export function calcROI(costs, revenueData) {
+export function calcROI(costs, revenueData, financial) {
   const investmentCost = annualInvestmentCost(costs);
   if (!investmentCost) return null;
-  const annualRev = annualizedRevenue(revenueData);
+  const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
   const netProfit = annualRev - totalAnnualCost(costs);
   return (netProfit / investmentCost) * 100;
@@ -81,10 +103,10 @@ export function calcROI(costs, revenueData) {
  * DSCR = Annual Operating Cash Flow / Annual Debt Service.
  * Returns null if monthlyDebtService is null/0 or no revenue.
  */
-export function calcDSCR(costs, revenueData, config) {
+export function calcDSCR(costs, revenueData, config, financial) {
   const debt = config.monthlyDebtService;
   if (!debt) return null;
-  const annualRev = annualizedRevenue(revenueData);
+  const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
 
   const annualOpsCost = costs
@@ -104,10 +126,10 @@ export function calcBreakEvenRevenue(costs) {
  * Payback Period in months: Total Investment Costs / Monthly Net Profit.
  * Returns Infinity if monthly profit ≤ 0, null if no investment costs.
  */
-export function calcPaybackPeriod(costs, revenueData) {
+export function calcPaybackPeriod(costs, revenueData, financial) {
   const totalInv = annualInvestmentCost(costs);
   if (!totalInv) return null;
-  const annualRev = annualizedRevenue(revenueData);
+  const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
   const monthlyRev = annualRev / 12;
   const monthlyNet = monthlyRev - totalMonthlyCost(costs);
@@ -119,8 +141,8 @@ export function calcPaybackPeriod(costs, revenueData) {
  * Cost Recovery Rate = Annualized Revenue / Total Annual Costs.
  * 1.0 = breaking even, >1 = profitable.
  */
-export function calcCostRecoveryRate(costs, revenueData) {
-  const annualRev = annualizedRevenue(revenueData);
+export function calcCostRecoveryRate(costs, revenueData, financial) {
+  const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
   const annualCost = totalAnnualCost(costs);
   if (!annualCost) return null;

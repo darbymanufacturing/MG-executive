@@ -4,6 +4,7 @@ import { useProjects } from '../../context/ProjectContext.jsx';
 import { isPowDay, daysSince, relativeLabel } from '../../utils/powHelpers.js';
 import { FILTER_OPTIONS } from './constants.js';
 import ProjectCard from './ProjectCard.jsx';
+import PortfolioOverview from './PortfolioOverview.jsx';
 import NewProjectModal from './NewProjectModal.jsx';
 import styles from './ProjectsDashboard.module.css';
 
@@ -90,6 +91,9 @@ export default function ProjectsDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Portfolio Overview strip */}
+      <PortfolioOverview />
 
       {/* Card grid */}
       <div className={styles.grid}>

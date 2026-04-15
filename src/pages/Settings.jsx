@@ -151,6 +151,72 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* Revenue Adjustments */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <DollarSign size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Revenue Adjustments</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Configure how gross revenue is adjusted before P&amp;L and financial health calculations.
+            VAT (24%) is always applied — it is collected but owed to the government.
+          </p>
+          <div className={styles.grid}>
+            {/* Hopp franchise fee toggle */}
+            <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
+              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={config.financial?.applyFranchiseFee ?? true}
+                  onChange={(e) => updateConfig({
+                    financial: { ...(config.financial || {}), applyFranchiseFee: e.target.checked },
+                  })}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-brand)' }}
+                />
+                <span>Apply Hopp franchise fee (19% deducted from net revenue)</span>
+              </label>
+              <p style={{ margin: '6px 0 0 26px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                Turn this off when migrating to OTORide. All KPIs update immediately.
+              </p>
+            </div>
+
+            {/* Monthly SIM cost */}
+            <div className={styles.field}>
+              <label className={styles.label}>Monthly SIM Cost (€)</label>
+              <div className={styles.amountWrap}>
+                <span className={styles.eurSymbol}>€</span>
+                <input
+                  type="number"
+                  className={`${styles.input} ${styles.amountInput}`}
+                  value={config.financial?.monthlySimCost ?? 150}
+                  onChange={(e) => updateConfig({
+                    financial: { ...(config.financial || {}), monthlySimCost: e.target.value === '' ? 0 : parseFloat(e.target.value) },
+                  })}
+                  placeholder="150"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                Fleet-level flat SIM cost (≈ €3/scooter regardless of active status). Update when fleet size changes.
+              </p>
+            </div>
+
+            {/* Read-only info strip */}
+            <div className={styles.field}>
+              <label className={styles.label}>Fixed Rates</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-2)', fontSize: 'var(--text-xs)', border: '1px solid var(--color-border)' }}>
+                  VAT 24%
+                </span>
+                <span style={{ padding: '3px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-2)', fontSize: 'var(--text-xs)', border: '1px solid var(--color-border)' }}>
+                  Hopp 19%
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Fleet Size Projection */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>

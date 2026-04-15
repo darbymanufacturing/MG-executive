@@ -77,6 +77,79 @@ export function revenuePerScooter(revenueData, fleetSize) {
   return totalRevenue(revenueData) / fleetSize / months;
 }
 
+/**
+ * Full revenue breakdown for a period, applying franchise fee, VAT, and SIM deductions.
+ *
+ * Revenue stored in Firestore (totalPaidRevenue) is NET of VAT — i.e. the ex-VAT amount.
+ * Cash-flow identity:
+ *   cashReceived = companyShare + vatPortion − simCost
+ *   companyShare = gross × (1 − franchiseRate)   [if fee active, else gross]
+ *   vatPortion   = gross × vatRate                [collected but owed to government]
+ *   simCost      = monthlySimCost × periodMonths
+ *   operatingRevenue = companyShare − simCost     [used for P&L and financial health]
+ *
+ * @param {Array}  revenueRows   - revenue docs for the period
+ * @param {Object} financial     - config.financial (defaults applied if falsy)
+ * @param {number} periodMonths  - how many months the period spans (default 1)
+ */
+export function revenueBreakdown(revenueRows, financial, periodMonths = 1) {
+  const fin = {
+    applyFranchiseFee: true,
+    franchiseRate: 0.19,
+    vatRate: 0.24,
+    monthlySimCost: 150,
+    ...(financial || {}),
+  };
+
+  const gross = totalRevenue(revenueRows);
+  const hoppFee = fin.applyFranchiseFee ? gross * fin.franchiseRate : 0;
+  const companyShare = gross - hoppFee;
+  const vatPortion = gross * fin.vatRate;
+  const simCost = fin.monthlySimCost * periodMonths;
+  const opRevenue = companyShare - simCost;
+  const cashReceived = companyShare + vatPortion - simCost;
+
+  return {
+    gross,
+    hoppFee,
+    companyShare,
+    vatPortion,
+    simCost,
+    operatingRevenue: opRevenue,
+    cashReceived,
+  };
+}
+
+/**
+ * Scalar shortcut: net operating revenue for the period.
+ * This is the number to use for P&L, break-even, and financial health calculations.
+ */
+export function operatingRevenue(revenueRows, financial, periodMonths = 1) {
+  return revenueBreakdown(revenueRows, financial, periodMonths).operatingRevenue;
+}
+
+/**
+ * Post-process a monthly trend array (from combinedMonthlyTrend / allTimeCombinedTrend)
+ * to apply franchise fee and SIM deductions to each month's revenue & profit values.
+ * Keeps existing trend functions untouched; adjustment is applied at the call site.
+ */
+export function applyFinancialAdjustments(trendArray, financial) {
+  const fin = {
+    applyFranchiseFee: true,
+    franchiseRate: 0.19,
+    vatRate: 0.24,
+    monthlySimCost: 150,
+    ...(financial || {}),
+  };
+  const revenueMultiplier = fin.applyFranchiseFee ? (1 - fin.franchiseRate) : 1;
+
+  return trendArray.map((entry) => {
+    const adjRevenue = parseFloat(((entry.revenue || 0) * revenueMultiplier - fin.monthlySimCost).toFixed(2));
+    const adjProfit  = parseFloat((adjRevenue - (entry.total || 0)).toFixed(2));
+    return { ...entry, revenue: adjRevenue, profit: adjProfit };
+  });
+}
+
 /** Profit/loss: revenue minus costs for matching period */
 export function profitLoss(revenueData, costs) {
   const rev = totalRevenue(revenueData);

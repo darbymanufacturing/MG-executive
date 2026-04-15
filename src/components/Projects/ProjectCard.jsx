@@ -98,9 +98,6 @@ export default function ProjectCard({ project }) {
       {/* Row 2: phase progress */}
       {phases.length > 0 && (
         <div className={styles.phaseRow}>
-          <span className={styles.phaseCounter}>
-            Phase {doneCount + (active?.status === 'inProgress' ? 1 : doneCount < phases.length ? doneCount + 1 : doneCount)} of {phases.length}
-          </span>
           <div className={styles.phaseDots}>
             {phases.map((ph, i) => {
               const cls = ph.status === 'done' ? styles.done
@@ -109,6 +106,9 @@ export default function ProjectCard({ project }) {
               return <span key={ph.id || i} className={`${styles.phaseDot} ${cls}`} />;
             })}
           </div>
+          <span className={styles.phaseCounter}>
+            {doneCount}/{phases.length} done
+          </span>
           {active && (
             <span className={styles.phaseNameLabel}>{active.name}</span>
           )}

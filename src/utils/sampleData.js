@@ -59,19 +59,6 @@ export const SAMPLE_COSTS = [
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
-  {
-    id: uuidv4(),
-    name: 'Mobile Data (SIM cards)',
-    category: 'fixed',
-    amount: 80,
-    frequency: 'monthly',
-    startDate: '2026-01-01',
-    endDate: null,
-    notes: '20 SIMs @ €4/month',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
   // ── Variable Costs ──
   {
     id: uuidv4(),

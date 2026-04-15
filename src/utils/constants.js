@@ -87,6 +87,12 @@ export const DEFAULT_CONFIG = {
   targetCostPerScooter: null,
   locations: [],
   categoryBudgets: {},   // { 'fixed': 2000, 'variable': 1500, ... } monthly EUR
+  financial: {
+    applyFranchiseFee: true,  // toggle off when migrating to OTORide
+    franchiseRate: 0.19,      // Hopp's cut of net-of-VAT revenue
+    vatRate: 0.24,            // Greek flat VAT (revenue is stored ex-VAT; VAT held for remittance)
+    monthlySimCost: 150,      // flat fleet SIM cost deducted from operating revenue
+  },
 };
 
 export const STORAGE_KEYS = {
