@@ -54,38 +54,28 @@
   clip-path: circle(46.3% at 50% 50%);
 }
 
-/* Sweep body — fading wedge behind the leading edge */
+/*
+  Single sweep element.
+  Leading edge: sharp bright line at 0°.
+  Trail: fades from bright → mid → faint → gone over ~65°.
+  No second layer — one conic-gradient does both.
+*/
 .sweep {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: conic-gradient(
-    from -2deg,
-    rgba(0, 255, 120, 0.0)  0deg,
-    rgba(0, 255, 120, 0.06) 20deg,
-    rgba(0, 255, 120, 0.18) 45deg,
-    rgba(0, 255, 120, 0.45) 62deg,
-    rgba(0, 255, 120, 0.0)  66deg
+    from 0deg,
+    rgba(0, 255, 120, 0.0)   355deg,   /* invisible just before leading edge */
+    rgba(0, 255, 120, 1.0)   360deg,   /* sharp bright leading edge at 0° */
+    rgba(0, 255, 120, 0.55)  4deg,     /* immediate falloff */
+    rgba(0, 255, 120, 0.28)  14deg,    /* bright trail */
+    rgba(0, 255, 120, 0.14)  30deg,    /* mid trail */
+    rgba(0, 255, 120, 0.05)  52deg,    /* faint tail */
+    rgba(0, 255, 120, 0.0)   68deg     /* fully faded */
   );
   animation: radarRotate 2.2s linear infinite;
   transform-origin: center;
-  filter: blur(1.5px);
-}
-
-/* Leading edge bright line */
-.sweepEdge {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from -0.5deg,
-    rgba(0, 255, 120, 0.95) 0deg,
-    rgba(0, 255, 120, 0.55) 1.5deg,
-    transparent             3deg
-  );
-  animation: radarRotate 2.2s linear infinite;
-  transform-origin: center;
-  filter: blur(0.5px) brightness(1.4);
 }
 
 @keyframes radarRotate {
@@ -118,23 +108,29 @@
   z-index: 2;
 }
 
+/*
+  Dot timing: sweep period = 2.2s, starts at 0° (12 o'clock).
+  Dot 1 sits at ~36°  → sweep arrives 0.22s → dot reveals at 0.22 + 0.2 = 0.42s
+  Dot 3 sits at ~141° → sweep arrives 0.86s → dot reveals at 0.86 + 0.2 = 1.06s
+  Dot 2 sits at ~232° → sweep arrives 1.42s → dot reveals at 1.42 + 0.2 = 1.62s
+*/
 .dot1 {
   background: #ff4040;
   box-shadow: 0 0 8px 3px rgba(255, 64, 64, 0.7);
   animation: dotAppear 0.25s ease forwards;
-  animation-delay: 0.6s;
+  animation-delay: 0.42s;
 }
 .dot2 {
   background: #ffaa00;
   box-shadow: 0 0 8px 3px rgba(255, 170, 0, 0.65);
   animation: dotAppear 0.25s ease forwards;
-  animation-delay: 1.9s;
+  animation-delay: 1.62s;
 }
 .dot3 {
   background: #00ff88;
   box-shadow: 0 0 8px 3px rgba(0, 255, 136, 0.65);
   animation: dotAppear 0.25s ease forwards;
-  animation-delay: 3.1s;
+  animation-delay: 1.06s;
 }
 
 @keyframes dotAppear {
@@ -153,7 +149,7 @@
 .ping1 {
   border: 2px solid #ff4040;
   animation: radarPing 0.65s ease-out 3 forwards;
-  animation-delay: 0.6s;
+  animation-delay: 0.42s;
 }
 @keyframes radarPing {
   0%   { transform: scale(1);   opacity: 0.9; }
@@ -174,13 +170,14 @@
   top: 50%;
 }
 
+/* Labels appear 0.43s after their dot (dot reveal + short read pause) */
 .label1 {
   color: #ff5555;
   text-shadow: 0 0 8px rgba(255, 64, 64, 0.8);
   left: 18px;
   transform: translateY(-50%) scale(0.75);
   animation: labelPop 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
-  animation-delay: 1.3s;
+  animation-delay: 0.85s;   /* dot1 0.42s + 0.43s */
 }
 .label2 {
   color: #ffbb22;
@@ -188,7 +185,7 @@
   left: 18px;
   transform: translateY(-50%) scale(0.75);
   animation: labelPop 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
-  animation-delay: 2.15s;
+  animation-delay: 2.05s;   /* dot2 1.62s + 0.43s */
 }
 .label3 {
   color: #00ff88;
@@ -197,7 +194,7 @@
   left: auto;
   transform: translateY(-50%) scale(0.75);
   animation: labelPop 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
-  animation-delay: 3.35s;
+  animation-delay: 1.49s;   /* dot3 1.06s + 0.43s */
 }
 
 @keyframes labelPop {

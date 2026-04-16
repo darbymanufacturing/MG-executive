@@ -150,11 +150,9 @@ export default function PmeIntroOverlay({ onDone }) {
         {/* SVG static structure */}
         <RadarFace />
 
-        {/* Rotating sweep arm (CSS conic-gradient) */}
+        {/* Rotating sweep arm — single element, bright leading edge + fade trail */}
         <div className={styles.sweepWrap}>
           <div className={styles.sweep} />
-          {/* Bright leading-edge line */}
-          <div className={styles.sweepEdge} />
         </div>
 
         {/* ── Dot 1 — red, top-right ~50° ── */}
