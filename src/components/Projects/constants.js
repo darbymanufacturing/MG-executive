@@ -12,6 +12,15 @@ export const PROJECT_TYPES = [
   'Finance',
 ];
 
+export const CATEGORIES = [
+  'Expansion',
+  'Operations',
+  'Technology',
+  'Finance',
+  'Legal',
+  'Needs Setup',
+];
+
 export const STATUS_CONFIG = {
   onTrack: {
     label: 'On Track',

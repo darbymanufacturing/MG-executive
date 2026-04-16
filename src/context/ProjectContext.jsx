@@ -5,8 +5,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
-const PROJECTS_COL = 'projects';
-const GATES_COL    = 'decisionGates';
+const PROJECTS_COL   = 'projects';
+const GATES_COL      = 'decisionGates';
+const BRAINSTORM_COL = 'brainstormIdeas';
 
 const ProjectContext = createContext(null);
 
@@ -19,22 +20,23 @@ function effectiveStatus(project) {
 }
 
 export function ProjectProvider({ children }) {
-  const [projects, setProjects] = useState([]);
-  const [gates, setGates]       = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [projects, setProjects]             = useState([]);
+  const [gates, setGates]                   = useState([]);
+  const [brainstormIdeas, setBrainstormIdeas] = useState([]);
+  const [loading, setLoading]               = useState(true);
 
   // ── Real-time listeners ───────────────────────────────────────────────────
   useEffect(() => {
-    let projectsDone = false;
-    let gatesDone    = false;
+    let projectsDone   = false;
+    let gatesDone      = false;
+    let brainstormDone = false;
 
     const checkDone = () => {
-      if (projectsDone && gatesDone) setLoading(false);
+      if (projectsDone && gatesDone && brainstormDone) setLoading(false);
     };
 
     const unsubProjects = onSnapshot(collection(db, PROJECTS_COL), (snap) => {
       const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-      // Attach computed effectiveStatus
       setProjects(raw.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
       projectsDone = true;
       checkDone();
@@ -46,7 +48,16 @@ export function ProjectProvider({ children }) {
       checkDone();
     });
 
-    return () => { unsubProjects(); unsubGates(); };
+    const unsubBrainstorm = onSnapshot(collection(db, BRAINSTORM_COL), (snap) => {
+      const ideas = snap.docs
+        .map((d) => ({ _docId: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      setBrainstormIdeas(ideas);
+      brainstormDone = true;
+      checkDone();
+    });
+
+    return () => { unsubProjects(); unsubGates(); unsubBrainstorm(); };
   }, []);
 
   // ── Project CRUD ──────────────────────────────────────────────────────────
@@ -59,7 +70,6 @@ export function ProjectProvider({ children }) {
       decisions:     data.decisions     || [],
       powEntries:    data.powEntries    || [],
       linkedProjectIds: data.linkedProjectIds || [],
-      brainstormIdeas: data.brainstormIdeas || [],
       archived:      false,
       createdAt:     serverTimestamp(),
       updatedAt:     serverTimestamp(),
@@ -274,26 +284,22 @@ export function ProjectProvider({ children }) {
     await updateDoc(doc(db, PROJECTS_COL, docId), { powEntries, updatedAt: serverTimestamp() });
   }, [projects]);
 
-  // ── Brainstorm Ideas ──────────────────────────────────────────────────────
-  const addBrainstormIdea = useCallback(async (docId, idea) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const entry = {
-      id:        crypto.randomUUID(),
-      date:      new Date().toISOString().slice(0, 10),
-      text:      idea.text || '',
-      createdBy: idea.createdBy || project.owner || 'Kostas',
-    };
-    const brainstormIdeas = [entry, ...(project.brainstormIdeas || [])];
-    await updateDoc(doc(db, PROJECTS_COL, docId), { brainstormIdeas, updatedAt: serverTimestamp() });
-  }, [projects]);
+  // ── Brainstorm Ideas (global — standalone collection) ─────────────────────
+  const addBrainstormIdea = useCallback(async ({ text, tag = '' }) => {
+    await addDoc(collection(db, BRAINSTORM_COL), {
+      text,
+      tag,
+      createdAt: new Date().toISOString(),
+    });
+  }, []);
 
-  const deleteBrainstormIdea = useCallback(async (docId, ideaId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const brainstormIdeas = (project.brainstormIdeas || []).filter((i) => i.id !== ideaId);
-    await updateDoc(doc(db, PROJECTS_COL, docId), { brainstormIdeas, updatedAt: serverTimestamp() });
-  }, [projects]);
+  const deleteBrainstormIdea = useCallback(async (docId) => {
+    await deleteDoc(doc(db, BRAINSTORM_COL, docId));
+  }, []);
+
+  const updateBrainstormIdea = useCallback(async (docId, changes) => {
+    await updateDoc(doc(db, BRAINSTORM_COL, docId), changes);
+  }, []);
 
   // ── Milestone helpers (kept for War Room backward compat) ────────────────
   const toggleMilestone = useCallback(async (docId, milestoneId) => {
@@ -363,7 +369,7 @@ export function ProjectProvider({ children }) {
   return (
     <ProjectContext.Provider value={{
       projects, activeProjects, archivedProjects,
-      gates, loading,
+      gates, brainstormIdeas, loading,
       // Project CRUD
       addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
       setStatus,
@@ -379,8 +385,8 @@ export function ProjectProvider({ children }) {
       addDecision,
       // POW
       addPowEntry,
-      // Brainstorm
-      addBrainstormIdea, deleteBrainstormIdea,
+      // Brainstorm (global)
+      addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
       // Milestones (War Room compat)
       toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
       // Decision Gates (War Room compat)

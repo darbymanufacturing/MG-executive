@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Calendar } from 'lucide-react';
+import { Plus, Calendar, Lightbulb, FolderKanban } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { isPowDay, daysSince, relativeLabel } from '../../utils/powHelpers.js';
 import { FILTER_OPTIONS } from './constants.js';
 import ProjectCard from './ProjectCard.jsx';
 import PortfolioOverview from './PortfolioOverview.jsx';
 import NewProjectModal from './NewProjectModal.jsx';
+import Brainstorm from './Brainstorm.jsx';
 import styles from './ProjectsDashboard.module.css';
 
 /** Sort order: Blocked → needsAttention → onTrack → archived */
@@ -20,6 +21,7 @@ function sortProjects(projects) {
 
 export default function ProjectsDashboard() {
   const { activeProjects, archivedProjects, loading } = useProjects();
+  const [tab, setTab] = useState('projects');
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
   const [lastReviewedAt, setLastReviewedAt] = useState(null);
@@ -68,46 +70,70 @@ export default function ProjectsDashboard() {
       <div className={styles.header}>
         <h1 className={styles.title}>Projects</h1>
         <div className={styles.headerRight}>
-          {lastReviewedAt && (
+          {lastReviewedAt && tab === 'projects' && (
             <span className={`${styles.lastReviewed} ${reviewStale ? styles.lastReviewedAmber : ''}`}>
               Last reviewed: {relativeLabel(lastReviewedAt)}
             </span>
           )}
-          <button className={styles.newBtn} onClick={() => setShowNew(true)}>
-            <Plus size={16} /> New Project
-          </button>
+          {tab === 'projects' && (
+            <button className={styles.newBtn} onClick={() => setShowNew(true)}>
+              <Plus size={16} /> New Project
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Filter pills */}
-      <div className={styles.filters}>
-        {FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            className={`${styles.filterPill} ${filter === opt.value ? styles.active : ''}`}
-            onClick={() => setFilter(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* Module tabs */}
+      <div className={styles.moduleTabs}>
+        <button
+          className={`${styles.moduleTab} ${tab === 'projects' ? styles.moduleTabActive : ''}`}
+          onClick={() => setTab('projects')}
+        >
+          <FolderKanban size={14} /> Projects
+        </button>
+        <button
+          className={`${styles.moduleTab} ${tab === 'brainstorm' ? styles.moduleTabActive : ''}`}
+          onClick={() => setTab('brainstorm')}
+        >
+          <Lightbulb size={14} /> Brainstorm
+        </button>
       </div>
 
-      {/* Portfolio Overview strip */}
-      <PortfolioOverview />
-
-      {/* Card grid */}
-      <div className={styles.grid}>
-        {filtered.length === 0 ? (
-          <div className={styles.emptyState}>
-            <p className={styles.emptyStateTitle}>No projects here</p>
-            <p>Create your first project or change the filter.</p>
+      {tab === 'brainstorm' ? (
+        <Brainstorm />
+      ) : (
+        <>
+          {/* Filter pills */}
+          <div className={styles.filters}>
+            {FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                className={`${styles.filterPill} ${filter === opt.value ? styles.active : ''}`}
+                onClick={() => setFilter(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          filtered.map((project) => (
-            <ProjectCard key={project._docId} project={project} />
-          ))
-        )}
-      </div>
+
+          {/* Portfolio Overview strip */}
+          <PortfolioOverview />
+
+          {/* Card grid */}
+          <div className={styles.grid}>
+            {filtered.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p className={styles.emptyStateTitle}>No projects here</p>
+                <p>Create your first project or change the filter.</p>
+              </div>
+            ) : (
+              filtered.map((project) => (
+                <ProjectCard key={project._docId} project={project} />
+              ))
+            )}
+          </div>
+        </>
+      )}
 
       {showNew && <NewProjectModal onClose={() => setShowNew(false)} />}
     </div>

@@ -64,6 +64,34 @@
 }
 .lastReviewedAmber { color: #F5A623; }
 
+/* Module tabs (Projects / Brainstorm) */
+.moduleTabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-5);
+}
+.moduleTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.moduleTab:hover { color: var(--color-text-secondary); }
+.moduleTabActive {
+  color: var(--color-primary-light);
+  border-bottom-color: var(--color-primary-light);
+}
+
 /* Filter pills row */
 .filters {
   display: flex;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Modal from '../Shared/Modal.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
-import { OWNERS, CITIES, PROJECT_TYPES } from './constants.js';
+import { OWNERS, CITIES, PROJECT_TYPES, CATEGORIES } from './constants.js';
 import styles from './Projects.module.css';
 
 export default function NewProjectModal({ onClose }) {
@@ -12,6 +12,7 @@ export default function NewProjectModal({ onClose }) {
     tagline: '',
     owner: 'Kostas',
     status: 'onTrack',
+    category: 'Needs Setup',
     projectType: 'Operations',
     linkedCity: '',
     startDate: new Date().toISOString().slice(0, 10),
@@ -86,6 +87,13 @@ export default function NewProjectModal({ onClose }) {
               {PROJECT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'block', marginBottom: 6 }}>Category</label>
+          <select className={styles.select} value={form.category} onChange={(e) => set('category', e.target.value)}>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
