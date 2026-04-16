@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
-import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CITIES } from './constants.js';
+import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CITIES, CATEGORIES } from './constants.js';
 import PhaseTracker from './PhaseTracker.jsx';
 import NextActionPanel from './NextActionPanel.jsx';
 import BlockersPanel from './BlockersPanel.jsx';
@@ -192,6 +192,17 @@ export default function ProjectDetail({ projectId }) {
                   onChange={(e) => updateProject(project._docId, { projectType: e.target.value })}
                 >
                   {PROJECT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Category</label>
+                <select
+                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%', cursor: 'pointer' }}
+                  value={project.category || ''}
+                  onChange={(e) => updateProject(project._docId, { category: e.target.value })}
+                >
+                  <option value="">— no category —</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
