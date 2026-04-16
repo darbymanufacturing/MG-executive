@@ -9,7 +9,7 @@ import Button from '../../Shared/Button.jsx';
 import styles from './ProjectsListTab.module.css';
 
 const STATUS_FILTERS = ['All', 'Green', 'Amber', 'Red'];
-const CATEGORY_FILTERS = ['All', 'Expansion', 'Operations', 'Technology', 'Finance', 'Legal'];
+const CATEGORY_FILTERS = ['All', 'Expansion', 'Operations', 'Technology', 'Finance', 'Legal', 'Needs Setup'];
 const OWNER_FILTERS = ['All', 'Kostas', 'Panos', 'Both'];
 
 export default function ProjectsListTab() {

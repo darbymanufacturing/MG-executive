@@ -9,6 +9,7 @@ import BlockersPanel from './BlockersPanel.jsx';
 import BudgetTracker from './BudgetTracker.jsx';
 import DecisionLog from './DecisionLog.jsx';
 import PowHistory from './PowHistory.jsx';
+import Brainstorm from './Brainstorm.jsx';
 import styles from './ProjectDetail.module.css';
 
 function ActivityLog({ updates }) {
@@ -156,7 +157,15 @@ export default function ProjectDetail({ projectId }) {
         <PowHistory project={project} />
       </section>
 
-      {/* ── §3.8 Activity Log ── */}
+      {/* ── §3.8 Brainstorm ── */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Brainstorm</h2>
+        </div>
+        <Brainstorm project={project} />
+      </section>
+
+      {/* ── §3.9 Activity Log ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Activity Log</h2>

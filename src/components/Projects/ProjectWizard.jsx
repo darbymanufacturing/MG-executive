@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, ChevronLeft, Plus, X, Check } from 'lucide-react';
 import styles from './ProjectWizard.module.css';
 
-const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal'];
+const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal', 'Needs Setup'];
 const OWNERS     = ['Kostas', 'Panos', 'Both'];
 
 const STATUS_OPTIONS = [
@@ -17,6 +17,7 @@ const CATEGORY_DESC = {
   Technology:  'Platform migration, app features, integrations, or tools',
   Finance:     'Funding, budgeting, accounting, or financial planning',
   Legal:       'Licenses, contracts, compliance, or regulatory matters',
+  'Needs Setup': 'Project captured but not yet scoped — placeholder until details are filled in',
 };
 
 const STEPS = [

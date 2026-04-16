@@ -59,6 +59,7 @@ export function ProjectProvider({ children }) {
       decisions:     data.decisions     || [],
       powEntries:    data.powEntries    || [],
       linkedProjectIds: data.linkedProjectIds || [],
+      brainstormIdeas: data.brainstormIdeas || [],
       archived:      false,
       createdAt:     serverTimestamp(),
       updatedAt:     serverTimestamp(),
@@ -273,6 +274,27 @@ export function ProjectProvider({ children }) {
     await updateDoc(doc(db, PROJECTS_COL, docId), { powEntries, updatedAt: serverTimestamp() });
   }, [projects]);
 
+  // ── Brainstorm Ideas ──────────────────────────────────────────────────────
+  const addBrainstormIdea = useCallback(async (docId, idea) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return;
+    const entry = {
+      id:        crypto.randomUUID(),
+      date:      new Date().toISOString().slice(0, 10),
+      text:      idea.text || '',
+      createdBy: idea.createdBy || project.owner || 'Kostas',
+    };
+    const brainstormIdeas = [entry, ...(project.brainstormIdeas || [])];
+    await updateDoc(doc(db, PROJECTS_COL, docId), { brainstormIdeas, updatedAt: serverTimestamp() });
+  }, [projects]);
+
+  const deleteBrainstormIdea = useCallback(async (docId, ideaId) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return;
+    const brainstormIdeas = (project.brainstormIdeas || []).filter((i) => i.id !== ideaId);
+    await updateDoc(doc(db, PROJECTS_COL, docId), { brainstormIdeas, updatedAt: serverTimestamp() });
+  }, [projects]);
+
   // ── Milestone helpers (kept for War Room backward compat) ────────────────
   const toggleMilestone = useCallback(async (docId, milestoneId) => {
     const project = projects.find((p) => p._docId === docId);
@@ -357,6 +379,8 @@ export function ProjectProvider({ children }) {
       addDecision,
       // POW
       addPowEntry,
+      // Brainstorm
+      addBrainstormIdea, deleteBrainstormIdea,
       // Milestones (War Room compat)
       toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
       // Decision Gates (War Room compat)

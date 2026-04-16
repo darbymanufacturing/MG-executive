@@ -3,7 +3,7 @@ import Modal from '../Shared/Modal.jsx';
 import Button from '../Shared/Button.jsx';
 import styles from './ProjectForm.module.css';
 
-const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal'];
+const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal', 'Needs Setup'];
 const OWNERS     = ['Kostas', 'Panos', 'Both'];
 const STATUSES   = [
   { value: 'Green', label: '🟢 Green — On Track' },
