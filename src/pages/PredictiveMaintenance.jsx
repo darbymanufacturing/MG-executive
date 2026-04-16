@@ -2,17 +2,25 @@
  * PredictiveMaintenance (PME) — page shell.
  * Wraps PmeTabs and owns the radar-sweep entry animation.
  *
- * Animation: on mount a rotating conic-gradient overlay sweeps 360° (900ms),
- * simultaneous with content fading in from 0 → 1 opacity.
- * Respects prefers-reduced-motion → plain fade only.
+ * On mount: full-screen PmeIntroOverlay plays (~4s radar animation) then
+ * dismisses. The existing CSS radarOverlay subtle sweep plays underneath
+ * once the intro clears, giving a nice layered transition.
+ * Respects prefers-reduced-motion → intro overlay hidden via CSS.
  */
+import { useState } from 'react';
 import PmeTabs from '../components/PME/PmeTabs.jsx';
+import PmeIntroOverlay from '../components/PME/PmeIntroOverlay.jsx';
 import styles from './PredictiveMaintenance.module.css';
 
 export default function PredictiveMaintenance() {
+  const [showIntro, setShowIntro] = useState(true);
+
   return (
     <div className={styles.page}>
-      {/* Radar sweep overlay — CSS-only, removes itself after animation ends */}
+      {/* Full-screen radar intro — plays on every mount, click to skip */}
+      {showIntro && <PmeIntroOverlay onDone={() => setShowIntro(false)} />}
+
+      {/* Subtle CSS-only radar sweep (existing, plays after intro clears) */}
       <div className={styles.radarOverlay} aria-hidden />
 
       {/* Page header */}
