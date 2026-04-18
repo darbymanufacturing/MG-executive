@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { CostProvider, useCosts } from './context/CostContext.jsx';
@@ -22,6 +22,7 @@ import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
+import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -45,12 +46,14 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+/** Admin-only shell: sidebar + all admin routes. Technicians are redirected to /technician. */
 function AppShell() {
   const { loading } = useCosts();
+  const { userRole } = useAuth();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Preload Mapbox + WarRoom chunk in the background after app is ready
-  // so War Room opens near-instantly when the user navigates to /war-room
   useEffect(() => {
     if (loading) return;
     const t = setTimeout(() => {
@@ -58,6 +61,11 @@ function AppShell() {
     }, 2000);
     return () => clearTimeout(t);
   }, [loading]);
+
+  // Redirect technicians away from admin routes
+  if (userRole === 'technician') {
+    return <Navigate to="/technician" replace />;
+  }
 
   if (loading) return <LoadingScreen />;
 
@@ -94,12 +102,32 @@ function AppShell() {
           <Route path="/maintenance"   element={<Maintenance />} />
           <Route path="/pme"           element={<PredictiveMaintenance />} />
           <Route path="/settings"      element={<Settings />} />
+          {/* Catch-all: redirect unknown paths to dashboard */}
+          <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
       {/* Diary bubble — floats above all content including War Room (z-index 300) */}
       <DiaryBubble />
     </div>
+  );
+}
+
+/** Technician shell: mobile-first, no sidebar. Admins are redirected to /. */
+function TechnicianShell() {
+  const { userRole } = useAuth();
+
+  // Redirect admins away from technician routes
+  if (userRole === 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/technician"           element={<TechnicianDashboard />} />
+      <Route path="/technician/:ticketId" element={<TechnicianDashboard />} />
+      <Route path="*"                     element={<Navigate to="/technician" replace />} />
+    </Routes>
   );
 }
 
@@ -111,7 +139,19 @@ export default function App() {
           {/* Public */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected — everything else */}
+          {/* Technician routes — protected, mobile shell, no heavy admin contexts */}
+          <Route
+            path="/technician/*"
+            element={
+              <ProtectedRoute>
+                <MaintenanceProvider>
+                  <TechnicianShell />
+                </MaintenanceProvider>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin routes — protected, full provider stack + sidebar shell */}
           <Route
             path="/*"
             element={
@@ -121,13 +161,13 @@ export default function App() {
                     <SprProvider>
                       <MaintenanceProvider>
                         <TelemetryProvider>
-                        <ProjectProvider>
-                          <NotificationProvider>
-                            <DiaryProvider>
-                              <AppShell />
-                            </DiaryProvider>
-                          </NotificationProvider>
-                        </ProjectProvider>
+                          <ProjectProvider>
+                            <NotificationProvider>
+                              <DiaryProvider>
+                                <AppShell />
+                              </DiaryProvider>
+                            </NotificationProvider>
+                          </ProjectProvider>
                         </TelemetryProvider>
                       </MaintenanceProvider>
                     </SprProvider>

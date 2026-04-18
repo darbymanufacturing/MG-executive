@@ -1,8 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
   DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart, ClipboardList,
+  Users, UserPlus, Loader2, CheckCircle, AlertCircle,
 } from 'lucide-react';
+import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
 import { CATEGORIES } from '../utils/constants.js';
 import Header from '../components/Layout/Header.jsx';
@@ -11,6 +14,7 @@ import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
 import { projectedCostPerScooterSimple } from '../utils/calculations.js';
 import { formatEUR } from '../utils/formatters.js';
@@ -18,11 +22,53 @@ import styles from './Settings.module.css';
 
 export default function Settings() {
   const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
+  const { createTechnicianAccount } = useAuth();
   const [clearConfirm, setClearConfirm] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const [projFleet, setProjFleet] = useState(config.fleetSize);
   const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
+
+  // Team management state
+  const [technicians, setTechnicians] = useState([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteStatus, setInviteStatus] = useState(null); // { type: 'success'|'error', text }
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
+
+  // Load technician accounts in real time
+  useEffect(() => {
+    const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+    const unsub = onSnapshot(q, (snap) => {
+      setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, []);
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || !invitePassword.trim()) return;
+    setInviteLoading(true);
+    setInviteStatus(null);
+    try {
+      await createTechnicianAccount(inviteEmail.trim(), invitePassword, inviteName.trim());
+      setInviteStatus({ type: 'success', text: `Technician account created for ${inviteEmail.trim()}.` });
+      setInviteEmail('');
+      setInvitePassword('');
+      setInviteName('');
+    } catch (err) {
+      setInviteStatus({ type: 'error', text: err.message });
+    } finally {
+      setInviteLoading(false);
+      setTimeout(() => setInviteStatus(null), 6000);
+    }
+  };
+
+  const handleRemoveTechnician = async (uid) => {
+    await deleteDoc(doc(db, 'users', uid));
+    setRemoveConfirm(null);
+  };
 
   const locations = config.locations || [];
 
@@ -326,6 +372,101 @@ export default function Settings() {
           <BankTransactionReview />
         </section>
 
+        {/* Team Management */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Users size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Team — Technician Accounts</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Create logins for field technicians. They see only their repair queue — no financial data.
+          </p>
+
+          {/* Existing technicians */}
+          {technicians.length > 0 && (
+            <div className={styles.teamList}>
+              {technicians.map((tech) => (
+                <div key={tech.uid} className={styles.teamRow}>
+                  <div className={styles.teamInfo}>
+                    <span className={styles.teamName}>{tech.displayName}</span>
+                    <span className={styles.teamEmail}>{tech.email}</span>
+                  </div>
+                  <button
+                    className={styles.teamRemoveBtn}
+                    onClick={() => setRemoveConfirm(tech.uid)}
+                    title="Remove technician"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Invite form */}
+          <div className={styles.inviteForm}>
+            <h3 className={styles.inviteTitle}>
+              <UserPlus size={15} />
+              Add Technician
+            </h3>
+            <div className={styles.grid}>
+              <div className={styles.field}>
+                <label className={styles.label}>Full Name</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Nikos Papadopoulos"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Email</label>
+                <input
+                  type="email"
+                  className={styles.input}
+                  placeholder="technician@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Temporary Password</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Min. 6 characters"
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleInvite}
+                disabled={inviteLoading || !inviteEmail.trim() || !invitePassword.trim()}
+              >
+                {inviteLoading
+                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Creating…</>
+                  : <><UserPlus size={14} /> Create Account</>
+                }
+              </Button>
+              {inviteStatus && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)',
+                  color: inviteStatus.type === 'success' ? '#00C896' : 'var(--color-danger)' }}>
+                  {inviteStatus.type === 'success'
+                    ? <CheckCircle size={14} />
+                    : <AlertCircle size={14} />
+                  }
+                  {inviteStatus.text}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Data Management */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -415,6 +556,15 @@ export default function Settings() {
         title="Clear All Data"
         message="This will permanently delete all cost entries and reset all settings. Export a backup first if needed."
         confirmLabel="Clear All"
+      />
+
+      <ConfirmDialog
+        isOpen={!!removeConfirm}
+        onClose={() => setRemoveConfirm(null)}
+        onConfirm={() => handleRemoveTechnician(removeConfirm)}
+        title="Remove Technician"
+        message="This will remove the technician's access. Their Firebase Auth account remains — contact Firebase console to fully delete it."
+        confirmLabel="Remove Access"
       />
     </div>
   );
