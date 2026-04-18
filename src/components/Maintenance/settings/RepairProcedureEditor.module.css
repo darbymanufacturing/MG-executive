@@ -314,46 +314,115 @@
   gap: var(--space-2);
 }
 
-.partListHeader {
-  display: grid;
-  grid-template-columns: 1fr 80px 28px;
-  gap: var(--space-2);
-  padding: 0 var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
+/* Each part row: combobox fills width, qty+remove sit right inline */
 .partRow {
-  display: grid;
-  grid-template-columns: 1fr 80px 28px;
-  gap: var(--space-2);
+  display: flex;
   align-items: center;
-}
-
-.partSelect {
+  gap: var(--space-2);
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--text-xs);
-  font-family: var(--font-body);
-  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
 }
-.partSelect:focus { outline: none; border-color: var(--color-primary-light); }
+
+.partRowRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.partQtyLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
 
 .partQty {
-  background: var(--color-surface-2);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-body);
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   text-align: center;
-  width: 100%;
+  width: 52px;
 }
 .partQty:focus { outline: none; border-color: var(--color-primary-light); }
+
+/* ── Searchable combobox ── */
+.comboWrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.comboInput {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  padding: 0;
+  outline: none;
+}
+.comboInput::placeholder { color: var(--color-text-muted); }
+
+.comboDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -12px;   /* align with card edge */
+  right: 0;
+  z-index: 100;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.comboOption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.comboOption:hover, .comboOptionActive {
+  background: rgba(160, 82, 29, 0.12);
+}
+
+.comboOptionName {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.comboOptionSku {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.comboEmpty {
+  padding: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
 
 .emptyHint {
   font-size: var(--text-xs);

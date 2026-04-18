@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive, Bike,
+  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive, Bike, Activity,
 } from 'lucide-react';
 // Package, BarChart2, Settings used in TABS icon array below
 import Header from '../components/Layout/Header.jsx';
@@ -13,6 +13,7 @@ import AnalyticsTab from '../components/Maintenance/tabs/AnalyticsTab.jsx';
 import ArchivedTab from '../components/Maintenance/tabs/ArchivedTab.jsx';
 import FleetTab    from '../components/Maintenance/tabs/FleetTab.jsx';
 import SettingsTab from '../components/Maintenance/tabs/SettingsTab.jsx';
+import RepairSessionFeed from '../components/Maintenance/overview/RepairSessionFeed.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import styles from './Maintenance.module.css';
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'repairlog',   label: 'Repair Log',       icon: Wrench },
   { id: 'parts',       label: 'Parts Pipeline',   icon: Package },
   { id: 'analytics',   label: 'Analytics',        icon: BarChart2 },
+  { id: 'activity',    label: 'Activity',         icon: Activity },
   { id: 'archived',    label: 'Archived',         icon: Archive },
   { id: 'settings',    label: 'Settings',         icon: Settings },
 ];
@@ -122,6 +124,9 @@ export default function Maintenance() {
           )}
           {activeTab === 'analytics' && (
             <AnalyticsTab filteredTickets={filteredTickets} />
+          )}
+          {activeTab === 'activity' && (
+            <RepairSessionFeed />
           )}
           {activeTab === 'archived' && (
             <ArchivedTab filteredTickets={filteredTickets} />

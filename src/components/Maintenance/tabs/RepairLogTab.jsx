@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus } from 'lucide-react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../lib/firebase.js';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import Button from '../../Shared/Button.jsx';
 import ActiveTicketsBanner from '../tickets/ActiveTicketsBanner.jsx';
@@ -14,12 +16,20 @@ const EMPTY_FILTERS = { search: '', statuses: [], categories: [], tags: [] };
 export default function RepairLogTab({ filteredTickets }) {
   const {
     config, isAtMaxActive, activeCount,
-    addTicket, updateTicket, deleteTicket, completeTicket,
+    addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
   } = useMaintenance();
 
   const [filters,       setFilters]       = useState(EMPTY_FILTERS);
   const [showForm,      setShowForm]      = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
+  const [technicians,   setTechnicians]   = useState([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+    return onSnapshot(q, (snap) => {
+      setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+    });
+  }, []);
 
   function handleSearch(val) {
     setFilters((prev) => ({ ...prev, search: val }));
@@ -96,6 +106,11 @@ export default function RepairLogTab({ filteredTickets }) {
     await completeTicket(docId);
   }
 
+  async function handleAssign(docId, uid) {
+    const tech = technicians.find((t) => t.uid === uid);
+    await assignTicket(docId, uid || null, tech?.displayName || null);
+  }
+
   return (
     <div className={styles.wrapper}>
       {isAtMaxActive && (
@@ -127,6 +142,8 @@ export default function RepairLogTab({ filteredTickets }) {
         onEdit={handleOpenEdit}
         onDelete={handleDelete}
         onComplete={handleComplete}
+        technicians={technicians}
+        onAssign={handleAssign}
       />
 
       <TicketForm

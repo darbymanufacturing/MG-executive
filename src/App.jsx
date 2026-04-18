@@ -23,7 +23,9 @@ import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
+import RepairSession from './components/Technician/RepairSession.jsx';
 import { RepairProcedureProvider } from './context/RepairProcedureContext.jsx';
+import { RepairSessionProvider } from './context/RepairSessionContext.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -126,7 +128,7 @@ function TechnicianShell() {
   return (
     <Routes>
       <Route path="/technician"           element={<TechnicianDashboard />} />
-      <Route path="/technician/:ticketId" element={<TechnicianDashboard />} />
+      <Route path="/technician/:ticketId" element={<RepairSession />} />
       <Route path="*"                     element={<Navigate to="/technician" replace />} />
     </Routes>
   );
@@ -164,6 +166,7 @@ export default function App() {
                     <SprProvider>
                       <MaintenanceProvider>
                         <RepairProcedureProvider>
+                        <RepairSessionProvider>
                         <TelemetryProvider>
                           <ProjectProvider>
                             <NotificationProvider>
@@ -173,6 +176,7 @@ export default function App() {
                             </NotificationProvider>
                           </ProjectProvider>
                         </TelemetryProvider>
+                        </RepairSessionProvider>
                         </RepairProcedureProvider>
                       </MaintenanceProvider>
                     </SprProvider>

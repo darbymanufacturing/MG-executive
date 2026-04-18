@@ -96,34 +96,95 @@ function StepRow({ step, index, total, onChange, onRemove, onMove }) {
   );
 }
 
+// ── Searchable part combobox ──────────────────────────────────────────────────
+function PartCombobox({ value, parts, onSelect }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useState(() => ({ current: null }))[0];
+
+  const selectedPart = parts.find((p) => p.id === value);
+  const displayValue = open ? query : (selectedPart ? selectedPart.partName : '');
+
+  const filtered = query.trim()
+    ? parts.filter((p) =>
+        p.partName.toLowerCase().includes(query.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(query.toLowerCase())
+      ).slice(0, 10)
+    : parts.slice(0, 10);
+
+  function handleFocus() {
+    setQuery('');
+    setOpen(true);
+  }
+
+  function handleBlur() {
+    // Delay so click on dropdown item registers first
+    setTimeout(() => {
+      setOpen(false);
+      setQuery('');
+    }, 150);
+  }
+
+  function handlePick(part) {
+    onSelect(part);
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div className={styles.comboWrap} ref={(el) => { ref.current = el; }}>
+      <input
+        className={styles.comboInput}
+        placeholder={value ? selectedPart?.partName ?? 'Unknown part' : 'Search part name or SKU…'}
+        value={displayValue}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+      />
+      {open && filtered.length > 0 && (
+        <ul className={styles.comboDropdown}>
+          {filtered.map((p) => (
+            <li
+              key={p.id}
+              className={`${styles.comboOption} ${p.id === value ? styles.comboOptionActive : ''}`}
+              onMouseDown={() => handlePick(p)}
+            >
+              <span className={styles.comboOptionName}>{p.partName}</span>
+              <span className={styles.comboOptionSku}>{p.sku}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && (
+        <div className={styles.comboEmpty}>No parts match "{query}"</div>
+      )}
+    </div>
+  );
+}
+
 // ── Common parts picker row ───────────────────────────────────────────────────
 function PartPickerRow({ entry, parts, onChange, onRemove }) {
   return (
     <div className={styles.partRow}>
-      <select
-        className={styles.partSelect}
+      <PartCombobox
         value={entry.partId}
-        onChange={(e) => {
-          const part = parts.find((p) => p.id === e.target.value);
-          onChange({ partId: e.target.value, partName: part?.partName ?? '', defaultQty: entry.defaultQty });
-        }}
-      >
-        <option value="">— select part —</option>
-        {parts.map((p) => (
-          <option key={p.id} value={p.id}>{p.partName} ({p.sku})</option>
-        ))}
-      </select>
-      <input
-        type="number"
-        className={styles.partQty}
-        min={1}
-        max={99}
-        value={entry.defaultQty}
-        onChange={(e) => onChange({ ...entry, defaultQty: Math.max(1, parseInt(e.target.value) || 1) })}
+        parts={parts}
+        onSelect={(part) => onChange({ partId: part.id, partName: part.partName, defaultQty: entry.defaultQty })}
       />
-      <button type="button" className={styles.removeStepBtn} onClick={onRemove} aria-label="Remove part">
-        <X size={14} />
-      </button>
+      <div className={styles.partRowRight}>
+        <label className={styles.partQtyLabel}>Qty</label>
+        <input
+          type="number"
+          className={styles.partQty}
+          min={1}
+          max={99}
+          value={entry.defaultQty}
+          onChange={(e) => onChange({ ...entry, defaultQty: Math.max(1, parseInt(e.target.value) || 1) })}
+        />
+        <button type="button" className={styles.removeStepBtn} onClick={onRemove} aria-label="Remove part">
+          <X size={14} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -283,10 +344,6 @@ function ProcedureModal({ isOpen, onClose, initial }) {
             <p className={styles.emptyHint}>No pre-filled parts. Technicians can still pick parts during repair.</p>
           ) : (
             <div className={styles.partList}>
-              <div className={styles.partListHeader}>
-                <span>Part</span>
-                <span>Default qty</span>
-              </div>
               {form.commonParts.map((entry, idx) => (
                 <PartPickerRow
                   key={idx}

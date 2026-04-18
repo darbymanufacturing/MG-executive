@@ -216,6 +216,14 @@ export function MaintenanceProvider({ children }) {
     });
   }, []);
 
+  const assignTicket = useCallback(async (docId, uid, displayName) => {
+    await updateDoc(doc(db, TICKETS_COL, docId), {
+      assignedTo:     uid        || null,
+      assignedToName: displayName || null,
+      updatedAt: new Date().toISOString(),
+    });
+  }, []);
+
   // ── Parts CRUD ────────────────────────────────────────────────────────────
   const addPart = useCallback(async (data) => {
     const docId = String(data.sku).trim();
@@ -354,6 +362,7 @@ export function MaintenanceProvider({ children }) {
         updateTicket,
         deleteTicket,
         completeTicket,
+        assignTicket,
         // Scooter ops
         addScooter,
         updateScooter,

@@ -39,7 +39,7 @@ function CategoryBadge({ code }) {
   );
 }
 
-export default function TicketTable({ tickets, onEdit, onDelete, onComplete }) {
+export default function TicketTable({ tickets, onEdit, onDelete, onComplete, technicians = [], onAssign }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { docId, scooterId }
 
   if (tickets.length === 0) {
@@ -66,6 +66,7 @@ export default function TicketTable({ tickets, onEdit, onDelete, onComplete }) {
               <th className={styles.th}>Tag</th>
               <th className={styles.th + ' ' + styles.thNum}>Days</th>
               <th className={styles.th + ' ' + styles.thNum}>Rev. Lost</th>
+              {technicians.length > 0 && <th className={styles.th}>Assign</th>}
               <th className={styles.th}>Actions</th>
             </tr>
           </thead>
@@ -103,6 +104,21 @@ export default function TicketTable({ tickets, onEdit, onDelete, onComplete }) {
                     €{(ticket.revenueLost ?? 0).toFixed(0)}
                   </span>
                 </td>
+                {technicians.length > 0 && (
+                  <td className={styles.td}>
+                    <select
+                      className={styles.assignSelect}
+                      value={ticket.assignedTo ?? ''}
+                      onChange={(e) => onAssign?.(ticket._docId, e.target.value)}
+                      title="Assign to technician"
+                    >
+                      <option value="">Unassigned</option>
+                      {technicians.map((t) => (
+                        <option key={t.uid} value={t.uid}>{t.displayName}</option>
+                      ))}
+                    </select>
+                  </td>
+                )}
                 <td className={styles.td}>
                   <div className={styles.actions}>
                     <button

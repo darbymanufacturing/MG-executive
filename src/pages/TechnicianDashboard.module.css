@@ -18,15 +18,8 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.headerIcon {
-  color: var(--color-primary-light);
-}
+.headerLeft { display: flex; align-items: center; gap: var(--space-3); }
+.headerIcon { color: var(--color-primary-light); }
 
 .headerTitle {
   font-family: var(--font-heading);
@@ -35,16 +28,12 @@
   color: var(--color-text-primary);
 }
 
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
+.headerRight { display: flex; align-items: center; gap: var(--space-3); }
 
 .techName {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
-  max-width: 120px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -62,11 +51,7 @@
   padding: var(--space-2);
   transition: color var(--transition-fast), border-color var(--transition-fast);
 }
-
-.logoutBtn:hover {
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-}
+.logoutBtn:hover { color: var(--color-danger); border-color: var(--color-danger); }
 
 /* ── Offline banner ── */
 .offlineBanner {
@@ -80,14 +65,139 @@
   font-size: var(--text-xs);
 }
 
-/* ── Main content ── */
+/* ── Main ── */
 .main {
   flex: 1;
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-5);
   max-width: 600px;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
+
+.queueCount {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Ticket list ── */
+.ticketList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Ticket card ── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color var(--transition-fast);
+}
+.card:hover { border-color: var(--color-primary-light); }
+
+.cardHeader { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.scooterRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.scooterId {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.catBadge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid;
+}
+
+.unassignedBadge {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--color-border);
+}
+
+.issueDesc {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Card meta ── */
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ── Card footer ── */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.claimBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(160,82,29,0.12);
+  border: 1px solid rgba(160,82,29,0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-light);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  transition: background var(--transition-fast);
+}
+.claimBtn:hover { background: rgba(160,82,29,0.22); }
+
+.startBtn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  transition: background var(--transition-fast);
+}
+.startBtn:hover { background: var(--color-primary-dark); }
 
 /* ── Empty state ── */
 .emptyState {
@@ -100,23 +210,6 @@
   gap: var(--space-4);
 }
 
-.emptyIcon {
-  color: var(--color-primary);
-  opacity: 0.4;
-}
-
-.emptyTitle {
-  font-family: var(--font-heading);
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.emptyDesc {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  margin: 0;
-  max-width: 280px;
-  line-height: 1.6;
-}
+.emptyIcon { color: var(--color-primary); opacity: 0.4; }
+.emptyTitle { font-family: var(--font-heading); font-size: var(--text-xl); font-weight: 600; color: var(--color-text-primary); margin: 0; }
+.emptyDesc { font-size: var(--text-sm); color: var(--color-text-muted); margin: 0; max-width: 280px; line-height: 1.6; }
