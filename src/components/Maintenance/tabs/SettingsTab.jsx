@@ -4,6 +4,7 @@ import Button from '../../Shared/Button.jsx';
 import ConfigEditor from '../settings/ConfigEditor.jsx';
 import SeasonalityEditor from '../settings/SeasonalityEditor.jsx';
 import CsvImporter from '../settings/CsvImporter.jsx';
+import RepairProcedureEditor from '../settings/RepairProcedureEditor.jsx';
 import styles from './SettingsTab.module.css';
 
 function SectionHeader({ title, subtitle }) {
@@ -100,6 +101,15 @@ export default function SettingsTab() {
             </span>
           )}
         </div>
+      </section>
+
+      {/* Repair Procedure Library */}
+      <section className={styles.section}>
+        <SectionHeader
+          title="Repair Procedure Library (SOPs)"
+          subtitle="Create step-by-step procedures for each repair type. Technicians follow these guides during repairs."
+        />
+        <RepairProcedureEditor />
       </section>
 
       {/* Import */}

@@ -23,6 +23,7 @@ import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
+import { RepairProcedureProvider } from './context/RepairProcedureContext.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
@@ -145,7 +146,9 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MaintenanceProvider>
-                  <TechnicianShell />
+                  <RepairProcedureProvider>
+                    <TechnicianShell />
+                  </RepairProcedureProvider>
                 </MaintenanceProvider>
               </ProtectedRoute>
             }
@@ -160,6 +163,7 @@ export default function App() {
                   <RevenueProvider>
                     <SprProvider>
                       <MaintenanceProvider>
+                        <RepairProcedureProvider>
                         <TelemetryProvider>
                           <ProjectProvider>
                             <NotificationProvider>
@@ -169,6 +173,7 @@ export default function App() {
                             </NotificationProvider>
                           </ProjectProvider>
                         </TelemetryProvider>
+                        </RepairProcedureProvider>
                       </MaintenanceProvider>
                     </SprProvider>
                   </RevenueProvider>
