@@ -75,21 +75,22 @@ function TicketCard({ ticket, techUid, onClaim }) {
 }
 
 export default function TechnicianDashboard() {
-  const { userProfile, signOut } = useAuth();
+  const { user, userProfile, userRole, signOut } = useAuth();
   const { tickets, assignTicket, loading } = useMaintenance();
-  const uid = userProfile?.uid ?? null;
+  const uid = user?.uid ?? null;
 
-  // Show tickets assigned to me OR unassigned; exclude Completed
+  // Admin sees all open tickets; technician sees only their own + unassigned
   const myTickets = useMemo(() =>
-    tickets.filter((t) =>
-      t.status !== 'Completed' &&
-      (t.assignedTo === uid || !t.assignedTo)
-    ).sort((a, b) => {
-      // Mine first, then by days open desc
-      if (!!a.assignedTo !== !!b.assignedTo) return a.assignedTo ? -1 : 1;
-      return b.daysOpen - a.daysOpen;
+    tickets.filter((t) => {
+      if (t.status === 'Completed') return false;
+      if (userRole === 'admin') return true;
+      return t.assignedTo === uid || !t.assignedTo;
+    }).sort((a, b) => {
+      // Assigned-to-me first, then unassigned, then others; within group sort by days open desc
+      const rank = (t) => (t.assignedTo === uid ? 0 : !t.assignedTo ? 1 : 2);
+      return rank(a) - rank(b) || b.daysOpen - a.daysOpen;
     }),
-  [tickets, uid]);
+  [tickets, uid, userRole]);
 
   async function handleClaim(docId) {
     await assignTicket(docId, uid, userProfile?.displayName ?? '');
@@ -129,7 +130,7 @@ export default function TechnicianDashboard() {
         ) : (
           <>
             <p className={styles.queueCount}>
-              {myTickets.filter((t) => t.assignedTo === uid).length} assigned · {myTickets.filter((t) => !t.assignedTo).length} unassigned
+              {myTickets.filter((t) => t.assignedTo).length} assigned · {myTickets.filter((t) => !t.assignedTo).length} unassigned
             </p>
             <div className={styles.ticketList}>
               {myTickets.map((t) => (

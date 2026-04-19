@@ -118,13 +118,6 @@ function AppShell() {
 
 /** Technician shell: mobile-first, no sidebar. Admins are redirected to /. */
 function TechnicianShell() {
-  const { userRole } = useAuth();
-
-  // Redirect admins away from technician routes
-  if (userRole === 'admin') {
-    return <Navigate to="/" replace />;
-  }
-
   return (
     <Routes>
       <Route path="/technician"           element={<TechnicianDashboard />} />

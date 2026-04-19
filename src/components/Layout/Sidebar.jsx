@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList, Activity } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList, Activity, HardHat } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import SparkleBurst from '../PME/shared/SparkleBurst.jsx';
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/revenue',     icon: Receipt,         label: 'Revenue' },
   { to: '/spr',         icon: Radar,           label: 'SPR' },
   { to: '/maintenance', icon: Wrench,          label: 'Maintenance' },
+  { to: '/technician',  icon: HardHat,         label: 'Tech Queue' },
   { to: '/pme',         icon: Activity,        label: 'PME',         sparkle: true },
   { to: '/settings',    icon: Settings,        label: 'Settings' },
 ];

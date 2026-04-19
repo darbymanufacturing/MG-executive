@@ -182,7 +182,7 @@ function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing 
 export default function RepairSession() {
   const { ticketId } = useParams();
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const { tickets, parts } = useMaintenance();
   const { procedures } = useRepairProcedures();
 
@@ -241,7 +241,7 @@ export default function RepairSession() {
         sessionId,
         procedureId:    procedure.id,
         scooterId:      ticket?.scooterId ?? '',
-        technicianUid:  userProfile?.uid ?? '',
+        technicianUid:  user?.uid ?? '',
         technicianName: userProfile?.displayName ?? '',
         startedAt,
         completedAt:    new Date(),
