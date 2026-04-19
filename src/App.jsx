@@ -116,13 +116,13 @@ function AppShell() {
   );
 }
 
-/** Technician shell: mobile-first, no sidebar. Admins are redirected to /. */
+/** Technician shell: mobile-first, no sidebar. */
 function TechnicianShell() {
   return (
     <Routes>
-      <Route path="/technician"           element={<TechnicianDashboard />} />
-      <Route path="/technician/:ticketId" element={<RepairSession />} />
-      <Route path="*"                     element={<Navigate to="/technician" replace />} />
+      <Route index                element={<TechnicianDashboard />} />
+      <Route path=":ticketId"     element={<RepairSession />} />
+      <Route path="*"             element={<Navigate to="/technician" replace />} />
     </Routes>
   );
 }
