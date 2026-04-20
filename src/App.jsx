@@ -22,6 +22,7 @@ import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
+import Investment from './pages/Investment.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
 import RepairSession from './components/Technician/RepairSession.jsx';
 import { RepairProcedureProvider } from './context/RepairProcedureContext.jsx';
@@ -99,6 +100,7 @@ function AppShell() {
           <Route path="/projects"      element={<Projects />} />
           <Route path="/projects/:id"  element={<Projects />} />
           <Route path="/war-room"      element={<WarRoomPage />} />
+          <Route path="/investment"    element={<Investment />} />
           <Route path="/costs"         element={<CostManager />} />
           <Route path="/revenue"       element={<Revenue />} />
           <Route path="/spr"           element={<Spr />} />

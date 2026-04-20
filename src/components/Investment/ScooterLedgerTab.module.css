@@ -1,0 +1,113 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Fleet totals */
+.totalsStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 800px) {
+  .totalsStrip { grid-template-columns: repeat(2, 1fr); }
+}
+
+.total {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.totalLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.totalValue {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.positive { color: var(--color-success); }
+.warning  { color: var(--color-warning);  }
+.negative { color: var(--color-danger);   }
+
+/* Body: table + detail side by side on desktop */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Table */
+.tableWrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.th:hover { color: var(--color-text); }
+
+.thInner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sortIcon {
+  opacity: 0.4;
+}
+.sortActive {
+  opacity: 1;
+  color: var(--color-primary);
+}
+
+.tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.tr:hover td { background: var(--color-bg); }
+.trSelected td { background: rgba(160, 82, 29, 0.06); }
+
+.table td {
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.table tr:last-child td { border-bottom: none; }
+
+.idCell {
+  font-weight: 600;
+  color: var(--color-text) !important;
+}
+
+.empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-8) !important;
+}
