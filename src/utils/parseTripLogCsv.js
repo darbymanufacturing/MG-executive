@@ -1,118 +1,218 @@
 /**
  * parseTripLogCsv.js
- * Scaffold CSV parser for scooterTrips. Final column mapping will be confirmed
- * once the user sends a sample Hopp/OTORide trip-log CSV.
+ * Parses the Hopp trip-log CSV export for a single scooter.
  *
- * Expected columns (provisional — update when schema arrives):
- *   scooterId, startedAt, endedAt, userId, durationMinutes, distanceKm, endReason, cost
+ * CSV format (exported from Hopp vehicle detail → Trips tab):
+ *   Type, Started / Created, Ended, User, Length, End reason, Cost, Is Paid
+ *
+ * Key quirks:
+ *  - Multiline quoted cells: "13:06\n18 Apr 2026" (time + date across two lines)
+ *  - Length cell: "6 minutes\n1.43 km" or "55 seconds\n0.05 km"
+ *  - Cost cell: "€2.55" or "€2.05\n€1.25" (unlock + ride charge)
+ *  - No scooterId — caller must supply it.
  *
  * Returns { rows: object[], errors: string[], total: number }
- *
- * DocId pattern: `${scooterId}_${startedAt}` — idempotent upsert / dedup.
+ * Each row: { scooterId, startedAt, endedAt, userId, durationMinutes, distanceKm, endReason, cost, isPaid, _docId }
  */
 
-/** Normalise a header string: lowercase, trim, collapse spaces + underscores */
-function norm(h) {
-  return h.toLowerCase().trim().replace(/[\s_-]+/g, '_');
-}
+/**
+ * Full RFC 4180 CSV parser — handles quoted fields with embedded newlines.
+ * Returns array of string arrays (rows → cols).
+ */
+function parseCSVRaw(text) {
+  const rows = [];
+  let i = 0;
+  const n = text.length;
 
-/** Map normalised header → canonical field name */
-const FIELD_MAP = {
-  scooter_id:       'scooterId',
-  scooter:          'scooterId',
-  vehicle_id:       'scooterId',
-  started_at:       'startedAt',
-  start_time:       'startedAt',
-  trip_start:       'startedAt',
-  ended_at:         'endedAt',
-  end_time:         'endedAt',
-  trip_end:         'endedAt',
-  user_id:          'userId',
-  rider_id:         'userId',
-  duration_minutes: 'durationMinutes',
-  duration_min:     'durationMinutes',
-  duration:         'durationMinutes',
-  distance_km:      'distanceKm',
-  distance:         'distanceKm',
-  km:               'distanceKm',
-  end_reason:       'endReason',
-  end_type:         'endReason',
-  cost:             'cost',
-  fare:             'cost',
-  revenue:          'cost',
-};
+  while (i < n) {
+    const row = [];
+    let firstField = true;
 
-function parseLine(line) {
-  // Simple CSV parse — handles quoted fields
-  const cols = [];
-  let cur = '';
-  let inQuote = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      inQuote = !inQuote;
-    } else if (ch === ',' && !inQuote) {
-      cols.push(cur.trim());
-      cur = '';
-    } else {
-      cur += ch;
+    while (i < n) {
+      // After the first field, expect a comma before each field
+      if (!firstField) {
+        if (text[i] === ',') {
+          i++;
+        } else {
+          // End of row (newline or EOF)
+          if (text[i] === '\r') i++;
+          if (i < n && text[i] === '\n') i++;
+          break;
+        }
+      }
+      firstField = false;
+
+      let field = '';
+      if (i < n && text[i] === '"') {
+        // Quoted field — may contain embedded commas and newlines
+        i++; // skip opening quote
+        while (i < n) {
+          if (text[i] === '"') {
+            if (i + 1 < n && text[i + 1] === '"') {
+              // Escaped double-quote
+              field += '"';
+              i += 2;
+            } else {
+              i++; // skip closing quote
+              break;
+            }
+          } else {
+            field += text[i++];
+          }
+        }
+      } else {
+        // Unquoted field
+        while (i < n && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') {
+          field += text[i++];
+        }
+      }
+      row.push(field);
+    }
+
+    if (row.length > 0 && !(row.length === 1 && row[0].trim() === '')) {
+      rows.push(row);
     }
   }
-  cols.push(cur.trim());
-  return cols;
+
+  return rows;
 }
 
-export function parseTripLogCsv(csvText) {
-  const lines  = csvText.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return { rows: [], errors: ['File appears empty.'], total: 0 };
-
-  const rawHeaders = parseLine(lines[0]);
-  const headers    = rawHeaders.map(norm);
-
-  // Map column index → canonical field
-  const colMap = {};
-  headers.forEach((h, i) => {
-    const field = FIELD_MAP[h];
-    if (field) colMap[i] = field;
-  });
-
-  if (!Object.values(colMap).includes('scooterId')) {
-    return { rows: [], errors: ['Could not find a scooterId column. Check column headers match the expected format.'], total: 0 };
+/**
+ * Parse "13:06\n18 Apr 2026" → ISO date string "2026-04-18T13:06:00"
+ */
+function parseHoppDateTime(raw) {
+  if (!raw) return null;
+  // Field contains "HH:MM\nDD Mon YYYY"
+  const parts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) {
+    // Try single-line fallback: "13:06 18 Apr 2026"
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d.toISOString();
   }
-  if (!Object.values(colMap).includes('startedAt')) {
-    return { rows: [], errors: ['Could not find a startedAt / trip_start column.'], total: 0 };
+  const [timePart, datePart] = parts;
+  const combined = `${datePart} ${timePart}`;
+  const d = new Date(combined);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Parse "6 minutes\n1.43 km" → { durationMinutes: 6, distanceKm: 1.43 }
+ * Also handles "55 seconds\n0.05 km", "1 hour 2 minutes\n10.5 km"
+ */
+function parseLength(raw) {
+  if (!raw) return { durationMinutes: null, distanceKm: null };
+  const parts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
+  let durationMinutes = null;
+  let distanceKm      = null;
+
+  const durationStr = parts[0] || '';
+  const distStr     = parts[1] || '';
+
+  // Parse duration: "X minutes", "X seconds", "X hours Y minutes"
+  const hrMatch  = durationStr.match(/(\d+)\s*hour/i);
+  const minMatch = durationStr.match(/(\d+)\s*min/i);
+  const secMatch = durationStr.match(/(\d+)\s*sec/i);
+
+  let totalMin = 0;
+  if (hrMatch)  totalMin += parseInt(hrMatch[1], 10) * 60;
+  if (minMatch) totalMin += parseInt(minMatch[1], 10);
+  if (secMatch) totalMin += parseInt(secMatch[1], 10) / 60;
+  if (hrMatch || minMatch || secMatch) durationMinutes = parseFloat(totalMin.toFixed(2));
+
+  // Parse distance: "1.43 km" or "0 km"
+  const kmMatch = distStr.match(/([\d.]+)\s*km/i);
+  if (kmMatch) distanceKm = parseFloat(kmMatch[1]);
+
+  return { durationMinutes, distanceKm };
+}
+
+/**
+ * Parse "€2.55" or "€2.05\n€1.25" → cost as number
+ * When two values present, take the sum (unlock fee + ride cost).
+ */
+function parseCost(raw) {
+  if (!raw) return null;
+  const parts = raw.split('\n').map((s) => s.replace(/[€\s]/g, '').trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  const values = parts.map(parseFloat).filter((v) => !isNaN(v));
+  if (values.length === 0) return null;
+  // Sum all components (unlock + ride)
+  return parseFloat(values.reduce((s, v) => s + v, 0).toFixed(2));
+}
+
+export function parseTripLogCsv(csvText, scooterId) {
+  if (!scooterId) {
+    return { rows: [], errors: ['scooterId is required — specify which scooter this log belongs to.'], total: 0 };
   }
+
+  const allRows = parseCSVRaw(csvText);
+  if (allRows.length < 2) {
+    return { rows: [], errors: ['File appears empty or has no data rows.'], total: 0 };
+  }
+
+  // Normalise headers
+  const headers = allRows[0].map((h) => h.toLowerCase().replace(/[\s/]+/g, '_').trim());
+
+  // Map header → col index
+  const col = (names) => {
+    for (const name of names) {
+      const idx = headers.findIndex((h) => h.includes(name));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  const iType       = col(['type']);
+  const iStarted    = col(['started', 'created']);
+  const iEnded      = col(['ended']);
+  const iUser       = col(['user']);
+  const iLength     = col(['length']);
+  const iEndReason  = col(['end_reason', 'reason']);
+  const iCost       = col(['cost']);
+  const iIsPaid     = col(['paid']);
 
   const rows   = [];
   const errors = [];
 
-  for (let li = 1; li < lines.length; li++) {
-    const cols = parseLine(lines[li]);
-    if (cols.length === 1 && cols[0] === '') continue; // blank line
+  for (let ri = 1; ri < allRows.length; ri++) {
+    const cols = allRows[ri];
+    if (cols.length <= 1) continue;
 
-    const raw = {};
-    Object.entries(colMap).forEach(([idx, field]) => {
-      raw[field] = cols[Number(idx)] ?? '';
-    });
+    // Only process Trip rows (skip Reservation, Parking etc if present)
+    const type = iType >= 0 ? cols[iType]?.trim() : 'Trip';
+    if (type && type.toLowerCase() !== 'trip') continue;
 
-    if (!raw.scooterId || !raw.startedAt) {
-      errors.push(`Row ${li + 1}: missing scooterId or startedAt — skipped.`);
+    const startedRaw = iStarted >= 0 ? cols[iStarted] : '';
+    const endedRaw   = iEnded   >= 0 ? cols[iEnded]   : '';
+    const startedAt  = parseHoppDateTime(startedRaw);
+
+    if (!startedAt) {
+      errors.push(`Row ${ri + 1}: could not parse start time "${startedRaw}" — skipped.`);
       continue;
     }
 
-    const row = {
-      scooterId:       String(raw.scooterId).trim(),
-      startedAt:       raw.startedAt.trim(),
-      endedAt:         raw.endedAt?.trim() || null,
-      userId:          raw.userId?.trim()  || null,
-      durationMinutes: raw.durationMinutes ? parseFloat(raw.durationMinutes) : null,
-      distanceKm:      raw.distanceKm      ? parseFloat(raw.distanceKm)      : null,
-      endReason:       raw.endReason?.trim() || null,
-      cost:            raw.cost             ? parseFloat(raw.cost)            : null,
-      _docId:          `${raw.scooterId.trim()}_${raw.startedAt.trim()}`,
-    };
+    const endedAt = parseHoppDateTime(endedRaw);
+    const { durationMinutes, distanceKm } = parseLength(iLength >= 0 ? cols[iLength] : '');
+    const cost      = parseCost(iCost >= 0 ? cols[iCost] : '');
+    const userId    = iUser      >= 0 ? cols[iUser]?.trim()      || null : null;
+    const endReason = iEndReason >= 0 ? cols[iEndReason]?.trim() || null : null;
+    const isPaid    = iIsPaid    >= 0 ? cols[iIsPaid]?.trim().toLowerCase() === 'yes' : null;
 
-    rows.push(row);
+    // DocId: scooterId + startedAt for idempotent upsert
+    const _docId = `${scooterId}_${startedAt.replace(/[:.]/g, '-')}`;
+
+    rows.push({
+      scooterId:       String(scooterId),
+      startedAt,
+      endedAt,
+      userId,
+      durationMinutes,
+      distanceKm,
+      endReason,
+      cost,
+      isPaid,
+      _docId,
+    });
   }
 
   return { rows, errors, total: rows.length };

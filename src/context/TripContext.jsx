@@ -13,7 +13,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer,
+  collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer, query, where, getDocs, deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
@@ -70,8 +70,22 @@ export function TripProvider({ children }) {
     return { written };
   }, []);
 
+  /**
+   * Delete all trips for a specific scooter (so re-import is clean).
+   */
+  const clearTripsForScooter = useCallback(async (scooterId) => {
+    const q    = query(collection(db, TRIPS_COL), where('scooterId', '==', String(scooterId)));
+    const snap = await getDocs(q);
+    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    return snap.docs.length;
+  }, []);
+
   return (
-    <TripContext.Provider value={{ trips, loading, count, importTrips }}>
+    <TripContext.Provider value={{ trips, loading, count, importTrips, clearTripsForScooter }}>
       {children}
     </TripContext.Provider>
   );
