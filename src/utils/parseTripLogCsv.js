@@ -153,6 +153,15 @@ function isAfterJune2026(isoStr) {
 /** Upfront charge deducted from unpaid trips after the policy change date */
 const UPFRONT_FEE = 5.50;
 
+/** Greek VAT rate applied to all trips — divide to get ex-VAT revenue */
+const VAT_RATE = 0.24;
+
+/** Strip VAT: grossAmount / (1 + VAT_RATE) */
+function exVAT(gross) {
+  if (gross == null) return null;
+  return parseFloat((gross / (1 + VAT_RATE)).toFixed(2));
+}
+
 export function parseTripLogCsv(csvText, scooterId) {
   if (!scooterId) {
     return { rows: [], errors: ['scooterId is required — specify which scooter this log belongs to.'], total: 0 };
@@ -214,10 +223,13 @@ export function parseTripLogCsv(csvText, scooterId) {
     // Unpaid trips after June 1st: rider was charged the €5.50 upfront fee only.
     // Revenue for those trips = Final Amount − €5.50 (the portion beyond the pre-auth).
     // Clamp to 0 so we never store negative revenue.
-    let cost = rawCost;
+    let adjustedCost = rawCost;
     if (isPaid === false && isAfterJune2026(startedAt) && rawCost !== null) {
-      cost = parseFloat(Math.max(0, rawCost - UPFRONT_FEE).toFixed(2));
+      adjustedCost = parseFloat(Math.max(0, rawCost - UPFRONT_FEE).toFixed(2));
     }
+
+    // All trip costs include 24% Greek VAT — store ex-VAT revenue only.
+    const cost = exVAT(adjustedCost);
 
     // DocId: scooterId + startedAt for idempotent upsert
     const _docId = `${scooterId}_${startedAt.replace(/[:.]/g, '-')}`;
@@ -230,8 +242,8 @@ export function parseTripLogCsv(csvText, scooterId) {
       durationMinutes,
       distanceKm,
       endReason,
-      cost,            // adjusted cost (revenue to count)
-      costOriginal:    rawCost,  // full face-value amount from CSV
+      cost,               // ex-VAT revenue to count
+      costOriginal: rawCost,  // gross face-value from CSV (inc. VAT)
       isPaid,
       _docId,
     });

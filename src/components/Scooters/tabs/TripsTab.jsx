@@ -130,7 +130,7 @@ export default function TripsTab({ scooterId }) {
                     <td>
                       {t.cost != null ? (
                         <span style={{ color: adjusted ? 'var(--color-warning)' : 'var(--color-success)' }}
-                              title={adjusted ? `Original: ${formatEUR(t.costOriginal)} — adjusted (unpaid, −€5.50 upfront)` : undefined}>
+                              title={adjusted ? `Gross: ${formatEUR(t.costOriginal)} — adjusted (unpaid, −€5.50 upfront), ex-VAT 24%` : `Gross: ${formatEUR(t.costOriginal)} — ex-VAT 24%`}>
                           {formatEUR(t.cost)}
                           {adjusted && ' *'}
                         </span>
@@ -152,7 +152,7 @@ export default function TripsTab({ scooterId }) {
           </table>
           {myTrips.some((t) => t.isPaid === false && t.costOriginal != null && t.cost !== t.costOriginal) && (
             <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs,11px)', color: 'var(--color-text-muted)' }}>
-              * Unpaid trips after Jun 1st: revenue = original amount − €5.50 upfront charge.
+              * All revenues are ex-VAT (÷1.24). Unpaid trips after Jun 1st: gross amount − €5.50 upfront, then ex-VAT.
             </p>
           )}
         </div>

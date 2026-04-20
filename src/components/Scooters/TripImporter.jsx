@@ -208,7 +208,7 @@ export default function TripImporter({ scooterId, onImportDone }) {
                     <td>
                       {r.cost != null ? (
                         <span style={{ color: adjusted ? 'var(--color-warning)' : 'var(--color-success)' }}
-                              title={adjusted ? `Original: ${formatEUR(r.costOriginal)} — adjusted (unpaid, −€5.50)` : undefined}>
+                              title={adjusted ? `Gross: ${formatEUR(r.costOriginal)} — adjusted (unpaid −€5.50), ex-VAT 24%` : `Gross: ${formatEUR(r.costOriginal)} — ex-VAT 24%`}>
                           {formatEUR(r.cost)}{adjusted && ' *'}
                         </span>
                       ) : '—'}
