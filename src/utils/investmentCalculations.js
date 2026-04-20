@@ -202,13 +202,20 @@ export function repairCostPerScooter(scooterId, tickets, parts, labourRatePerHou
  * @param {number}   [defaultFleetSize=1]
  * @returns {object}
  */
-export function scooterLedgerRow(scooter, revenueRows, allTickets, parts, financial, labourRate = 0, defaultFleetSize = 1) {
+/**
+ * @param {object|null} tripRevenueOverride  - When trip-level data exists, pass
+ *   { total: number, monthly: { key: string, revenue: number }[] } here.
+ *   When provided this is used instead of the fleet-attribution formula.
+ */
+export function scooterLedgerRow(scooter, revenueRows, allTickets, parts, financial, labourRate = 0, defaultFleetSize = 1, tripRevenueOverride = null) {
   const myTickets = (allTickets || []).filter(
     (t) => String(t.scooterId) === String(scooter.scooterId),
   );
 
-  const { total: revenueTotal, monthly: revenueMonthly } =
-    revenuePerScooterLifetime(scooter, revenueRows, myTickets, financial, defaultFleetSize);
+  // Prefer exact trip-level revenue when available; fall back to fleet attribution
+  const { total: revenueTotal, monthly: revenueMonthly } = tripRevenueOverride
+    ? tripRevenueOverride
+    : revenuePerScooterLifetime(scooter, revenueRows, myTickets, financial, defaultFleetSize);
 
   const { total: repairTotal, monthly: repairMonthly, byTicket } =
     repairCostPerScooter(scooter.scooterId, myTickets, parts, labourRate);

@@ -6,7 +6,7 @@ import { X, Info } from 'lucide-react';
 import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './ScooterLedgerDetail.module.css';
 
-export default function ScooterLedgerDetail({ row, onClose, hideClose = false }) {
+export default function ScooterLedgerDetail({ row, onClose, hideClose = false, revenueNote = null }) {
   if (!row) return null;
 
   // Build monthly chart data: merge revenue + repair months
@@ -63,7 +63,9 @@ export default function ScooterLedgerDetail({ row, onClose, hideClose = false })
       {/* Attribution disclaimer */}
       <div className={styles.disclaimer}>
         <Info size={13} />
-        Revenue is attributed (city total ÷ active fleet per day). Not exact per-trip data.
+        {revenueNote
+          ? revenueNote
+          : 'Revenue is attributed (city total ÷ active fleet per day). Not exact per-trip data.'}
       </div>
 
       {/* Monthly chart */}

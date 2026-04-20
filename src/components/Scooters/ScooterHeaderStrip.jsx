@@ -95,9 +95,9 @@ export default function ScooterHeaderStrip({ scooter }) {
       />
       <KpiCard
         icon={TrendingUp}
-        label="Revenue (attributed)"
-        value={formatEUR(attributedRevenue)}
-        sub="Fleet share estimate"
+        label="Revenue (ex-VAT)"
+        value={formatEUR(tripStats.hasData ? tripStats.revenue : attributedRevenue)}
+        sub={tripStats.hasData ? 'From trip data' : 'Fleet share estimate'}
         accent="var(--color-success)"
       />
       <KpiCard
