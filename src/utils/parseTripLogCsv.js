@@ -127,8 +127,11 @@ function parseLength(raw) {
 }
 
 /**
- * Parse "€2.55" or "€2.05\n€1.25" → cost as number
- * When two values present, take the sum (unlock fee + ride cost).
+ * Parse "€2.55" or "€2.05\n€1.25" → actual charged amount.
+ * Hopp shows two values when a discount/override applies:
+ *   - First value  = original price (crossed out in the UI)
+ *   - Second value = actual amount charged
+ * When only one value is present that IS the charge.
  */
 function parseCost(raw) {
   if (!raw) return null;
@@ -136,9 +139,19 @@ function parseCost(raw) {
   if (parts.length === 0) return null;
   const values = parts.map(parseFloat).filter((v) => !isNaN(v));
   if (values.length === 0) return null;
-  // Sum all components (unlock + ride)
-  return parseFloat(values.reduce((s, v) => s + v, 0).toFixed(2));
+  // Take the LAST value — that is always the actual charged amount.
+  // (When two values: first = original/crossed-out, second = actual)
+  return parseFloat(values[values.length - 1].toFixed(2));
 }
+
+/** ISO date string (or null) → true if on or after 2026-06-01 */
+function isAfterJune2026(isoStr) {
+  if (!isoStr) return false;
+  return isoStr >= '2026-06-01';
+}
+
+/** Upfront charge deducted from unpaid trips after the policy change date */
+const UPFRONT_FEE = 5.50;
 
 export function parseTripLogCsv(csvText, scooterId) {
   if (!scooterId) {
@@ -191,12 +204,20 @@ export function parseTripLogCsv(csvText, scooterId) {
       continue;
     }
 
-    const endedAt = parseHoppDateTime(endedRaw);
+    const endedAt   = parseHoppDateTime(endedRaw);
     const { durationMinutes, distanceKm } = parseLength(iLength >= 0 ? cols[iLength] : '');
-    const cost      = parseCost(iCost >= 0 ? cols[iCost] : '');
+    const rawCost   = parseCost(iCost >= 0 ? cols[iCost] : '');
     const userId    = iUser      >= 0 ? cols[iUser]?.trim()      || null : null;
     const endReason = iEndReason >= 0 ? cols[iEndReason]?.trim() || null : null;
     const isPaid    = iIsPaid    >= 0 ? cols[iIsPaid]?.trim().toLowerCase() === 'yes' : null;
+
+    // Unpaid trips after June 1st: rider was charged the €5.50 upfront fee only.
+    // Revenue for those trips = Final Amount − €5.50 (the portion beyond the pre-auth).
+    // Clamp to 0 so we never store negative revenue.
+    let cost = rawCost;
+    if (isPaid === false && isAfterJune2026(startedAt) && rawCost !== null) {
+      cost = parseFloat(Math.max(0, rawCost - UPFRONT_FEE).toFixed(2));
+    }
 
     // DocId: scooterId + startedAt for idempotent upsert
     const _docId = `${scooterId}_${startedAt.replace(/[:.]/g, '-')}`;
@@ -209,7 +230,8 @@ export function parseTripLogCsv(csvText, scooterId) {
       durationMinutes,
       distanceKm,
       endReason,
-      cost,
+      cost,            // adjusted cost (revenue to count)
+      costOriginal:    rawCost,  // full face-value amount from CSV
       isPaid,
       _docId,
     });

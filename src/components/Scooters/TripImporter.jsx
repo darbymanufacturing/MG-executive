@@ -192,21 +192,37 @@ export default function TripImporter({ scooterId, onImportDone }) {
                 <th>Duration</th>
                 <th>Distance</th>
                 <th>Revenue</th>
+                <th>Paid</th>
                 <th>End Reason</th>
                 <th>User</th>
               </tr>
             </thead>
             <tbody>
-              {displayRows.map((r, i) => (
-                <tr key={i}>
-                  <td>{r.startedAt ? r.startedAt.replace('T', ' ').slice(0, 16) : '—'}</td>
-                  <td>{r.durationMinutes != null ? formatMinutes(r.durationMinutes) : '—'}</td>
-                  <td>{r.distanceKm     != null ? formatKm(r.distanceKm)           : '—'}</td>
-                  <td style={{ color: 'var(--color-success)' }}>{r.cost != null ? formatEUR(r.cost) : '—'}</td>
-                  <td>{r.endReason || '—'}</td>
-                  <td className={styles.userId}>{r.userId || '—'}</td>
-                </tr>
-              ))}
+              {displayRows.map((r, i) => {
+                const adjusted = r.isPaid === false && r.costOriginal != null && r.cost !== r.costOriginal;
+                return (
+                  <tr key={i}>
+                    <td>{r.startedAt ? r.startedAt.replace('T', ' ').slice(0, 16) : '—'}</td>
+                    <td>{r.durationMinutes != null ? formatMinutes(r.durationMinutes) : '—'}</td>
+                    <td>{r.distanceKm     != null ? formatKm(r.distanceKm)           : '—'}</td>
+                    <td>
+                      {r.cost != null ? (
+                        <span style={{ color: adjusted ? 'var(--color-warning)' : 'var(--color-success)' }}
+                              title={adjusted ? `Original: ${formatEUR(r.costOriginal)} — adjusted (unpaid, −€5.50)` : undefined}>
+                          {formatEUR(r.cost)}{adjusted && ' *'}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {r.isPaid === true  && <span style={{ color: 'var(--color-success)', fontWeight: 700, fontSize: 'var(--text-xs,11px)' }}>Paid</span>}
+                      {r.isPaid === false && <span style={{ color: 'var(--color-danger)',  fontWeight: 700, fontSize: 'var(--text-xs,11px)' }}>Unpaid</span>}
+                      {r.isPaid == null   && '—'}
+                    </td>
+                    <td>{r.endReason || '—'}</td>
+                    <td className={styles.userId}>{r.userId || '—'}</td>
+                  </tr>
+                );
+              })}
               {preview.total > MAX_PREVIEW && (
                 <tr>
                   <td colSpan={6} className={styles.moreRows}>

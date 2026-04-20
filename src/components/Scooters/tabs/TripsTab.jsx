@@ -113,26 +113,48 @@ export default function TripsTab({ scooterId }) {
                 <th>Duration</th>
                 <th>Distance</th>
                 <th>Revenue</th>
+                <th>Paid</th>
                 <th>End Reason</th>
                 <th>User</th>
               </tr>
             </thead>
             <tbody>
-              {myTrips.map((t) => (
-                <tr key={t._docId}>
-                  <td>{t.startedAt ? t.startedAt.replace('T', ' ').slice(0, 16) : '—'}</td>
-                  <td>{t.endedAt   ? t.endedAt.replace('T', ' ').slice(0, 16)   : '—'}</td>
-                  <td>{t.durationMinutes != null ? formatMinutes(t.durationMinutes) : '—'}</td>
-                  <td>{t.distanceKm     != null ? formatKm(t.distanceKm)           : '—'}</td>
-                  <td className={styles.positive}>{t.cost != null ? formatEUR(t.cost) : '—'}</td>
-                  <td>{t.endReason || '—'}</td>
-                  <td style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs, 11px)', fontFamily: 'monospace' }}>
-                    {t.userId || '—'}
-                  </td>
-                </tr>
-              ))}
+              {myTrips.map((t) => {
+                const adjusted = t.isPaid === false && t.costOriginal != null && t.cost !== t.costOriginal;
+                return (
+                  <tr key={t._docId}>
+                    <td>{t.startedAt ? t.startedAt.replace('T', ' ').slice(0, 16) : '—'}</td>
+                    <td>{t.endedAt   ? t.endedAt.replace('T', ' ').slice(0, 16)   : '—'}</td>
+                    <td>{t.durationMinutes != null ? formatMinutes(t.durationMinutes) : '—'}</td>
+                    <td>{t.distanceKm     != null ? formatKm(t.distanceKm)           : '—'}</td>
+                    <td>
+                      {t.cost != null ? (
+                        <span style={{ color: adjusted ? 'var(--color-warning)' : 'var(--color-success)' }}
+                              title={adjusted ? `Original: ${formatEUR(t.costOriginal)} — adjusted (unpaid, −€5.50 upfront)` : undefined}>
+                          {formatEUR(t.cost)}
+                          {adjusted && ' *'}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {t.isPaid === true  && <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-xs,11px)', fontWeight: 700 }}>Paid</span>}
+                      {t.isPaid === false && <span style={{ color: 'var(--color-danger)',  fontSize: 'var(--text-xs,11px)', fontWeight: 700 }}>Unpaid</span>}
+                      {t.isPaid == null   && '—'}
+                    </td>
+                    <td>{t.endReason || '—'}</td>
+                    <td style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs, 11px)', fontFamily: 'monospace' }}>
+                      {t.userId || '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {myTrips.some((t) => t.isPaid === false && t.costOriginal != null && t.cost !== t.costOriginal) && (
+            <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs,11px)', color: 'var(--color-text-muted)' }}>
+              * Unpaid trips after Jun 1st: revenue = original amount − €5.50 upfront charge.
+            </p>
+          )}
         </div>
       </div>
 
