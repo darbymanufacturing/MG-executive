@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { scooterLedgerRow } from '../../utils/investmentCalculations.js';
-import { formatEUR, formatDate, formatPercent } from '../../utils/formatters.js';
-import ScooterLedgerDetail from './ScooterLedgerDetail.jsx';
+import { formatEUR, formatPercent } from '../../utils/formatters.js';
 import styles from './ScooterLedgerTab.module.css';
 
 const SORT_KEYS = {
@@ -27,6 +27,7 @@ function SortIcon({ col, sortKey, dir }) {
 }
 
 export default function ScooterLedgerTab() {
+  const navigate = useNavigate();
   const { scooters, tickets, parts, config: maintConfig } = useMaintenance();
   const { revenueData } = useRevenue();
   const { config: costConfig } = useCosts();
@@ -36,7 +37,6 @@ export default function ScooterLedgerTab() {
 
   const [sortKey, setSortKey] = useState('netPosition');
   const [sortDir, setSortDir] = useState('asc'); // ascending = worst first (most negative)
-  const [selectedId, setSelectedId] = useState(null);
 
   // Build all ledger rows — expensive but memoized
   const rows = useMemo(() =>
@@ -51,8 +51,6 @@ export default function ScooterLedgerTab() {
       return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
   }, [rows, sortKey, sortDir]);
-
-  const selectedRow = useMemo(() => rows.find((r) => r.scooterId === selectedId), [rows, selectedId]);
 
   function handleSort(key) {
     if (key === sortKey) {
@@ -122,12 +120,12 @@ export default function ScooterLedgerTab() {
             </thead>
             <tbody>
               {sorted.map((row) => {
-                const isSelected = row.scooterId === selectedId;
                 return (
                   <tr
                     key={row.scooterId}
-                    className={`${styles.tr} ${isSelected ? styles.trSelected : ''}`}
-                    onClick={() => setSelectedId(isSelected ? null : row.scooterId)}
+                    className={styles.tr}
+                    onClick={() => navigate(`/scooters/${row.scooterId}?tab=finance`)}
+                    style={{ cursor: 'pointer' }}
                   >
                     <td className={styles.idCell}>#{row.scooterId}</td>
                     <td>{row.city || '—'}</td>
@@ -161,13 +159,6 @@ export default function ScooterLedgerTab() {
           </table>
         </div>
 
-        {/* Detail panel */}
-        {selectedRow && (
-          <ScooterLedgerDetail
-            row={selectedRow}
-            onClose={() => setSelectedId(null)}
-          />
-        )}
       </div>
     </div>
   );

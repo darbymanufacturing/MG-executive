@@ -74,3 +74,25 @@ export function formatMinutes(n) {
   if (h === 0) return `${m}m`;
   return `${h}h ${m}m`;
 }
+
+/**
+ * Returns a human-readable relative time string, e.g. "4 minutes ago", "2 days ago".
+ * Pass an ISO timestamp string or a Date object.
+ */
+export function formatRelativeTime(ts) {
+  if (!ts) return '—';
+  const date = typeof ts === 'string' ? new Date(ts) : ts;
+  if (isNaN(date.getTime())) return '—';
+  const diffMs  = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60)        return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60)        return `${diffMin} min ago`;
+  const diffH   = Math.floor(diffMin / 60);
+  if (diffH < 24)          return `${diffH}h ago`;
+  const diffD   = Math.floor(diffH / 24);
+  if (diffD < 30)          return `${diffD}d ago`;
+  const diffMo  = Math.floor(diffD / 30);
+  if (diffMo < 12)         return `${diffMo} mo ago`;
+  return `${Math.floor(diffMo / 12)}y ago`;
+}

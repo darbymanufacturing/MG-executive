@@ -1,0 +1,84 @@
+/**
+ * TripContext.jsx
+ * Manages the `scooterTrips` Firestore collection.
+ *
+ * SCAFFOLD — trip import CSV schema is TBD. This context loads all trips into
+ * memory and exposes importTrips() for batch upsert via CSV.
+ *
+ * DocId pattern: `${scooterId}_${startedAt}` (idempotent — re-uploading same CSV
+ * is safe).
+ *
+ * Collection will remain empty until the user imports a trip CSV.
+ */
+
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
+
+const TRIPS_COL  = 'scooterTrips';
+const BATCH_SIZE = 450;
+
+const TripContext = createContext(null);
+
+export function TripProvider({ children }) {
+  const [trips,   setTrips]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [count,   setCount]   = useState(0);
+
+  // Get total count cheaply before loading everything
+  useEffect(() => {
+    getCountFromServer(collection(db, TRIPS_COL))
+      .then((snap) => setCount(snap.data().count))
+      .catch(() => setCount(0));
+  }, []);
+
+  // Real-time listener
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, TRIPS_COL),
+      (snap) => {
+        setTrips(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        setCount(snap.size);
+        setLoading(false);
+      },
+      () => setLoading(false),
+    );
+    return unsub;
+  }, []);
+
+  /**
+   * Batch-upsert trip rows from parseTripLogCsv output.
+   * Returns { written, skipped } counts.
+   */
+  const importTrips = useCallback(async (rows) => {
+    let written = 0;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      rows.slice(i, i + BATCH_SIZE).forEach((row) => {
+        const docId = row._docId || `${row.scooterId}_${row.startedAt}`;
+        batch.set(
+          doc(db, TRIPS_COL, docId),
+          { ...row, _importedAt: serverTimestamp() },
+          { merge: true },
+        );
+        written++;
+      });
+      await batch.commit();
+    }
+    return { written };
+  }, []);
+
+  return (
+    <TripContext.Provider value={{ trips, loading, count, importTrips }}>
+      {children}
+    </TripContext.Provider>
+  );
+}
+
+export function useTrips() {
+  const ctx = useContext(TripContext);
+  if (!ctx) throw new Error('useTrips must be used inside TripProvider');
+  return ctx;
+}

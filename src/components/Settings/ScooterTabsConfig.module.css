@@ -1,0 +1,75 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 400px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  cursor: grab;
+  transition: background 0.1s, opacity 0.1s;
+  user-select: none;
+}
+
+.item:active { cursor: grabbing; }
+.item:hover { background: var(--color-hover, rgba(160,82,29,0.06)); }
+
+.item.disabled {
+  opacity: 0.45;
+}
+
+.grip {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tabIcon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tabLabel {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.toggleBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.toggleBtn:hover { color: var(--color-primary); }
+
+.footer {
+  display: flex;
+  align-items: center;
+}

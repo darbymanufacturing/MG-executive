@@ -1,0 +1,169 @@
+/* Shared styles for all scooter detail tabs */
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 10px);
+  padding: var(--space-5) var(--space-6);
+}
+
+.sectionTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fieldLabel {
+  font-size: var(--text-xs, 11px);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fieldValue {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* Ticket list */
+.ticketList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ticketRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--text-sm);
+}
+
+.ticketCat {
+  flex: 1;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.ticketDate {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 11px);
+}
+
+.ticketStatus {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+}
+
+.ticketStatus.open {
+  background: rgba(245, 166, 35, 0.15);
+  color: var(--color-warning);
+}
+
+.ticketStatus.inProgress {
+  background: rgba(0, 200, 150, 0.15);
+  color: var(--color-success);
+}
+
+/* Trips tab empty state */
+.empty {
+  text-align: center;
+  padding: var(--space-10) var(--space-6);
+  color: var(--color-text-muted);
+}
+
+.emptyTitle {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+}
+
+.emptyText {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Repairs tab */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: var(--color-hover, rgba(160,82,29,0.04)); }
+
+.statusBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+}
+
+.completed {
+  background: rgba(0,200,150,0.15);
+  color: var(--color-success);
+}
+
+.active {
+  background: rgba(245,166,35,0.15);
+  color: var(--color-warning);
+}
+
+.warning { color: var(--color-warning); }
+.positive { color: var(--color-success); }
+.negative { color: var(--color-danger); }
+.bold { font-weight: 700; }

@@ -6,7 +6,7 @@ import { X, Info } from 'lucide-react';
 import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './ScooterLedgerDetail.module.css';
 
-export default function ScooterLedgerDetail({ row, onClose }) {
+export default function ScooterLedgerDetail({ row, onClose, hideClose = false }) {
   if (!row) return null;
 
   // Build monthly chart data: merge revenue + repair months
@@ -31,9 +31,11 @@ export default function ScooterLedgerDetail({ row, onClose }) {
           <span className={styles.scooterId}>#{row.scooterId}</span>
           <span className={styles.meta}>{row.model} · {row.city}</span>
         </div>
-        <button className={styles.closeBtn} onClick={onClose} aria-label="Close">
-          <X size={18} />
-        </button>
+        {!hideClose && (
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Summary cards */}

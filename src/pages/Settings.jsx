@@ -13,6 +13,7 @@ import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
+import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
@@ -465,6 +466,18 @@ export default function Settings() {
               )}
             </div>
           </div>
+        </section>
+
+        {/* Scooter Page */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Bike size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Scooter Page</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Configure the tabs shown on each scooter's detail page. Drag to reorder, toggle to show/hide.
+          </p>
+          <ScooterTabsConfig />
         </section>
 
         {/* Data Management */}
