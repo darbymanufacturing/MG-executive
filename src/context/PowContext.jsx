@@ -44,14 +44,20 @@ export function PowProvider({ children }) {
     const unsub = onSnapshot(collection(db, TASKS_COL), (snap) => {
       const list = snap.docs.map(d => {
         const data = d.data();
-        // Normalize: old tasks may have assignee (string) instead of assignees (array)
+        // Normalize assignees: old tasks may have assignee (string) or none
         const assignees = data.assignees
           ?? (data.assignee ? [data.assignee] : []);
+        // Normalize status: old tasks used 'todo', new system uses 'backlog'/'pow'
+        let status = data.status;
+        if (status === 'todo') {
+          status = assignees.length > 0 ? 'pow' : 'backlog';
+        }
         return {
           id: d.id,
           ...data,
           assignees,
           checkedSteps: data.checkedSteps ?? [],
+          status,
         };
       });
       list.sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
-import StepsList from './StepsList.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TaskCard.module.css';
 
@@ -11,12 +10,11 @@ const ASSIGNEE_COLORS = {
 };
 
 export default function TaskCard({ task }) {
-  const { markDone, markBacklog, deleteTask, toggleStep } = usePow();
+  const { markDone, markBacklog, deleteTask } = usePow();
   const [expanded, setExpanded] = useState(false);
   const [editing,  setEditing]  = useState(false);
 
-  const isDone     = task.status === 'done';
-  const hasSummary = task.summary?.trim();
+  const isDone = task.status === 'done';
 
   return (
     <>
@@ -57,19 +55,13 @@ export default function TaskCard({ task }) {
           {task.description && <span className={styles.description}>{task.description}</span>}
         </div>
 
-        {hasSummary && (
+        {task.summary?.trim() && (
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-              {expanded ? 'Κρύψε steps' : 'Δες steps'}
+              {expanded ? 'Κρύψε summary' : 'Δες summary'}
             </button>
-            {expanded && (
-              <StepsList
-                summary={task.summary}
-                checkedSteps={task.checkedSteps ?? []}
-                onToggle={(idx) => toggleStep(task.id, idx)}
-              />
-            )}
+            {expanded && <pre className={styles.summary}>{task.summary}</pre>}
           </>
         )}
       </div>
