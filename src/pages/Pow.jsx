@@ -2,19 +2,20 @@ import { useState } from 'react';
 import { Plus, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { PowProvider, usePow } from '../context/PowContext.jsx';
 import PowBoard from '../components/Pow/PowBoard.jsx';
-import TaskCard from '../components/Pow/TaskCard.jsx';
+import TodoTaskCard from '../components/Pow/TodoTaskCard.jsx';
 import TaskModal from '../components/Pow/TaskModal.jsx';
 import styles from './Pow.module.css';
 
 function PowInner() {
   const {
-    activeTasks, doneTasks, currentWeek,
-    showDone, setShowDone,
+    categories, allTodoTasks, powTasks, doneTasks,
+    currentWeek, showDone, setShowDone,
     setCurrentWeek, loading,
   } = usePow();
 
-  const [addingTask,    setAddingTask]    = useState(false);
-  const [todoCollapsed, setTodoCollapsed] = useState(false);
+  const [addingTask,     setAddingTask]     = useState(false);
+  const [todoCollapsed,  setTodoCollapsed]  = useState(false);
+  const [activeCatFilter, setActiveCatFilter] = useState('all');
 
   if (loading) {
     return (
@@ -24,6 +25,12 @@ function PowInner() {
       </div>
     );
   }
+
+  const filteredTodoTasks = activeCatFilter === 'all'
+    ? allTodoTasks
+    : allTodoTasks.filter(t => t.categoryId === activeCatFilter);
+
+  const todoCount = allTodoTasks.filter(t => t.status !== 'done').length;
 
   return (
     <div className={styles.page}>
@@ -35,7 +42,6 @@ function PowInner() {
         </div>
 
         <div className={styles.headerControls}>
-          {/* Week selector */}
           <div className={styles.weekControl}>
             <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek - 1)}>
               <ChevronDown size={14}/>
@@ -46,7 +52,6 @@ function PowInner() {
             </button>
           </div>
 
-          {/* Toggle done */}
           <button
             className={`${styles.toggleBtn} ${showDone ? styles.active : ''}`}
             onClick={() => setShowDone(v => !v)}
@@ -55,7 +60,6 @@ function PowInner() {
             {showDone ? `Done (${doneTasks.length})` : 'Show Done'}
           </button>
 
-          {/* Add task */}
           <button className={styles.addBtn} onClick={() => setAddingTask(true)}>
             <Plus size={15}/> New Task
           </button>
@@ -71,55 +75,60 @@ function PowInner() {
           <div className={styles.sectionTitle}>
             <span className={styles.sectionDot} />
             To Do List
-            <span className={styles.sectionCount}>{activeTasks.length}</span>
+            <span className={styles.sectionCount}>{todoCount}</span>
           </div>
           {todoCollapsed ? <ChevronDown size={16}/> : <ChevronUp size={16}/>}
         </button>
 
         {!todoCollapsed && (
-          <div className={styles.todoGrid}>
-            {activeTasks.length === 0 ? (
-              <div className={styles.emptyState}>
-                <p>Όλα έτοιμα! Δεν υπάρχουν pending tasks.</p>
-                <button className={styles.addBtnSmall} onClick={() => setAddingTask(true)}>
-                  <Plus size={13}/> Πρόσθεσε το πρώτο task
+          <>
+            {/* Category filter tabs */}
+            <div className={styles.catTabs}>
+              <button
+                className={`${styles.catTab} ${activeCatFilter === 'all' ? styles.catTabActive : ''}`}
+                onClick={() => setActiveCatFilter('all')}
+              >
+                Όλα
+              </button>
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  className={`${styles.catTab} ${activeCatFilter === cat.id ? styles.catTabActive : ''}`}
+                  onClick={() => setActiveCatFilter(cat.id)}
+                >
+                  {cat.name}
                 </button>
-              </div>
-            ) : (
-              activeTasks.map(t => <TaskCard key={t.id} task={t} />)
-            )}
-          </div>
+              ))}
+            </div>
+
+            <div className={styles.todoGrid}>
+              {filteredTodoTasks.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <p>Δεν υπάρχουν tasks εδώ.</p>
+                  <button className={styles.addBtnSmall} onClick={() => setAddingTask(true)}>
+                    <Plus size={13}/> Πρόσθεσε task
+                  </button>
+                </div>
+              ) : (
+                filteredTodoTasks.map(t => <TodoTaskCard key={t.id} task={t} />)
+              )}
+            </div>
+          </>
         )}
       </section>
 
       {/* ── POW Board ────────────────────────────────────────────────────── */}
       <section className={styles.section}>
-        <div className={styles.sectionHeader} style={{ cursor: 'default' }}>
+        <div className={styles.sectionHeaderStatic}>
           <div className={styles.sectionTitle}>
             <span className={styles.sectionDotPrimary} />
             POW Tasks — Week {currentWeek}
+            <span className={styles.sectionCount}>{powTasks.length}</span>
           </div>
         </div>
         <PowBoard />
       </section>
 
-      {/* ── Done this week (collapsible) ─────────────────────────────────── */}
-      {showDone && doneTasks.length > 0 && (
-        <section className={styles.section}>
-          <div className={styles.sectionHeader} style={{ cursor: 'default' }}>
-            <div className={styles.sectionTitle}>
-              <span className={styles.sectionDotDone} />
-              Done — Week {currentWeek}
-              <span className={styles.sectionCount}>{doneTasks.length}</span>
-            </div>
-          </div>
-          <div className={styles.todoGrid}>
-            {doneTasks.map(t => <TaskCard key={t.id} task={t} />)}
-          </div>
-        </section>
-      )}
-
-      {/* Modal */}
       {addingTask && <TaskModal onClose={() => setAddingTask(false)} />}
     </div>
   );

@@ -3,14 +3,11 @@ import { X, ChevronDown } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import styles from './TaskModal.module.css';
 
-const ASSIGNEES = ['Panos', 'Kostas'];
-
 export default function TaskModal({ task, onClose }) {
   const { categories, addTask, updateTask } = usePow();
   const isEdit = Boolean(task?.id);
 
   const [title,       setTitle]      = useState(task?.title       ?? '');
-  const [assignee,    setAssignee]   = useState(task?.assignee    ?? 'Panos');
   const [description, setDesc]       = useState(task?.description ?? '');
   const [summary,     setSummary]    = useState(task?.summary     ?? '');
   const [categoryId,  setCategoryId] = useState(task?.categoryId  ?? categories[0]?.id ?? '');
@@ -29,9 +26,9 @@ export default function TaskModal({ task, onClose }) {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateTask(task.id, { title, assignee, description, summary, categoryId });
+        await updateTask(task.id, { title, description, summary, categoryId });
       } else {
-        await addTask({ title, assignee, description, summary, categoryId });
+        await addTask({ title, description, summary, categoryId });
       }
       onClose();
     } catch (err) {
@@ -49,7 +46,6 @@ export default function TaskModal({ task, onClose }) {
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {/* Title */}
           <label className={styles.label}>
             Τίτλος <span className={styles.required}>*</span>
             <input
@@ -61,30 +57,16 @@ export default function TaskModal({ task, onClose }) {
             />
           </label>
 
-          {/* Assignee + Category row */}
-          <div className={styles.row}>
-            <label className={styles.label}>
-              Ανατέθηκε σε
-              <div className={styles.selectWrap}>
-                <select className={styles.select} value={assignee} onChange={e => setAssignee(e.target.value)}>
-                  {ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-                <ChevronDown size={14} className={styles.chevron} />
-              </div>
-            </label>
+          <label className={styles.label}>
+            Κατηγορία
+            <div className={styles.selectWrap}>
+              <select className={styles.select} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <ChevronDown size={14} className={styles.chevron} />
+            </div>
+          </label>
 
-            <label className={styles.label}>
-              Κατηγορία
-              <div className={styles.selectWrap}>
-                <select className={styles.select} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <ChevronDown size={14} className={styles.chevron} />
-              </div>
-            </label>
-          </div>
-
-          {/* Description */}
           <label className={styles.label}>
             Περιγραφή
             <input
@@ -95,7 +77,6 @@ export default function TaskModal({ task, onClose }) {
             />
           </label>
 
-          {/* Summary / Steps */}
           <label className={styles.label}>
             Summary / Steps
             <textarea
@@ -112,7 +93,7 @@ export default function TaskModal({ task, onClose }) {
           <div className={styles.actions}>
             <button type="button" className={styles.cancelBtn} onClick={onClose}>Άκυρο</button>
             <button type="submit" className={styles.submitBtn} disabled={saving}>
-              {saving ? 'Αποθήκευση...' : isEdit ? 'Αποθήκευση' : 'Προσθήκη Task'}
+              {saving ? 'Αποθήκευση...' : isEdit ? 'Αποθήκευση' : 'Προσθήκη'}
             </button>
           </div>
         </form>

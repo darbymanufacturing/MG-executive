@@ -112,11 +112,43 @@
 }
 .addBtn:hover { opacity: 0.9; }
 
+/* ── Category filter tabs ────────────────────────────────────────────── */
+.catTabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.catTab {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 4px 14px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.catTab:hover { border-color: var(--color-text-muted); color: var(--color-text-primary); }
+.catTabActive {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: #fff;
+}
+
 /* ── Sections ─────────────────────────────────────────────────────────── */
 .section {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.sectionHeaderStatic {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
 }
 
 .sectionHeader {

@@ -1,20 +1,17 @@
 import { useState } from 'react';
-import { Plus, Settings2, Trash2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Check, X } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import TaskCard from './TaskCard.jsx';
-import TaskModal from './TaskModal.jsx';
 import styles from './PowBoard.module.css';
 
 const ASSIGNEES = ['Panos', 'Kostas'];
 
 function CategoryColumn({ cat }) {
-  const { activeTasks, doneTasks, showDone, addCategory, removeCategory, renameCategory } = usePow();
-  const [addingTask, setAddingTask] = useState(false);
-  const [editing,    setEditing]    = useState(false);
-  const [newName,    setNewName]    = useState(cat.name);
+  const { powTasks, removeCategory, renameCategory } = usePow();
+  const [editing, setEditing] = useState(false);
+  const [newName, setNewName] = useState(cat.name);
 
-  const colActiveTasks = activeTasks.filter(t => t.categoryId === cat.id);
-  const colDoneTasks   = doneTasks.filter(t => t.categoryId === cat.id);
+  const colTasks = powTasks.filter(t => t.categoryId === cat.id);
 
   const handleRename = () => {
     if (newName.trim() && newName !== cat.name) renameCategory(cat.id, newName.trim());
@@ -23,7 +20,6 @@ function CategoryColumn({ cat }) {
 
   return (
     <div className={styles.column}>
-      {/* Column header */}
       <div className={styles.colHeader}>
         {editing ? (
           <div className={styles.renameRow}>
@@ -43,7 +39,7 @@ function CategoryColumn({ cat }) {
               {cat.name}
             </span>
             <div className={styles.colActions}>
-              <span className={styles.taskCount}>{colActiveTasks.length}</span>
+              <span className={styles.taskCount}>{colTasks.length}</span>
               <button className={styles.iconBtn} onClick={() => removeCategory(cat.id)} title="Διαγραφή κατηγορίας">
                 <Trash2 size={12}/>
               </button>
@@ -52,36 +48,24 @@ function CategoryColumn({ cat }) {
         )}
       </div>
 
-      {/* Grouped by assignee */}
       <div className={styles.colBody}>
         {ASSIGNEES.map(assignee => {
-          const userTasks     = colActiveTasks.filter(t => t.assignee === assignee);
-          const userDoneTasks = colDoneTasks.filter(t => t.assignee === assignee);
-          const hasAny        = userTasks.length > 0 || (showDone && userDoneTasks.length > 0);
-
+          const userTasks = colTasks.filter(t => t.assignee === assignee);
           return (
             <div key={assignee} className={styles.assigneeGroup}>
               <div className={styles.assigneeLabel}>{assignee}</div>
-              {userTasks.length === 0 && (!showDone || userDoneTasks.length === 0) && (
-                <p className={styles.empty}>—</p>
-              )}
-              {userTasks.map(t => <TaskCard key={t.id} task={t} />)}
-              {showDone && userDoneTasks.map(t => <TaskCard key={t.id} task={t} />)}
+              {userTasks.length === 0
+                ? <p className={styles.empty}>—</p>
+                : userTasks.map(t => <TaskCard key={t.id} task={t} />)
+              }
             </div>
           );
         })}
 
-        <button className={styles.addTaskBtn} onClick={() => setAddingTask(true)}>
-          <Plus size={13}/> Add Task
-        </button>
+        {colTasks.length === 0 && (
+          <p className={styles.emptyCol}>Assign tasks από το To Do List</p>
+        )}
       </div>
-
-      {addingTask && (
-        <TaskModal
-          task={{ categoryId: cat.id }}
-          onClose={() => setAddingTask(false)}
-        />
-      )}
     </div>
   );
 }
@@ -107,7 +91,6 @@ export default function PowBoard() {
         .map(cat => <CategoryColumn key={cat.id} cat={cat} />)
       }
 
-      {/* Add category */}
       <div className={styles.addCatCol}>
         {addingCat ? (
           <div className={styles.addCatBox}>
