@@ -50,7 +50,7 @@ function CategoryColumn({ cat }) {
 
       <div className={styles.colBody}>
         {ASSIGNEES.map(assignee => {
-          const userTasks = colTasks.filter(t => t.assignee === assignee);
+          const userTasks = colTasks.filter(t => (t.assignees ?? []).includes(assignee));
           return (
             <div key={assignee} className={styles.assigneeGroup}>
               <div className={styles.assigneeLabel}>{assignee}</div>
