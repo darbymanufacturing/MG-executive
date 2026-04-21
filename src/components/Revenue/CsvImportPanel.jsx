@@ -148,11 +148,11 @@ export default function CsvImportPanel({ locations }) {
           </div>
 
           {/* Location assignment */}
-          {locations?.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                Which location is this data for?
-              </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              Which location is this data for?
+            </span>
+            {locations?.length > 0 ? (
               <select
                 value={selectedLocation}
                 onChange={(e) => setSelectedLocation(e.target.value)}
@@ -173,8 +173,12 @@ export default function CsvImportPanel({ locations }) {
                   <option key={loc} value={loc}>{loc}</option>
                 ))}
               </select>
-            </div>
-          )}
+            ) : (
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+                No cities configured — add them in <a href="/settings" style={{ color: 'var(--color-primary-light)' }}>Settings</a>.
+              </span>
+            )}
+          </div>
 
           <div className={styles.actions}>
             <Button variant="secondary" size="sm" onClick={() => setParsed(null)}>Cancel</Button>

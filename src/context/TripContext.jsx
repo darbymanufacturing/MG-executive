@@ -13,7 +13,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer, query, where, getDocs, deleteDoc,
+  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
@@ -26,13 +26,6 @@ export function TripProvider({ children }) {
   const [trips,   setTrips]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [count,   setCount]   = useState(0);
-
-  // Get total count cheaply before loading everything
-  useEffect(() => {
-    getCountFromServer(collection(db, TRIPS_COL))
-      .then((snap) => setCount(snap.data().count))
-      .catch(() => setCount(0));
-  }, []);
 
   // Real-time listener
   useEffect(() => {

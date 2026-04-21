@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
@@ -15,13 +15,18 @@ const firebaseConfig = {
 // Guard against re-initialization during Vite HMR
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const db      = getFirestore(app);
+// initializeFirestore can only be called once per app instance.
+// On HMR reloads the app already exists, so fall back to getFirestore().
+function getDb(app) {
+  try {
+    return initializeFirestore(app, {
+      cache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    return getFirestore(app);
+  }
+}
+
+export const db      = getDb(app);
 export const auth    = getAuth(app);
 export const storage = getStorage(app);
-
-// Offline persistence for technician depot use (patchy signal)
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
-    console.error('Firestore offline persistence error:', err);
-  }
-});
