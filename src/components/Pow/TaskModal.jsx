@@ -7,7 +7,7 @@ const ASSIGNEES = ['Panos', 'Kostas'];
 
 export default function TaskModal({ task, onClose }) {
   const { categories, addTask, updateTask } = usePow();
-  const isEdit = Boolean(task);
+  const isEdit = Boolean(task?.id);
 
   const [title,       setTitle]      = useState(task?.title       ?? '');
   const [assignee,    setAssignee]   = useState(task?.assignee    ?? 'Panos');
