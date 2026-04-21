@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw, UserPlus, UserMinus } from 'lucide-react';
+import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
+import StepsList from './StepsList.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TodoTaskCard.module.css';
 
@@ -12,19 +13,18 @@ const ASSIGNEE_COLORS = {
 };
 
 export default function TodoTaskCard({ task }) {
-  const { categories, markDone, markBacklog, deleteTask, assignToPow, removeFromPow } = usePow();
-  const [expanded,       setExpanded]       = useState(false);
-  const [editing,        setEditing]        = useState(false);
-  const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const { categories, markDone, markBacklog, deleteTask, toggleAssignee, toggleStep } = usePow();
+  const [expanded, setExpanded] = useState(false);
+  const [editing,  setEditing]  = useState(false);
 
   const isDone     = task.status === 'done';
-  const isAssigned = task.status === 'pow';
+  const assignees  = task.assignees ?? [];
   const hasSummary = task.summary?.trim();
   const category   = categories.find(c => c.id === task.categoryId);
 
   return (
     <>
-      <div className={`${styles.card} ${isDone ? styles.done : ''} ${isAssigned ? styles.assigned : ''}`}>
+      <div className={`${styles.card} ${isDone ? styles.done : ''} ${assignees.length > 0 && !isDone ? styles.assigned : ''}`}>
         {/* Top row */}
         <div className={styles.top}>
           <button
@@ -44,69 +44,39 @@ export default function TodoTaskCard({ task }) {
 
           <div className={styles.actions}>
             {!isDone && (
-              <button className={styles.iconBtn} onClick={() => setEditing(true)} title="Επεξεργασία">
-                <Pencil size={13} />
-              </button>
+              <button className={styles.iconBtn} onClick={() => setEditing(true)}><Pencil size={13}/></button>
             )}
             {isDone && (
-              <button className={styles.iconBtn} onClick={() => markBacklog(task.id)} title="Επαναφορά">
-                <RotateCcw size={13} />
-              </button>
+              <button className={styles.iconBtn} onClick={() => markBacklog(task.id)}><RotateCcw size={13}/></button>
             )}
-            <button className={`${styles.iconBtn} ${styles.danger}`} onClick={() => deleteTask(task.id)} title="Διαγραφή">
-              <Trash2 size={13} />
-            </button>
+            <button className={`${styles.iconBtn} ${styles.danger}`} onClick={() => deleteTask(task.id)}><Trash2 size={13}/></button>
           </div>
         </div>
 
-        {/* Meta row: category + assignee */}
+        {/* Meta: category + description */}
         <div className={styles.meta}>
-          {category && (
-            <span className={styles.catBadge}>{category.name}</span>
-          )}
-          {isAssigned && task.assignee && (
-            <span
-              className={styles.assigneeBadge}
-              style={{ '--ac': ASSIGNEE_COLORS[task.assignee] ?? 'var(--color-primary)' }}
-            >
-              {task.assignee}
-            </span>
-          )}
-          {task.description && (
-            <span className={styles.description}>{task.description}</span>
-          )}
+          {category && <span className={styles.catBadge}>{category.name}</span>}
+          {task.description && <span className={styles.description}>{task.description}</span>}
         </div>
 
-        {/* Assign / Unassign row */}
+        {/* Assign toggle buttons */}
         {!isDone && (
           <div className={styles.assignRow}>
-            {isAssigned ? (
-              <button className={styles.unassignBtn} onClick={() => removeFromPow(task.id)}>
-                <UserMinus size={12}/> Αφαίρεση από POW
-              </button>
-            ) : (
-              <div className={styles.assignWrap}>
+            <span className={styles.assignLabel}>POW:</span>
+            {ASSIGNEES.map(person => {
+              const isAssigned = assignees.includes(person);
+              return (
                 <button
-                  className={styles.assignBtn}
-                  onClick={() => setShowAssignMenu(v => !v)}
+                  key={person}
+                  className={`${styles.assignToggle} ${isAssigned ? styles.assignToggleActive : ''}`}
+                  style={isAssigned ? { '--ac': ASSIGNEE_COLORS[person] } : {}}
+                  onClick={() => toggleAssignee(task.id, person)}
+                  title={isAssigned ? `Αφαίρεση ${person}` : `Assign σε ${person}`}
                 >
-                  <UserPlus size={12}/> Assign σε POW
+                  {person}
                 </button>
-                {showAssignMenu && (
-                  <div className={styles.assignMenu}>
-                    {ASSIGNEES.map(a => (
-                      <button
-                        key={a}
-                        className={styles.assignOption}
-                        onClick={() => { assignToPow(task.id, a); setShowAssignMenu(false); }}
-                      >
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })}
           </div>
         )}
 
@@ -114,10 +84,16 @@ export default function TodoTaskCard({ task }) {
         {hasSummary && (
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
               {expanded ? 'Κρύψε steps' : 'Δες steps'}
             </button>
-            {expanded && <pre className={styles.summary}>{task.summary}</pre>}
+            {expanded && (
+              <StepsList
+                summary={task.summary}
+                checkedSteps={task.checkedSteps ?? []}
+                onToggle={(idx) => toggleStep(task.id, idx)}
+              />
+            )}
           </>
         )}
       </div>

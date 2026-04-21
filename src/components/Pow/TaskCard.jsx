@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
+import StepsList from './StepsList.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TaskCard.module.css';
 
@@ -10,22 +11,21 @@ const ASSIGNEE_COLORS = {
 };
 
 export default function TaskCard({ task }) {
-  const { markDone, markTodo, deleteTask } = usePow();
+  const { markDone, markBacklog, deleteTask, toggleStep } = usePow();
   const [expanded, setExpanded] = useState(false);
   const [editing,  setEditing]  = useState(false);
 
-  const isDone = task.status === 'done';
+  const isDone     = task.status === 'done';
   const hasSummary = task.summary?.trim();
 
   return (
     <>
       <div className={`${styles.card} ${isDone ? styles.done : ''}`}>
-        {/* Top row: status + title + actions */}
         <div className={styles.top}>
           <button
             className={styles.statusBtn}
-            onClick={() => isDone ? markTodo(task.id) : markDone(task.id)}
-            title={isDone ? 'Undo done' : 'Mark done'}
+            onClick={() => isDone ? markBacklog(task.id) : markDone(task.id)}
+            title={isDone ? 'Undo' : 'Mark done'}
           >
             {isDone
               ? <CheckCircle size={17} className={styles.doneIcon} />
@@ -38,44 +38,37 @@ export default function TaskCard({ task }) {
           </span>
 
           <div className={styles.actions}>
-            {isDone && (
-              <button className={styles.iconBtn} onClick={() => markTodo(task.id)} title="Επαναφορά">
-                <RotateCcw size={13} />
-              </button>
-            )}
             {!isDone && (
-              <button className={styles.iconBtn} onClick={() => setEditing(true)} title="Επεξεργασία">
-                <Pencil size={13} />
-              </button>
+              <button className={styles.iconBtn} onClick={() => setEditing(true)}><Pencil size={13}/></button>
             )}
-            <button className={`${styles.iconBtn} ${styles.danger}`} onClick={() => deleteTask(task.id)} title="Διαγραφή">
-              <Trash2 size={13} />
-            </button>
+            {isDone && (
+              <button className={styles.iconBtn} onClick={() => markBacklog(task.id)}><RotateCcw size={13}/></button>
+            )}
+            <button className={`${styles.iconBtn} ${styles.danger}`} onClick={() => deleteTask(task.id)}><Trash2 size={13}/></button>
           </div>
         </div>
 
-        {/* Assignee badge */}
         <div className={styles.meta}>
-          <span
-            className={styles.assignee}
-            style={{ '--ac': ASSIGNEE_COLORS[task.assignee] ?? 'var(--color-primary)' }}
-          >
-            {task.assignee}
-          </span>
-          {task.description && (
-            <span className={styles.description}>{task.description}</span>
-          )}
+          {(task.assignees ?? []).map(a => (
+            <span key={a} className={styles.assignee} style={{ '--ac': ASSIGNEE_COLORS[a] ?? 'var(--color-primary)' }}>
+              {a}
+            </span>
+          ))}
+          {task.description && <span className={styles.description}>{task.description}</span>}
         </div>
 
-        {/* Summary / Steps (collapsible) */}
         {hasSummary && (
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
               {expanded ? 'Κρύψε steps' : 'Δες steps'}
             </button>
             {expanded && (
-              <pre className={styles.summary}>{task.summary}</pre>
+              <StepsList
+                summary={task.summary}
+                checkedSteps={task.checkedSteps ?? []}
+                onToggle={(idx) => toggleStep(task.id, idx)}
+              />
             )}
           </>
         )}

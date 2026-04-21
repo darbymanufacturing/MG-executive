@@ -3,8 +3,11 @@ import { Plus, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { PowProvider, usePow } from '../context/PowContext.jsx';
 import PowBoard from '../components/Pow/PowBoard.jsx';
 import TodoTaskCard from '../components/Pow/TodoTaskCard.jsx';
+import TaskCard from '../components/Pow/TaskCard.jsx';
 import TaskModal from '../components/Pow/TaskModal.jsx';
 import styles from './Pow.module.css';
+
+const ASSIGNEES = ['Panos', 'Kostas'];
 
 function PowInner() {
   const {
@@ -13,9 +16,10 @@ function PowInner() {
     setCurrentWeek, loading,
   } = usePow();
 
-  const [addingTask,     setAddingTask]     = useState(false);
-  const [todoCollapsed,  setTodoCollapsed]  = useState(false);
+  const [addingTask,      setAddingTask]      = useState(false);
+  const [todoCollapsed,   setTodoCollapsed]   = useState(false);
   const [activeCatFilter, setActiveCatFilter] = useState('all');
+  const [weekPerson,      setWeekPerson]      = useState(null); // null | 'Panos' | 'Kostas'
 
   if (loading) {
     return (
@@ -31,6 +35,13 @@ function PowInner() {
     : allTodoTasks.filter(t => t.categoryId === activeCatFilter);
 
   const todoCount = allTodoTasks.filter(t => t.status !== 'done').length;
+
+  // Tasks for the selected person this week (pow + done)
+  const weekPersonTasks = weekPerson
+    ? [...powTasks, ...(showDone ? doneTasks : [])].filter(t =>
+        (t.assignees ?? []).includes(weekPerson)
+      )
+    : [];
 
   return (
     <div className={styles.page}>
@@ -66,6 +77,39 @@ function PowInner() {
         </div>
       </div>
 
+      {/* ── This Week Tasks ──────────────────────────────────────────────── */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeaderStatic}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.sectionDotInfo} />
+            This Week Tasks
+          </div>
+          <div className={styles.personToggle}>
+            {ASSIGNEES.map(p => (
+              <button
+                key={p}
+                className={`${styles.personBtn} ${weekPerson === p ? styles.personBtnActive : ''}`}
+                onClick={() => setWeekPerson(prev => prev === p ? null : p)}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {weekPerson && (
+          weekPersonTasks.length === 0 ? (
+            <div className={styles.weekEmpty}>
+              Δεν υπάρχουν tasks για τον <strong>{weekPerson}</strong> αυτή την εβδομάδα.
+            </div>
+          ) : (
+            <div className={styles.todoGrid}>
+              {weekPersonTasks.map(t => <TaskCard key={t.id} task={t} />)}
+            </div>
+          )
+        )}
+      </section>
+
       {/* ── To Do List ───────────────────────────────────────────────────── */}
       <section className={styles.section}>
         <button
@@ -82,7 +126,6 @@ function PowInner() {
 
         {!todoCollapsed && (
           <>
-            {/* Category filter tabs */}
             <div className={styles.catTabs}>
               <button
                 className={`${styles.catTab} ${activeCatFilter === 'all' ? styles.catTabActive : ''}`}
