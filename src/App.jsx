@@ -25,6 +25,7 @@ import Projects from './pages/Projects.jsx';
 import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
 import Investment from './pages/Investment.jsx';
+import Pow from './pages/Pow.jsx';
 import Scooters from './pages/Scooters.jsx';
 import ScooterDetail from './pages/ScooterDetail.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
@@ -112,6 +113,7 @@ function AppShell() {
           <Route path="/spr"           element={<Spr />} />
           <Route path="/maintenance"   element={<Maintenance />} />
           <Route path="/pme"           element={<PredictiveMaintenance />} />
+          <Route path="/pow"            element={<Pow />} />
           <Route path="/settings"      element={<Settings />} />
           {/* Catch-all: redirect unknown paths to dashboard */}
           <Route path="*"              element={<Navigate to="/" replace />} />
