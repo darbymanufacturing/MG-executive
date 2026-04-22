@@ -52,10 +52,20 @@ export function PowProvider({ children }) {
         if (status === 'todo') {
           status = assignees.length > 0 ? 'pow' : 'backlog';
         }
+        // Normalize steps: old tasks have summary (string), new have steps (array)
+        let steps = data.steps;
+        if (!steps) {
+          // parse old summary string into array
+          steps = (data.summary ?? '')
+            .split('\n')
+            .map(l => l.replace(/^(\d+[\.\)]|[-•])\s+/, '').trim())
+            .filter(Boolean);
+        }
         return {
           id: d.id,
           ...data,
           assignees,
+          steps,
           checkedSteps: data.checkedSteps ?? [],
           powSteps: data.powSteps ?? {},   // { Panos: [0,1], Kostas: [2] }
           status,
@@ -94,12 +104,13 @@ export function PowProvider({ children }) {
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
-  const addTask = useCallback(async ({ title, description, summary, categoryId }) => {
+  const addTask = useCallback(async ({ title, description, steps, categoryId }) => {
     const id = `task-${Date.now()}`;
     await setDoc(doc(db, TASKS_COL, id), {
-      title, description, summary, categoryId,
+      title, description, steps, categoryId,
       assignees: [],
       checkedSteps: [],
+      powSteps: {},
       status: 'backlog',
       createdWeek: currentWeek,
       doneWeek: null,

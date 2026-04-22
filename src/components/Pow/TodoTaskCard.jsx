@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
-import StepsList from './StepsList.jsx';
+import StepsList, { getSteps } from './StepsList.jsx';
 import AssignStepsModal from './AssignStepsModal.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TodoTaskCard.module.css';
@@ -100,15 +100,15 @@ export default function TodoTaskCard({ task }) {
         )}
 
         {/* Steps with checkboxes */}
-        {task.summary?.trim() && (
+        {getSteps(task).length > 0 && (
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-              {expanded ? 'Κρύψε steps' : 'Δες steps'}
+              {expanded ? 'Κρύψε steps' : `Δες steps (${getSteps(task).length})`}
             </button>
             {expanded && (
               <StepsList
-                summary={task.summary}
+                steps={getSteps(task)}
                 checkedSteps={task.checkedSteps ?? []}
                 onToggle={(idx) => toggleStep(task.id, idx)}
               />

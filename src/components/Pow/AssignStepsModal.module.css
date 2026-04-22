@@ -96,6 +96,13 @@
   height: 15px;
 }
 
+.stepNum {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  min-width: 18px;
+}
+
 .stepText {
   font-size: var(--text-sm);
   color: var(--color-text-primary);

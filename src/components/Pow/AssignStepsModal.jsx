@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { parseSteps } from './StepsList.jsx';
+import { getSteps } from './StepsList.jsx';
 import styles from './AssignStepsModal.module.css';
 
 export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
-  const steps = parseSteps(task.summary).filter(l => l.type === 'step');
-  const existingSelected = task.powSteps?.[person] ?? steps.map(s => s.index);
+  const steps = getSteps(task);
+  const existingSelected = task.powSteps?.[person] ?? steps.map((_, i) => i);
   const [selected, setSelected] = useState(new Set(existingSelected));
 
-  const toggleStep = (idx) => {
+  const toggle = (idx) => {
     setSelected(prev => {
       const next = new Set(prev);
       next.has(idx) ? next.delete(idx) : next.add(idx);
@@ -16,12 +16,7 @@ export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
     });
   };
 
-  const handleConfirm = () => {
-    onConfirm([...selected]);
-    onClose();
-  };
-
-  // No steps defined — just assign directly
+  // No steps — assign directly without modal
   if (steps.length === 0) {
     onConfirm([]);
     onClose();
@@ -42,22 +37,23 @@ export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
         <p className={styles.hint}>Επέλεξε ποια steps θα εμφανιστούν στο POW board:</p>
 
         <div className={styles.stepsList}>
-          {steps.map(step => (
-            <label key={step.index} className={`${styles.step} ${selected.has(step.index) ? styles.selected : ''}`}>
+          {steps.map((content, idx) => (
+            <label key={idx} className={`${styles.step} ${selected.has(idx) ? styles.selected : ''}`}>
               <input
                 type="checkbox"
                 className={styles.checkbox}
-                checked={selected.has(step.index)}
-                onChange={() => toggleStep(step.index)}
+                checked={selected.has(idx)}
+                onChange={() => toggle(idx)}
               />
-              <span className={styles.stepText}>{step.content}</span>
+              <span className={styles.stepNum}>{idx + 1}.</span>
+              <span className={styles.stepText}>{content}</span>
             </label>
           ))}
         </div>
 
         <div className={styles.actions}>
           <button className={styles.cancelBtn} onClick={onClose}>Άκυρο</button>
-          <button className={styles.confirmBtn} onClick={handleConfirm}>
+          <button className={styles.confirmBtn} onClick={() => { onConfirm([...selected]); onClose(); }}>
             Assign ({selected.size} steps)
           </button>
         </div>

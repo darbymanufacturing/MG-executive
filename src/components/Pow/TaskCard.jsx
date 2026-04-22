@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
-import { parseSteps } from './StepsList.jsx';
+import { getSteps } from './StepsList.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TaskCard.module.css';
 
@@ -19,8 +19,8 @@ export default function TaskCard({ task, assigneeContext = null }) {
   const [expanded, setExpanded] = useState(false);
   const [editing,  setEditing]  = useState(false);
 
-  const isDone     = task.status === 'done';
-  const allSteps   = parseSteps(task.summary).filter(l => l.type === 'step');
+  const isDone   = task.status === 'done';
+  const allSteps = getSteps(task);
 
   // Which steps to show in POW board for this person
   const powStepIndices = assigneeContext
@@ -28,7 +28,7 @@ export default function TaskCard({ task, assigneeContext = null }) {
     : null;
 
   const visibleSteps = powStepIndices !== null
-    ? allSteps.filter(s => powStepIndices.includes(s.index))
+    ? allSteps.filter((_, i) => powStepIndices.includes(i))
     : allSteps;
 
   const hasMoreSteps = powStepIndices !== null && visibleSteps.length < allSteps.length;
@@ -81,10 +81,10 @@ export default function TaskCard({ task, assigneeContext = null }) {
             </button>
             {expanded && (
               <div className={styles.stepsList}>
-                {visibleSteps.map(step => (
-                  <div key={step.index} className={styles.step}>
+                {visibleSteps.map((content, i) => (
+                  <div key={i} className={styles.step}>
                     <span className={styles.stepBullet}>•</span>
-                    <span className={styles.stepText}>{step.content}</span>
+                    <span className={styles.stepText}>{content}</span>
                   </div>
                 ))}
                 {hasMoreSteps && (

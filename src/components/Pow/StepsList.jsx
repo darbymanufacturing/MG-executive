@@ -1,41 +1,31 @@
 import styles from './StepsList.module.css';
 
-/** Parse a summary string into an array of {type: 'step'|'text', content, index} */
-export function parseSteps(summary) {
-  if (!summary?.trim()) return [];
-  let stepIdx = -1;
-  return summary.split('\n').map(line => {
-    const trimmed = line.trim();
-    const isStep  = /^(\d+[\.\)]|[-•])\s/.test(trimmed);
-    if (isStep) {
-      stepIdx++;
-      return { type: 'step', index: stepIdx, content: trimmed.replace(/^(\d+[\.\)]|[-•])\s+/, '') };
-    }
-    return { type: 'text', content: trimmed };
-  }).filter(l => l.content);
+/** Get steps array from task (new: steps[], old: parse summary string) */
+export function getSteps(task) {
+  if (Array.isArray(task?.steps) && task.steps.length > 0) return task.steps;
+  if (!task?.summary?.trim()) return [];
+  return task.summary
+    .split('\n')
+    .map(l => l.replace(/^(\d+[\.\)]|[-•])\s+/, '').trim())
+    .filter(Boolean);
 }
 
-export default function StepsList({ summary, checkedSteps = [], onToggle }) {
-  const lines = parseSteps(summary);
-  if (!lines.length) return <pre className={styles.plain}>{summary}</pre>;
+export default function StepsList({ steps = [], checkedSteps = [], onToggle }) {
+  if (!steps.length) return null;
 
   return (
     <div className={styles.list}>
-      {lines.map((line, i) => {
-        if (line.type === 'text') {
-          return <p key={i} className={styles.textLine}>{line.content}</p>;
-        }
-        const checked = checkedSteps.includes(line.index);
+      {steps.map((content, index) => {
+        const checked = checkedSteps.includes(index);
         return (
-          <label key={i} className={`${styles.step} ${checked ? styles.checked : ''}`}>
+          <label key={index} className={`${styles.step} ${checked ? styles.checked : ''}`}>
             <input
               type="checkbox"
               className={styles.checkbox}
               checked={checked}
-              onChange={() => onToggle?.(line.index)}
-              readOnly={!onToggle}
+              onChange={() => onToggle?.(index)}
             />
-            <span className={styles.stepText}>{line.content}</span>
+            <span className={styles.stepText}>{content}</span>
           </label>
         );
       })}
