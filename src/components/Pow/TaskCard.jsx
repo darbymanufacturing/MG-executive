@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
+import { parseSteps } from './StepsList.jsx';
 import TaskModal from './TaskModal.jsx';
 import styles from './TaskCard.module.css';
 
@@ -9,12 +10,28 @@ const ASSIGNEE_COLORS = {
   Kostas: 'var(--color-info)',
 };
 
-export default function TaskCard({ task }) {
+/**
+ * assigneeContext: the person this card is rendered under (for POW board).
+ * If null, show all assignees and all steps.
+ */
+export default function TaskCard({ task, assigneeContext = null }) {
   const { markDone, markBacklog, deleteTask } = usePow();
   const [expanded, setExpanded] = useState(false);
   const [editing,  setEditing]  = useState(false);
 
-  const isDone = task.status === 'done';
+  const isDone     = task.status === 'done';
+  const allSteps   = parseSteps(task.summary).filter(l => l.type === 'step');
+
+  // Which steps to show in POW board for this person
+  const powStepIndices = assigneeContext
+    ? (task.powSteps?.[assigneeContext] ?? allSteps.map(s => s.index))
+    : null;
+
+  const visibleSteps = powStepIndices !== null
+    ? allSteps.filter(s => powStepIndices.includes(s.index))
+    : allSteps;
+
+  const hasMoreSteps = powStepIndices !== null && visibleSteps.length < allSteps.length;
 
   return (
     <>
@@ -55,14 +72,36 @@ export default function TaskCard({ task }) {
           {task.description && <span className={styles.description}>{task.description}</span>}
         </div>
 
-        {task.summary?.trim() && (
+        {/* Steps */}
+        {visibleSteps.length > 0 && (
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-              {expanded ? 'Κρύψε summary' : 'Δες summary'}
+              {expanded ? 'Κρύψε steps' : `Δες steps (${visibleSteps.length})`}
             </button>
-            {expanded && <pre className={styles.summary}>{task.summary}</pre>}
+            {expanded && (
+              <div className={styles.stepsList}>
+                {visibleSteps.map(step => (
+                  <div key={step.index} className={styles.step}>
+                    <span className={styles.stepBullet}>•</span>
+                    <span className={styles.stepText}>{step.content}</span>
+                  </div>
+                ))}
+                {hasMoreSteps && (
+                  <div className={styles.moreSteps}>
+                    + {allSteps.length - visibleSteps.length} more steps in To Do List
+                  </div>
+                )}
+              </div>
+            )}
           </>
+        )}
+
+        {/* If no visible steps but there are more */}
+        {visibleSteps.length === 0 && allSteps.length > 0 && (
+          <div className={styles.moreStepsInline}>
+            All {allSteps.length} steps in To Do List
+          </div>
         )}
       </div>
 

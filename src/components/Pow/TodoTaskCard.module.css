@@ -127,6 +127,17 @@
   color: var(--ac, var(--color-primary));
 }
 
+.editStepsBtn {
+  background: none;
+  border: none;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color var(--transition-fast);
+}
+.editStepsBtn:hover { color: var(--color-primary-light); }
+
 /* Steps */
 .expandBtn {
   display: flex;

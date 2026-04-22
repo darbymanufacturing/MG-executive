@@ -56,7 +56,7 @@ function CategoryColumn({ cat }) {
               <div className={styles.assigneeLabel}>{assignee}</div>
               {userTasks.length === 0
                 ? <p className={styles.empty}>—</p>
-                : userTasks.map(t => <TaskCard key={t.id} task={t} />)
+                : userTasks.map(t => <TaskCard key={t.id} task={t} assigneeContext={assignee} />)
               }
             </div>
           );

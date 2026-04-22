@@ -78,12 +78,12 @@ export default function TaskModal({ task, onClose }) {
           </label>
 
           <label className={styles.label}>
-            Summary / Steps
+            Steps
             <textarea
               className={styles.textarea}
               value={summary}
               onChange={e => setSummary(e.target.value)}
-              placeholder={"Τι πρέπει να γίνει:\n1. ...\n2. ...\n3. ..."}
+              placeholder={"1. ...\n2. ...\n3. ..."}
               rows={5}
             />
           </label>
