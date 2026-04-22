@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronUp, Link2, X } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronUp, Link2, X, Pencil } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CITIES, CATEGORIES } from './constants.js';
 import PhaseTracker from './PhaseTracker.jsx';
@@ -11,20 +11,85 @@ import DecisionLog from './DecisionLog.jsx';
 import PowHistory from './PowHistory.jsx';
 import styles from './ProjectDetail.module.css';
 
-function ActivityLog({ updates }) {
-  if (!updates?.length) return <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No activity yet.</p>;
+// ── Inline text editor (click-to-edit) ───────────────────────────────────────
+function InlineText({ value, onSave, placeholder, className, multiline = false, large = false }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState(value || '');
+  const ref = useRef(null);
+
+  useEffect(() => { setDraft(value || ''); }, [value]);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  function commit() {
+    const trimmed = draft.trim();
+    if (trimmed !== (value || '').trim()) onSave(trimmed);
+    setEditing(false);
+  }
+
+  function handleKey(e) {
+    if (!multiline && e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { setDraft(value || ''); setEditing(false); }
+  }
+
+  if (editing) {
+    const shared = {
+      ref,
+      value: draft,
+      onChange: (e) => setDraft(e.target.value),
+      onBlur: commit,
+      onKeyDown: handleKey,
+      className: large ? styles.inlineInputLarge : styles.inlineInput,
+      placeholder,
+    };
+    return multiline
+      ? <textarea rows={2} {...shared} style={{ resize: 'vertical', width: '100%' }} />
+      : <input type="text" {...shared} />;
+  }
+
   return (
-    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {updates.map((u) => (
-        <li key={u.id} style={{ display: 'flex', gap: 12, fontSize: 13, borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 8 }}>
-          <span style={{ color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{u.date}</span>
-          <span style={{ color: 'var(--color-text-secondary)' }}>{u.text}</span>
-        </li>
-      ))}
-    </ul>
+    <button
+      className={`${styles.inlineDisplay} ${className || ''} ${!value ? styles.inlinePlaceholder : ''}`}
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+    >
+      {value || placeholder || 'Click to edit…'}
+      <Pencil size={12} className={styles.inlinePencil} />
+    </button>
   );
 }
 
+// ── Inline select editor ──────────────────────────────────────────────────────
+function InlineSelect({ value, options, onSave, placeholder }) {
+  return (
+    <select
+      className={styles.metaSelect}
+      value={value || ''}
+      onChange={(e) => onSave(e.target.value || null)}
+    >
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map((o) => (
+        <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>
+      ))}
+    </select>
+  );
+}
+
+// ── Inline date editor ────────────────────────────────────────────────────────
+function InlineDate({ value, onSave, label }) {
+  return (
+    <label className={styles.metaDateWrap}>
+      <span className={styles.metaDateLabel}>{label}</span>
+      <input
+        type="date"
+        className={styles.metaDateInput}
+        value={value || ''}
+        onChange={(e) => onSave(e.target.value || null)}
+      />
+    </label>
+  );
+}
+
+// ── Related Projects strip ────────────────────────────────────────────────────
 function RelatedProjects({ project }) {
   const navigate = useNavigate();
   const { activeProjects, linkProjects, unlinkProjects } = useProjects();
@@ -56,67 +121,41 @@ function RelatedProjects({ project }) {
       {hasAny && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           {parent && (
-            <button
-              style={chipStyle('#6B7280')}
-              onClick={() => navigate(`/projects/${parent._docId}`)}
-              title="Parent project"
-            >
+            <button style={chipStyle('#6B7280')} onClick={() => navigate(`/projects/${parent._docId}`)}>
               ↑ {parent.name}
             </button>
           )}
           {children.map(({ phase, child }) => (
-            <button
-              key={child._docId}
-              style={chipStyle('#C97D49')}
-              onClick={() => navigate(`/projects/${child._docId}`)}
-              title={`Sub-project from ${phase.name}`}
-            >
+            <button key={child._docId} style={chipStyle('#C97D49')} onClick={() => navigate(`/projects/${child._docId}`)}>
               ↓ {child.name}
             </button>
           ))}
           {linked.map((p) => (
             <span key={p._docId} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              <button style={chipStyle('#3B82F6')} onClick={() => navigate(`/projects/${p._docId}`)}>
-                ⟷ {p.name}
-              </button>
-              <button
-                onClick={() => unlinkProjects(project._docId, p._docId)}
-                title="Unlink"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '0 2px', fontSize: 12 }}
-              >
+              <button style={chipStyle('#3B82F6')} onClick={() => navigate(`/projects/${p._docId}`)}>⟷ {p.name}</button>
+              <button onClick={() => unlinkProjects(project._docId, p._docId)} title="Unlink" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '0 2px', fontSize: 12 }}>
                 <X size={10} />
               </button>
             </span>
           ))}
         </div>
       )}
-
       {showLinkPicker ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select
             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '5px 10px', fontSize: 13, cursor: 'pointer' }}
             defaultValue=""
-            onChange={async (e) => {
-              if (e.target.value) {
-                await linkProjects(project._docId, e.target.value);
-                setShowLinkPicker(false);
-              }
-            }}
+            onChange={async (e) => { if (e.target.value) { await linkProjects(project._docId, e.target.value); setShowLinkPicker(false); } }}
           >
             <option value="">— select project —</option>
-            {linkCandidates.map((p) => (
-              <option key={p._docId} value={p._docId}>{p.name}</option>
-            ))}
+            {linkCandidates.map((p) => <option key={p._docId} value={p._docId}>{p.name}</option>)}
           </select>
           <button onClick={() => setShowLinkPicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: 4 }}>
             <X size={13} />
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setShowLinkPicker(true)}
-          style={{ background: 'none', border: '1px dashed var(--color-border)', borderRadius: 6, color: 'var(--color-text-muted)', fontSize: 12, padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-        >
+        <button onClick={() => setShowLinkPicker(true)} style={{ background: 'none', border: '1px dashed var(--color-border)', borderRadius: 6, color: 'var(--color-text-muted)', fontSize: 12, padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <Link2 size={12} /> Link project
         </button>
       )}
@@ -130,15 +169,30 @@ function chipStyle(color) {
     padding: '3px 10px', borderRadius: 20,
     background: `color-mix(in srgb, ${color} 12%, transparent)`,
     border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
-    color, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    color, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
   };
 }
 
+// ── Activity log ──────────────────────────────────────────────────────────────
+function ActivityLog({ updates }) {
+  if (!updates?.length) return <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No activity yet.</p>;
+  return (
+    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {updates.map((u) => (
+        <li key={u.id} style={{ display: 'flex', gap: 12, fontSize: 13, borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 8 }}>
+          <span style={{ color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{u.date}</span>
+          <span style={{ color: 'var(--color-text-secondary)' }}>{u.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function ProjectDetail({ projectId }) {
   const navigate = useNavigate();
-  const { projects, setStatus, updateProject, archiveProject, deleteProject } = useProjects();
-  const [metaOpen, setMetaOpen] = useState(false);
+  const { projects, setStatus, updateProject, archiveProject, deleteProject, unarchiveProject } = useProjects();
+  const [dangerOpen, setDangerOpen] = useState(false);
 
   const project = projects.find((p) => p._docId === projectId);
 
@@ -155,14 +209,17 @@ export default function ProjectDetail({ projectId }) {
 
   const statusCfg = STATUS_CONFIG[project.effectiveStatus] || STATUS_CONFIG.onTrack;
 
-  async function handleStatusChange(e) {
-    await setStatus(project._docId, e.target.value);
+  function save(field) {
+    return (value) => updateProject(project._docId, { [field]: value });
   }
 
   async function handleArchive() {
-    await archiveProject(project._docId);
-    navigate('/projects');
+    project.archived ? await unarchiveProject(project._docId) : await archiveProject(project._docId);
+    if (!project.archived) navigate('/projects');
   }
+
+  const phases = project.phases || [];
+  const donePhases = phases.filter((p) => p.status === 'done').length;
 
   return (
     <div className={styles.page}>
@@ -171,57 +228,87 @@ export default function ProjectDetail({ projectId }) {
         <ChevronLeft size={16} /> Projects
       </button>
 
-      {/* ── §3.1 Project Header ── */}
+      {/* ── Project Header ── */}
       <div className={styles.headerRow}>
-        <h1 className={styles.projectTitle}>{project.name}</h1>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <InlineText
+            value={project.name}
+            onSave={save('name')}
+            placeholder="Project name"
+            className={styles.projectTitle}
+            large
+          />
+          <InlineText
+            value={project.tagline}
+            onSave={save('tagline')}
+            placeholder="Add a one-line tagline…"
+            className={styles.tagline}
+          />
+        </div>
         <div className={styles.headerActions}>
           <select
             className={styles.statusSelect}
             value={project.status}
-            onChange={handleStatusChange}
+            onChange={(e) => setStatus(project._docId, e.target.value)}
             style={{ borderLeft: `3px solid ${statusCfg.color}` }}
           >
             {Object.entries(STATUS_CONFIG).map(([k, v]) => (
               <option key={k} value={k}>{v.dot} {v.label}</option>
             ))}
           </select>
-          <div className={styles.ownerBadge}>
-            <div className={styles.ownerDot}>
-              {(project.owner || '?').slice(0, 2).toUpperCase()}
-            </div>
-            {project.owner}
-          </div>
         </div>
       </div>
 
-      {project.tagline && <p className={styles.tagline}>{project.tagline}</p>}
+      {/* ── Editable meta row ── */}
+      <div className={styles.metaGrid}>
+        <InlineDate label="Start" value={project.startDate} onSave={save('startDate')} />
+        <InlineDate label="Target" value={project.targetDate} onSave={save('targetDate')} />
 
-      <div className={styles.metaRow}>
-        {project.startDate && (
-          <span className={styles.metaItem}>Start: {project.startDate}</span>
-        )}
-        {project.targetDate && (
-          <span className={styles.metaItem}>Target: {project.targetDate}</span>
-        )}
-        {(project.phases || []).length > 0 && (
-          <span className={styles.metaItem}>
-            Phase {(project.phases.filter((p) => p.status === 'done').length) + 1} of {project.phases.length}
+        <label className={styles.metaSelectWrap}>
+          <span className={styles.metaDateLabel}>Owner</span>
+          <InlineSelect
+            value={project.owner}
+            options={OWNERS}
+            onSave={save('owner')}
+          />
+        </label>
+
+        <label className={styles.metaSelectWrap}>
+          <span className={styles.metaDateLabel}>Type</span>
+          <InlineSelect
+            value={project.projectType}
+            options={PROJECT_TYPES}
+            onSave={save('projectType')}
+            placeholder="— type —"
+          />
+        </label>
+
+        <label className={styles.metaSelectWrap}>
+          <span className={styles.metaDateLabel}>Category</span>
+          <InlineSelect
+            value={project.category}
+            options={CATEGORIES}
+            onSave={save('category')}
+            placeholder="— category —"
+          />
+        </label>
+
+        {phases.length > 0 && (
+          <span className={styles.metaPill}>
+            Phase {donePhases + 1} / {phases.length}
           </span>
-        )}
-        {project.projectType && (
-          <span className={styles.metaItem}>{project.projectType}</span>
         )}
       </div>
 
       {/* ── Related Projects ── */}
-      <section className={styles.section} style={{ paddingTop: 12, paddingBottom: 12 }}>
+      <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Related Projects</h2>
         </div>
         <RelatedProjects project={project} />
       </section>
 
-      {/* ── §3.2 Phase Tracker ── */}
+      {/* ── Phase Tracker ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Phases</h2>
@@ -229,7 +316,7 @@ export default function ProjectDetail({ projectId }) {
         <PhaseTracker project={project} />
       </section>
 
-      {/* ── §3.3 Next Action ── */}
+      {/* ── Next Action ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Next Action</h2>
@@ -237,7 +324,7 @@ export default function ProjectDetail({ projectId }) {
         <NextActionPanel project={project} />
       </section>
 
-      {/* ── §3.4 Blockers ── */}
+      {/* ── Blockers ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Blockers</h2>
@@ -250,7 +337,7 @@ export default function ProjectDetail({ projectId }) {
         <BlockersPanel project={project} />
       </section>
 
-      {/* ── §3.5 Budget Tracker ── */}
+      {/* ── Budget ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Budget</h2>
@@ -258,7 +345,7 @@ export default function ProjectDetail({ projectId }) {
         <BudgetTracker project={project} />
       </section>
 
-      {/* ── §3.6 Decision Log ── */}
+      {/* ── Decision Log ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Decision Log</h2>
@@ -266,7 +353,7 @@ export default function ProjectDetail({ projectId }) {
         <DecisionLog project={project} />
       </section>
 
-      {/* ── §3.7 POW History ── */}
+      {/* ── POW History ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>POW — Progress of Week</h2>
@@ -274,7 +361,7 @@ export default function ProjectDetail({ projectId }) {
         <PowHistory project={project} />
       </section>
 
-      {/* ── §3.8 Activity Log ── */}
+      {/* ── Activity Log ── */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Activity Log</h2>
@@ -282,92 +369,53 @@ export default function ProjectDetail({ projectId }) {
         <ActivityLog updates={project.updates} />
       </section>
 
-      {/* ── §3.8 Project Metadata (collapsible footer) ── */}
+      {/* ── Description + Tags (collapsible, low-priority fields) ── */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Description & Tags</h2>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Description</label>
+            <InlineText
+              value={project.description}
+              onSave={save('description')}
+              placeholder="Add a longer description…"
+              multiline
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Tags (comma-separated)</label>
+            <input
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' }}
+              defaultValue={(project.tags || []).join(', ')}
+              onBlur={(e) => {
+                const tags = e.target.value.split(',').map((t) => t.trim()).filter(Boolean);
+                updateProject(project._docId, { tags });
+              }}
+              placeholder="xslide, nafplion, operations"
+            />
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            Created: {project.createdAt?.toDate ? project.createdAt.toDate().toLocaleDateString('en-GB') : '—'}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Danger zone ── */}
       <div>
-        <button className={styles.metadataToggle} onClick={() => setMetaOpen((v) => !v)}>
-          {metaOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          Project details & settings
+        <button className={styles.metadataToggle} onClick={() => setDangerOpen((v) => !v)}>
+          {dangerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          Danger zone
         </button>
-
-        {metaOpen && (
+        {dangerOpen && (
           <section className={styles.section}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Owner</label>
-                <select
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%', cursor: 'pointer' }}
-                  value={project.owner || ''}
-                  onChange={(e) => updateProject(project._docId, { owner: e.target.value })}
-                >
-                  {OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Type</label>
-                <select
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%', cursor: 'pointer' }}
-                  value={project.projectType || ''}
-                  onChange={(e) => updateProject(project._docId, { projectType: e.target.value })}
-                >
-                  {PROJECT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Category</label>
-                <select
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%', cursor: 'pointer' }}
-                  value={project.category || ''}
-                  onChange={(e) => updateProject(project._docId, { category: e.target.value })}
-                >
-                  <option value="">— no category —</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Start date</label>
-                <input
-                  type="date"
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%' }}
-                  defaultValue={project.startDate || ''}
-                  onBlur={(e) => updateProject(project._docId, { startDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Target date</label>
-                <input
-                  type="date"
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%' }}
-                  defaultValue={project.targetDate || ''}
-                  onBlur={(e) => updateProject(project._docId, { targetDate: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 5 }}>Tags (comma-separated)</label>
-              <input
-                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '6px 10px', fontSize: 13, width: '100%' }}
-                defaultValue={(project.tags || []).join(', ')}
-                onBlur={(e) => {
-                  const tags = e.target.value.split(',').map((t) => t.trim()).filter(Boolean);
-                  updateProject(project._docId, { tags });
-                }}
-                placeholder="xslide, nafplion, operations"
-              />
-            </div>
-
-            <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                Created: {project.createdAt?.toDate ? project.createdAt.toDate().toLocaleDateString('en-GB') : '—'}
-              </span>
-            </div>
-
-            <div style={{ marginTop: 24, display: 'flex', gap: 10, paddingTop: 16, borderTop: '1px dashed var(--color-border)' }}>
+            <div style={{ display: 'flex', gap: 10 }}>
               <button
                 onClick={handleArchive}
                 style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-muted)', fontSize: 13, padding: '6px 14px', cursor: 'pointer' }}
               >
-                {project.archived ? 'Unarchive' : 'Archive project'}
+                {project.archived ? 'Unarchive project' : 'Archive project'}
               </button>
               <button
                 onClick={async () => {

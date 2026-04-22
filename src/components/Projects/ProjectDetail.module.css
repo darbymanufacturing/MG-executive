@@ -151,6 +151,152 @@
 }
 .metadataToggle:hover { color: var(--color-text-secondary); }
 
+/* ── Editable meta grid ── */
+.metaGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: var(--space-6);
+  align-items: center;
+}
+
+.metaDateWrap,
+.metaSelectWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.metaDateWrap:focus-within,
+.metaSelectWrap:focus-within {
+  border-color: var(--color-primary-light);
+}
+
+.metaDateLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.metaDateInput {
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  width: 120px;
+}
+
+.metaSelect {
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+}
+
+.metaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Inline text editing ── */
+.inlineDisplay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  transition: background 0.15s;
+  max-width: 100%;
+}
+.inlineDisplay:hover {
+  background: var(--color-surface-2);
+}
+.inlineDisplay:hover .inlinePencil {
+  opacity: 1;
+}
+
+.inlinePencil {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.inlinePlaceholder {
+  color: var(--color-text-muted) !important;
+  font-style: italic;
+}
+
+.inlineInput {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  outline: none;
+  width: 100%;
+  font-family: var(--font-body);
+}
+
+.inlineInputLarge {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  font-family: var(--font-heading);
+  padding: 2px 8px;
+  outline: none;
+  width: 100%;
+  line-height: 1.2;
+}
+
+/* Override projectTitle and tagline to work as inline buttons */
+.projectTitle {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  font-family: var(--font-heading);
+  color: var(--color-text-primary);
+  line-height: 1.2;
+  width: 100%;
+}
+
+.tagline {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  display: block;
+  width: 100%;
+}
+
 .notFound {
   padding: var(--space-16);
   text-align: center;
