@@ -342,6 +342,98 @@ export function ProjectProvider({ children }) {
     await updateDoc(doc(db, PROJECTS_COL, docId), { milestones, updatedAt: serverTimestamp() });
   }, [projects]);
 
+  // ── Task assignee ─────────────────────────────────────────────────────────
+  const setTaskAssignee = useCallback(async (docId, phaseId, taskId, assignee) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return;
+    const phases = (project.phases || []).map((ph) => {
+      if (ph.id !== phaseId) return ph;
+      const tasks = (ph.tasks || []).map((t) =>
+        t.id === taskId ? { ...t, assignee: assignee || null } : t,
+      );
+      return { ...ph, tasks };
+    });
+    await updateDoc(doc(db, PROJECTS_COL, docId), { phases, updatedAt: serverTimestamp() });
+  }, [projects]);
+
+  // ── Project interconnection ───────────────────────────────────────────────
+  const promotePhaseToProject = useCallback(async (docId, phaseId) => {
+    const project = projects.find((p) => p._docId === docId);
+    if (!project) return null;
+    const phase = (project.phases || []).find((ph) => ph.id === phaseId);
+    if (!phase) return null;
+
+    const newProjectRef = await addDoc(collection(db, PROJECTS_COL), {
+      name:             `${project.name} — ${phase.name}`,
+      tagline:          `Promoted from phase ${phase.number} of "${project.name}"`,
+      owner:            project.owner || 'Kostas',
+      projectType:      project.projectType || '',
+      category:         project.category || '',
+      status:           'onTrack',
+      startDate:        phase.targetDate || new Date().toISOString().slice(0, 10),
+      targetDate:       phase.targetDate || null,
+      parentProjectId:  docId,
+      phases:           [],
+      blockers:         [],
+      updates:          [],
+      decisions:        [],
+      powEntries:       [],
+      linkedProjectIds: [docId],
+      archived:         false,
+      createdAt:        serverTimestamp(),
+      updatedAt:        serverTimestamp(),
+    });
+
+    // Write childProjectId back onto the source phase
+    const phases = (project.phases || []).map((ph) =>
+      ph.id === phaseId ? { ...ph, childProjectId: newProjectRef.id } : ph,
+    );
+    // Also add the new project to linkedProjectIds of the parent
+    const parentLinked = [...(project.linkedProjectIds || []), newProjectRef.id];
+    await updateDoc(doc(db, PROJECTS_COL, docId), {
+      phases,
+      linkedProjectIds: parentLinked,
+      updatedAt: serverTimestamp(),
+    });
+
+    return newProjectRef.id;
+  }, [projects]);
+
+  const linkProjects = useCallback(async (aId, bId) => {
+    const a = projects.find((p) => p._docId === aId);
+    const b = projects.find((p) => p._docId === bId);
+    if (!a || !b) return;
+    if (!(a.linkedProjectIds || []).includes(bId)) {
+      await updateDoc(doc(db, PROJECTS_COL, aId), {
+        linkedProjectIds: [...(a.linkedProjectIds || []), bId],
+        updatedAt: serverTimestamp(),
+      });
+    }
+    if (!(b.linkedProjectIds || []).includes(aId)) {
+      await updateDoc(doc(db, PROJECTS_COL, bId), {
+        linkedProjectIds: [...(b.linkedProjectIds || []), aId],
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }, [projects]);
+
+  const unlinkProjects = useCallback(async (aId, bId) => {
+    const a = projects.find((p) => p._docId === aId);
+    const b = projects.find((p) => p._docId === bId);
+    if (a) {
+      await updateDoc(doc(db, PROJECTS_COL, aId), {
+        linkedProjectIds: (a.linkedProjectIds || []).filter((id) => id !== bId),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    if (b) {
+      await updateDoc(doc(db, PROJECTS_COL, bId), {
+        linkedProjectIds: (b.linkedProjectIds || []).filter((id) => id !== aId),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }, [projects]);
+
   // ── Decision Gates CRUD ───────────────────────────────────────────────────
   const addGate = useCallback(async (data) => {
     await addDoc(collection(db, GATES_COL), {
@@ -387,6 +479,10 @@ export function ProjectProvider({ children }) {
       addPowEntry,
       // Brainstorm (global)
       addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
+      // Task assignee
+      setTaskAssignee,
+      // Interconnection
+      promotePhaseToProject, linkProjects, unlinkProjects,
       // Milestones (War Room compat)
       toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
       // Decision Gates (War Room compat)

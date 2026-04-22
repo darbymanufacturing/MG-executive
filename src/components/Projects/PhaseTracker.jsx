@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Plus, Pencil, ChevronUp, ChevronDown, Check, X, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, ChevronUp, ChevronDown, Check, X, Trash2, ExternalLink, GitBranch } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { ASSIGNEES } from './constants.js';
 import styles from './PhaseTracker.module.css';
 import sharedStyles from './Projects.module.css';
 
@@ -11,7 +13,7 @@ const STATUS_LABELS = {
 };
 
 function TaskList({ phase, projectId }) {
-  const { updatePhase } = useProjects();
+  const { updatePhase, setTaskAssignee } = useProjects();
   const [newTask, setNewTask] = useState('');
 
   const tasks = phase.tasks || [];
@@ -30,7 +32,7 @@ function TaskList({ phase, projectId }) {
     e.preventDefault();
     const text = newTask.trim();
     if (!text) return;
-    const updated = [...tasks, { id: crypto.randomUUID(), text, done: false }];
+    const updated = [...tasks, { id: crypto.randomUUID(), text, done: false, assignee: null }];
     await updatePhase(projectId, phase.id, { tasks: updated });
     setNewTask('');
   }
@@ -60,6 +62,15 @@ function TaskList({ phase, projectId }) {
               <span className={`${styles.taskText} ${task.done ? styles.taskTextDone : ''}`}>
                 {task.text}
               </span>
+              <select
+                className={styles.taskAssignee}
+                value={task.assignee || ''}
+                onChange={(e) => setTaskAssignee(projectId, phase.id, task.id, e.target.value || null)}
+                title="Assign to"
+              >
+                <option value="">—</option>
+                {ASSIGNEES.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
               <button className={styles.taskRemove} onClick={() => handleRemove(task.id)} title="Remove task">
                 <X size={11} />
               </button>
@@ -84,7 +95,8 @@ function TaskList({ phase, projectId }) {
 }
 
 function PhaseRow({ phase, phases, projectId, index, total }) {
-  const { updatePhase, deletePhase, reorderPhases } = useProjects();
+  const navigate = useNavigate();
+  const { updatePhase, deletePhase, reorderPhases, promotePhaseToProject } = useProjects();
   const [editing, setEditing]   = useState(false);
   const [expanded, setExpanded] = useState(phase.status !== 'done');
   const [form, setForm]         = useState({
@@ -182,6 +194,28 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
         </span>
 
         <div className={styles.rowControls}>
+          {phase.childProjectId ? (
+            <button
+              className={styles.childProjectChip}
+              title="Open linked project"
+              onClick={() => navigate(`/projects/${phase.childProjectId}`)}
+            >
+              <ExternalLink size={11} /> Sub-project
+            </button>
+          ) : (
+            <button
+              className={styles.ctrlBtn}
+              title="Promote to standalone project"
+              onClick={async () => {
+                if (window.confirm(`Promote "${phase.name}" to a standalone project?`)) {
+                  const newId = await promotePhaseToProject(projectId, phase.id);
+                  if (newId) navigate(`/projects/${newId}`);
+                }
+              }}
+            >
+              <GitBranch size={12} />
+            </button>
+          )}
           <button
             className={styles.ctrlBtn}
             title="Move up"

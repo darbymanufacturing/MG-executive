@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Calendar, Lightbulb, FolderKanban } from 'lucide-react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { Plus, Calendar, Lightbulb, FolderKanban, CheckSquare, BarChart2 } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { isPowDay, daysSince, relativeLabel } from '../../utils/powHelpers.js';
 import { FILTER_OPTIONS } from './constants.js';
@@ -7,6 +7,9 @@ import ProjectCard from './ProjectCard.jsx';
 import PortfolioOverview from './PortfolioOverview.jsx';
 import NewProjectModal from './NewProjectModal.jsx';
 import Brainstorm from './Brainstorm.jsx';
+import ChecklistTab from './tabs/ChecklistTab.jsx';
+const CalendarTab = lazy(() => import('./tabs/CalendarTab.jsx'));
+const TimelineTab = lazy(() => import('./tabs/TimelineTab.jsx'));
 import styles from './ProjectsDashboard.module.css';
 
 /** Sort order: Blocked → needsAttention → onTrack → archived */
@@ -92,6 +95,24 @@ export default function ProjectsDashboard() {
           <FolderKanban size={14} /> Projects
         </button>
         <button
+          className={`${styles.moduleTab} ${tab === 'checklist' ? styles.moduleTabActive : ''}`}
+          onClick={() => setTab('checklist')}
+        >
+          <CheckSquare size={14} /> Checklist
+        </button>
+        <button
+          className={`${styles.moduleTab} ${tab === 'calendar' ? styles.moduleTabActive : ''}`}
+          onClick={() => setTab('calendar')}
+        >
+          <Calendar size={14} /> Calendar
+        </button>
+        <button
+          className={`${styles.moduleTab} ${tab === 'timeline' ? styles.moduleTabActive : ''}`}
+          onClick={() => setTab('timeline')}
+        >
+          <BarChart2 size={14} /> Timeline
+        </button>
+        <button
           className={`${styles.moduleTab} ${tab === 'brainstorm' ? styles.moduleTabActive : ''}`}
           onClick={() => setTab('brainstorm')}
         >
@@ -101,6 +122,16 @@ export default function ProjectsDashboard() {
 
       {tab === 'brainstorm' ? (
         <Brainstorm />
+      ) : tab === 'checklist' ? (
+        <ChecklistTab />
+      ) : tab === 'calendar' ? (
+        <Suspense fallback={<div className={styles.loading}>Loading calendar…</div>}>
+          <CalendarTab />
+        </Suspense>
+      ) : tab === 'timeline' ? (
+        <Suspense fallback={<div className={styles.loading}>Loading timeline…</div>}>
+          <TimelineTab />
+        </Suspense>
       ) : (
         <>
           {/* Filter pills */}

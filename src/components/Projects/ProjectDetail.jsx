@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronUp, Link2, X } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CITIES, CATEGORIES } from './constants.js';
 import PhaseTracker from './PhaseTracker.jsx';
@@ -23,6 +23,116 @@ function ActivityLog({ updates }) {
       ))}
     </ul>
   );
+}
+
+function RelatedProjects({ project }) {
+  const navigate = useNavigate();
+  const { activeProjects, linkProjects, unlinkProjects } = useProjects();
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+
+  const parent   = project.parentProjectId
+    ? activeProjects.find((p) => p._docId === project.parentProjectId)
+    : null;
+  const children = (project.phases || [])
+    .filter((ph) => ph.childProjectId)
+    .map((ph) => ({ phase: ph, child: activeProjects.find((p) => p._docId === ph.childProjectId) }))
+    .filter((x) => x.child);
+  const linked   = (project.linkedProjectIds || [])
+    .filter((id) => id !== project.parentProjectId && !children.some((c) => c.child._docId === id))
+    .map((id) => activeProjects.find((p) => p._docId === id))
+    .filter(Boolean);
+
+  const linkCandidates = activeProjects.filter(
+    (p) =>
+      p._docId !== project._docId &&
+      !(project.linkedProjectIds || []).includes(p._docId) &&
+      p._docId !== project.parentProjectId,
+  );
+
+  const hasAny = parent || children.length > 0 || linked.length > 0;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      {hasAny && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {parent && (
+            <button
+              style={chipStyle('#6B7280')}
+              onClick={() => navigate(`/projects/${parent._docId}`)}
+              title="Parent project"
+            >
+              ↑ {parent.name}
+            </button>
+          )}
+          {children.map(({ phase, child }) => (
+            <button
+              key={child._docId}
+              style={chipStyle('#C97D49')}
+              onClick={() => navigate(`/projects/${child._docId}`)}
+              title={`Sub-project from ${phase.name}`}
+            >
+              ↓ {child.name}
+            </button>
+          ))}
+          {linked.map((p) => (
+            <span key={p._docId} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              <button style={chipStyle('#3B82F6')} onClick={() => navigate(`/projects/${p._docId}`)}>
+                ⟷ {p.name}
+              </button>
+              <button
+                onClick={() => unlinkProjects(project._docId, p._docId)}
+                title="Unlink"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '0 2px', fontSize: 12 }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {showLinkPicker ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select
+            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', padding: '5px 10px', fontSize: 13, cursor: 'pointer' }}
+            defaultValue=""
+            onChange={async (e) => {
+              if (e.target.value) {
+                await linkProjects(project._docId, e.target.value);
+                setShowLinkPicker(false);
+              }
+            }}
+          >
+            <option value="">— select project —</option>
+            {linkCandidates.map((p) => (
+              <option key={p._docId} value={p._docId}>{p.name}</option>
+            ))}
+          </select>
+          <button onClick={() => setShowLinkPicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: 4 }}>
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowLinkPicker(true)}
+          style={{ background: 'none', border: '1px dashed var(--color-border)', borderRadius: 6, color: 'var(--color-text-muted)', fontSize: 12, padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <Link2 size={12} /> Link project
+        </button>
+      )}
+    </div>
+  );
+}
+
+function chipStyle(color) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    padding: '3px 10px', borderRadius: 20,
+    background: `color-mix(in srgb, ${color} 12%, transparent)`,
+    border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+    color, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  };
 }
 
 export default function ProjectDetail({ projectId }) {
@@ -102,6 +212,14 @@ export default function ProjectDetail({ projectId }) {
           <span className={styles.metaItem}>{project.projectType}</span>
         )}
       </div>
+
+      {/* ── Related Projects ── */}
+      <section className={styles.section} style={{ paddingTop: 12, paddingBottom: 12 }}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Related Projects</h2>
+        </div>
+        <RelatedProjects project={project} />
+      </section>
 
       {/* ── §3.2 Phase Tracker ── */}
       <section className={styles.section}>

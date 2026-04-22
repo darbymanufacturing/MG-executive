@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { daysSince, relativeLabel } from '../../utils/powHelpers.js';
+import { upcomingDeadlines, tasksByAssignee } from '../../utils/projectAggregations.js';
 import { STATUS_CONFIG, BLOCKER_TYPES } from './constants.js';
 import styles from './PortfolioOverview.module.css';
 
@@ -65,7 +66,15 @@ export default function PortfolioOverview() {
       .filter((d) => d.value > 0);
   }, [activeProjects]);
 
-  // ── 4. Stale next-actions ─────────────────────────────────────────────────
+  // ── 4. Upcoming deadlines ─────────────────────────────────────────────────
+  const deadlines = useMemo(() => upcomingDeadlines(activeProjects, 14), [activeProjects]);
+
+  // ── 5. Tasks by assignee ──────────────────────────────────────────────────
+  const taskCounts = useMemo(() => tasksByAssignee(activeProjects), [activeProjects]);
+  const taskCountEntries = useMemo(() => Object.entries(taskCounts).sort((a, b) => b[1] - a[1]), [taskCounts]);
+  const maxTaskCount = useMemo(() => Math.max(...Object.values(taskCounts), 1), [taskCounts]);
+
+  // ── 6. Stale next-actions ─────────────────────────────────────────────────
   const staleProjects = useMemo(() => {
     return [...activeProjects]
       .filter((p) => p.nextAction?.text || p.updatedAt)
@@ -211,6 +220,54 @@ export default function PortfolioOverview() {
           </div>
         </div>
       )}
+
+      {/* ── Upcoming Deadlines ───────────────────────────────────────────── */}
+      <div className={styles.row}>
+        {deadlines.length > 0 && (
+          <div className={styles.tile}>
+            <h3 className={styles.tileTitle}>Upcoming Deadlines</h3>
+            <p className={styles.tileSub}>Next 14 days</p>
+            <div className={styles.staleList}>
+              {deadlines.map((d, i) => {
+                const today = new Date().toISOString().slice(0, 10);
+                const daysUntil = Math.round((new Date(d.date).getTime() - new Date(today).getTime()) / 86400000);
+                const chipColor = daysUntil <= 2 ? 'var(--color-danger)' : daysUntil <= 7 ? 'var(--color-warning)' : 'var(--color-text-muted)';
+                return (
+                  <div key={i} className={styles.staleRow} onClick={() => navigate(`/projects/${d.projectId}`)}>
+                    <span className={styles.staleDot} style={{ background: d.type === 'nextAction' ? '#A0521D' : '#C97D49' }} />
+                    <div className={styles.staleInfo}>
+                      <span className={styles.staleName}>{d.label}</span>
+                      <span className={styles.staleAction}>{d.subLabel}</span>
+                    </div>
+                    <span className={styles.staleChip} style={{ color: chipColor }}>
+                      {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil}d`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tasks by person */}
+        {taskCountEntries.length > 0 && (
+          <div className={styles.tile}>
+            <h3 className={styles.tileTitle}>Open Tasks by Person</h3>
+            <p className={styles.tileSub}>Across all active projects</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              {taskCountEntries.map(([name, count]) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', width: 80, flexShrink: 0 }}>{name}</span>
+                  <div style={{ flex: 1, background: 'var(--color-border)', borderRadius: 4, height: 10, overflow: 'hidden' }}>
+                    <div style={{ width: `${(count / maxTaskCount) * 100}%`, height: '100%', background: 'var(--color-primary-light)', borderRadius: 4, transition: 'width 0.3s' }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', width: 28, textAlign: 'right' }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Stale Next-Actions ────────────────────────────────────────────── */}
       {staleProjects.length > 0 && (

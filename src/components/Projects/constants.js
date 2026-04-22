@@ -58,3 +58,15 @@ export const PHASE_STATUS = {
   inProgress:  'In Progress',
   done:        'Done',
 };
+
+export const ASSIGNEES = ['Kostas', 'Panos'];
+
+export const CALENDAR_EVENT_TYPES = [
+  { value: 'all',         label: 'All events' },
+  { value: 'phaseTarget', label: 'Phase deadlines' },
+  { value: 'phaseActual', label: 'Completions' },
+  { value: 'nextAction',  label: 'Next actions' },
+  { value: 'blocker',     label: 'Blockers' },
+  { value: 'decision',    label: 'Decisions' },
+  { value: 'pow',         label: 'POW entries' },
+];

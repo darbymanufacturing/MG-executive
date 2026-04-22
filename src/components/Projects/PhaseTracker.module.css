@@ -464,3 +464,45 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+
+/* ── Task assignee inline select ── */
+.taskAssignee {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  padding: 2px 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  max-width: 80px;
+  flex-shrink: 0;
+}
+
+.taskItem:hover .taskAssignee,
+.taskAssignee:focus,
+.taskAssignee[value]:not([value=""]) {
+  opacity: 1;
+}
+
+/* ── Child project chip ── */
+.childProjectChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border: 1px solid var(--color-primary-light);
+  color: var(--color-primary-light);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.childProjectChip:hover {
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
