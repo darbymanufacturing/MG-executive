@@ -42,6 +42,19 @@
   flex-wrap: wrap;
 }
 
+/* Week block */
+.weekBlock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.weekDates {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 /* Week control */
 .weekControl {
   display: flex;

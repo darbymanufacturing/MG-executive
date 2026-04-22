@@ -9,6 +9,18 @@ import styles from './Pow.module.css';
 
 const ASSIGNEES = ['Panos', 'Kostas'];
 
+// Week 1 = Nov 3, 2025 (Monday). Week 25 = Apr 20, 2026.
+const WEEK1_START = new Date('2025-11-03T00:00:00');
+
+function getWeekRange(weekNumber) {
+  const start = new Date(WEEK1_START);
+  start.setDate(start.getDate() + (weekNumber - 1) * 7);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const fmt = (d) => d.toLocaleDateString('el-GR', { day: 'numeric', month: 'short' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 function PowInner() {
   const {
     categories, allTodoTasks, powTasks, doneTasks,
@@ -53,14 +65,17 @@ function PowInner() {
         </div>
 
         <div className={styles.headerControls}>
-          <div className={styles.weekControl}>
-            <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek - 1)}>
-              <ChevronDown size={14}/>
-            </button>
-            <span className={styles.weekLabel}>Week {currentWeek}</span>
-            <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek + 1)}>
-              <ChevronUp size={14}/>
-            </button>
+          <div className={styles.weekBlock}>
+            <div className={styles.weekControl}>
+              <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek - 1)}>
+                <ChevronDown size={14}/>
+              </button>
+              <span className={styles.weekLabel}>Week {currentWeek}</span>
+              <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek + 1)}>
+                <ChevronUp size={14}/>
+              </button>
+            </div>
+            <span className={styles.weekDates}>{getWeekRange(currentWeek)}</span>
           </div>
 
           <button
