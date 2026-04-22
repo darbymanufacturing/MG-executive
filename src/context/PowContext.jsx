@@ -67,7 +67,8 @@ export function PowProvider({ children }) {
           assignees,
           steps,
           checkedSteps: data.checkedSteps ?? [],
-          powSteps: data.powSteps ?? {},   // { Panos: [0,1], Kostas: [2] }
+          powSteps: data.powSteps ?? {},    // { Panos: [0,1], Kostas: [2] }
+          powWeeks: data.powWeeks ?? {},   // { Panos: 25, Kostas: 26 }
           status,
         };
       });
@@ -126,30 +127,31 @@ export function PowProvider({ children }) {
   const toggleAssignee = useCallback(async (id, person, stepIndices = null) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    const current   = task.assignees ?? [];
-    const isAdding  = !current.includes(person) && stepIndices !== null;
+    const current    = task.assignees ?? [];
     const isRemoving = current.includes(person) && stepIndices === null;
 
     let assignees = current;
     let powSteps  = { ...(task.powSteps ?? {}) };
+    let powWeeks  = { ...(task.powWeeks ?? {}) };  // { Panos: 25, Kostas: 26 }
 
-    if (isAdding) {
-      assignees = [...current, person];
-      powSteps[person] = stepIndices;
-    } else if (isRemoving) {
+    if (isRemoving) {
       assignees = current.filter(a => a !== person);
       delete powSteps[person];
-    } else if (current.includes(person) && stepIndices !== null) {
-      // Update steps for existing assignee
-      powSteps[person] = stepIndices;
+      delete powWeeks[person];
+    } else {
+      // Add or update
+      if (!current.includes(person)) assignees = [...current, person];
+      powSteps[person] = stepIndices ?? [];
+      powWeeks[person] = currentWeek;
     }
 
     await updateDoc(doc(db, TASKS_COL, id), {
       assignees,
       powSteps,
+      powWeeks,
       status: assignees.length > 0 ? 'pow' : 'backlog',
     });
-  }, [tasks]);
+  }, [tasks, currentWeek]);
 
   /** Toggle a step checkbox by its index */
   const toggleStep = useCallback(async (id, stepIndex) => {

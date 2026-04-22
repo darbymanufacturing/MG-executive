@@ -48,12 +48,14 @@ function PowInner() {
 
   const todoCount = allTodoTasks.filter(t => t.status !== 'done').length;
 
-  // Tasks for the selected person this week (pow + done)
-  const weekPersonTasks = weekPerson
-    ? [...powTasks, ...(showDone ? doneTasks : [])].filter(t =>
-        (t.assignees ?? []).includes(weekPerson)
-      )
-    : [];
+  // Tasks for selected person(s) this week — filtered by powWeeks
+  const getPersonTasks = (person) =>
+    [...powTasks, ...(showDone ? doneTasks : [])].filter(t =>
+      (t.assignees ?? []).includes(person) &&
+      (t.powWeeks?.[person] ?? t.createdWeek) === currentWeek
+    );
+
+  const weekPersonTasks = weekPerson ? getPersonTasks(weekPerson) : [];
 
   return (
     <div className={styles.page}>
@@ -119,7 +121,9 @@ function PowInner() {
             </div>
           ) : (
             <div className={styles.todoGrid}>
-              {weekPersonTasks.map(t => <TaskCard key={t.id} task={t} />)}
+              {weekPersonTasks.map(t => (
+                <TaskCard key={t.id} task={t} assigneeContext={weekPerson} />
+              ))}
             </div>
           )
         )}

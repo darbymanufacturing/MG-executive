@@ -7,7 +7,7 @@ import styles from './PowBoard.module.css';
 const ASSIGNEES = ['Panos', 'Kostas'];
 
 function CategoryColumn({ cat }) {
-  const { powTasks, removeCategory, renameCategory } = usePow();
+  const { powTasks, currentWeek, removeCategory, renameCategory } = usePow();
   const [editing, setEditing] = useState(false);
   const [newName, setNewName] = useState(cat.name);
 
@@ -50,7 +50,10 @@ function CategoryColumn({ cat }) {
 
       <div className={styles.colBody}>
         {ASSIGNEES.map(assignee => {
-          const userTasks = colTasks.filter(t => (t.assignees ?? []).includes(assignee));
+          const userTasks = colTasks.filter(t =>
+            (t.assignees ?? []).includes(assignee) &&
+            (t.powWeeks?.[assignee] ?? t.createdWeek) === currentWeek
+          );
           return (
             <div key={assignee} className={styles.assigneeGroup}>
               <div className={styles.assigneeLabel}>{assignee}</div>
