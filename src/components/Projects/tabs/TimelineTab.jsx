@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjects } from '../../../context/ProjectContext.jsx';
+import { computeCPM } from '../../../utils/criticalPath.js';
 import { STATUS_CONFIG } from '../constants.js';
 import styles from './TimelineTab.module.css';
 
@@ -53,9 +54,21 @@ function dateToX(date, minTime, totalMs, chartW) {
 export default function TimelineTab() {
   const navigate = useNavigate();
   const { activeProjects } = useProjects();
-  const [zoom, setZoom] = useState('auto');
+  const [zoom, setZoom]       = useState('auto');
+  const [showCPM, setShowCPM] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const svgRef = useRef(null);
+
+  // Per-project CPM data (only computed when CPM overlay is on)
+  const cpmByProject = useMemo(() => {
+    if (!showCPM) return {};
+    const result = {};
+    for (const p of activeProjects) {
+      const cpm = computeCPM(p.phases || []);
+      result[p._docId] = cpm;
+    }
+    return result;
+  }, [activeProjects, showCPM]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -126,17 +139,27 @@ export default function TimelineTab() {
       {/* ── Controls ── */}
       <div className={styles.controls}>
         <span className={styles.heading}>Project Timeline</span>
-        <div className={styles.zoomGroup}>
-          <span className={styles.zoomLabel}>Zoom:</span>
-          {['1M','3M','6M','1Y','auto'].map((z) => (
-            <button
-              key={z}
-              className={`${styles.zoomBtn} ${zoom === z ? styles.zoomBtnActive : ''}`}
-              onClick={() => setZoom(z)}
-            >
-              {z === 'auto' ? 'Fit all' : z}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className={styles.zoomGroup}>
+            <span className={styles.zoomLabel}>Zoom:</span>
+            {['1M','3M','6M','1Y','auto'].map((z) => (
+              <button
+                key={z}
+                className={`${styles.zoomBtn} ${zoom === z ? styles.zoomBtnActive : ''}`}
+                onClick={() => setZoom(z)}
+              >
+                {z === 'auto' ? 'Fit all' : z}
+              </button>
+            ))}
+          </div>
+          <button
+            className={`${styles.zoomBtn} ${showCPM ? styles.zoomBtnActive : ''}`}
+            style={{ borderColor: showCPM ? '#E84545' : undefined, background: showCPM ? '#E84545' : undefined }}
+            onClick={() => setShowCPM((v) => !v)}
+            title="Highlight critical path phases"
+          >
+            ⚠ Critical Path
+          </button>
         </div>
       </div>
 
@@ -251,9 +274,11 @@ export default function TimelineTab() {
                     if (!px) return null;
                     const cx = clamp(px);
                     const py = rowY + BAR_OFFSET_Y - PHASE_H - 2;
-                    const phColor = PHASE_COLORS[ph.status] || PHASE_COLORS.notStarted;
-                    // Draw a small diamond
-                    const s = 5;
+                    const cpmPhase = showCPM ? (cpmByProject[project._docId] || []).find((c) => c.id === ph.id) : null;
+                    const phColor = cpmPhase?.critical ? '#E84545'
+                      : PHASE_COLORS[ph.status] || PHASE_COLORS.notStarted;
+                    const s = cpmPhase?.critical ? 7 : 5;
+                    const floatInfo = cpmPhase ? `\nFloat: ${cpmPhase.float}d${cpmPhase.critical ? ' ⚠ CRITICAL' : ''}` : '';
                     return (
                       <g key={ph.id}>
                         <polygon
@@ -261,10 +286,13 @@ export default function TimelineTab() {
                           fill={phColor}
                           opacity={0.9}
                           style={{ cursor: 'pointer' }}
-                          onMouseEnter={(e) => handleMouseEnter(e, `Phase ${ph.number}: ${ph.name}\nStatus: ${ph.status}\nTarget: ${ph.targetDate}`)}
+                          onMouseEnter={(e) => handleMouseEnter(e, `Phase ${ph.number}: ${ph.name}\nStatus: ${ph.status}\nTarget: ${ph.targetDate}${floatInfo}`)}
                           onMouseLeave={() => setTooltip(null)}
                           onClick={() => navigate(`/projects/${project._docId}`)}
                         />
+                        {cpmPhase?.critical && (
+                          <circle cx={cx} cy={py} r={s + 4} fill="none" stroke="#E84545" strokeWidth={1.5} opacity={0.5} />
+                        )}
                       </g>
                     );
                   })}
@@ -377,6 +405,7 @@ export default function TimelineTab() {
         <span className={styles.legendItem}><span style={{ fontSize: 11 }}>★</span> Next action</span>
         <span className={styles.legendItem}><span style={{ color: '#E84545', fontSize: 12, fontWeight: 700 }}>┊</span>Blocker</span>
         <span className={styles.legendItem}><span style={{ borderBottom: '1.5px dashed var(--color-primary-light)', paddingRight: 12 }} />Linked project</span>
+        {showCPM && <span className={styles.legendItem}><span className={styles.legendSwatch} style={{ background: '#E84545' }} />Critical phase</span>}
       </div>
     </div>
   );

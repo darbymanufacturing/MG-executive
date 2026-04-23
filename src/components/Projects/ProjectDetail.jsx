@@ -9,6 +9,7 @@ import BlockersPanel from './BlockersPanel.jsx';
 import BudgetTracker from './BudgetTracker.jsx';
 import DecisionLog from './DecisionLog.jsx';
 import PowHistory from './PowHistory.jsx';
+import CriticalPathPanel from './CriticalPathPanel.jsx';
 import styles from './ProjectDetail.module.css';
 
 // ── Inline text editor (click-to-edit) ───────────────────────────────────────
@@ -315,6 +316,16 @@ export default function ProjectDetail({ projectId }) {
         </div>
         <PhaseTracker project={project} />
       </section>
+
+      {/* ── Critical Path Analysis ── */}
+      {phases.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Critical Path Analysis</h2>
+          </div>
+          <CriticalPathPanel project={project} />
+        </section>
+      )}
 
       {/* ── Next Action ── */}
       <section className={styles.section}>

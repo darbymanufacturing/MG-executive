@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, ChevronUp, ChevronDown, Check, X, Trash2, ExternalLink, GitBranch } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { computeCPM } from '../../utils/criticalPath.js';
 import { ASSIGNEES } from './constants.js';
 import styles from './PhaseTracker.module.css';
 import sharedStyles from './Projects.module.css';
@@ -94,7 +95,7 @@ function TaskList({ phase, projectId }) {
   );
 }
 
-function PhaseRow({ phase, phases, projectId, index, total }) {
+function PhaseRow({ phase, phases, projectId, index, total, cpmData }) {
   const navigate = useNavigate();
   const { updatePhase, deletePhase, reorderPhases, promotePhaseToProject } = useProjects();
   const [editing, setEditing]   = useState(false);
@@ -105,7 +106,11 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
     scopeCap:     phase.scopeCap || '',
     doneCriteria: (phase.doneCriteria || []).join('\n'),
     parallel:     phase.parallel || false,
+    duration:     phase.duration || '',
+    dependencies: phase.dependencies || [],
   });
+
+  const cpm = cpmData?.find((c) => c.id === phase.id);
 
   const tasks      = phase.tasks || [];
   const doneTasks  = tasks.filter((t) => t.done).length;
@@ -146,6 +151,8 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
       scopeCap:     form.scopeCap.trim(),
       doneCriteria: form.doneCriteria.split('\n').map((s) => s.trim()).filter(Boolean),
       parallel:     form.parallel,
+      duration:     form.duration ? Number(form.duration) : null,
+      dependencies: form.dependencies,
     });
     setEditing(false);
   }
@@ -192,6 +199,15 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
         <span className={`${styles.phaseBadge} ${statusClass}`}>
           {STATUS_LABELS[phase.status]}
         </span>
+
+        {cpm && (
+          <span
+            className={`${styles.floatBadge} ${cpm.critical ? styles.floatBadgeCritical : ''}`}
+            title={cpm.critical ? 'On critical path — any delay impacts the project' : `Float: ${cpm.float}d slack`}
+          >
+            {cpm.critical ? '⚠ Critical' : `+${cpm.float}d`}
+          </span>
+        )}
 
         <div className={styles.rowControls}>
           {phase.childProjectId ? (
@@ -286,6 +302,39 @@ function PhaseRow({ phase, phases, projectId, index, total }) {
               placeholder="This phase does NOT include…"
             />
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label className={styles.editLabel}>Duration (days) — for CPM</label>
+              <input
+                type="number"
+                min={1}
+                className={sharedStyles.input}
+                value={form.duration}
+                onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
+                placeholder="e.g. 14 (default 7)"
+              />
+            </div>
+            <div>
+              <label className={styles.editLabel}>Depends on (predecessors)</label>
+              <select
+                multiple
+                className={sharedStyles.input}
+                style={{ height: 64 }}
+                value={form.dependencies}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, (o) => o.value);
+                  setForm((f) => ({ ...f, dependencies: selected }));
+                }}
+              >
+                {phases.filter((p) => p.id !== phase.id).map((p) => (
+                  <option key={p.id} value={p.id}>Phase {p.number}: {p.name}</option>
+                ))}
+              </select>
+              <p style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '3px 0 0' }}>
+                Hold Ctrl/Cmd to select multiple. Leave empty to use sequential order.
+              </p>
+            </div>
+          </div>
           <label className={styles.checkRow}>
             <input
               type="checkbox"
@@ -371,10 +420,11 @@ export default function PhaseTracker({ project }) {
   const { addPhase } = useProjects();
   const [showForm, setShowForm] = useState(false);
   const [newPhase, setNewPhase] = useState({
-    name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false,
+    name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false, duration: '',
   });
 
-  const phases = project.phases || [];
+  const phases  = project.phases || [];
+  const cpmData = useMemo(() => computeCPM(phases), [phases]);
 
   async function handleAddPhase(e) {
     e.preventDefault();
@@ -385,9 +435,10 @@ export default function PhaseTracker({ project }) {
       scopeCap:     newPhase.scopeCap.trim(),
       doneCriteria: newPhase.doneCriteria.split('\n').map((s) => s.trim()).filter(Boolean),
       parallel:     newPhase.parallel,
+      duration:     newPhase.duration ? Number(newPhase.duration) : null,
       tasks:        [],
     });
-    setNewPhase({ name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false });
+    setNewPhase({ name: '', targetDate: '', scopeCap: '', doneCriteria: '', parallel: false, duration: '' });
     setShowForm(false);
   }
 
@@ -408,14 +459,15 @@ export default function PhaseTracker({ project }) {
             projectId={project._docId}
             index={i}
             total={phases.length}
+            cpmData={cpmData}
           />
         ))}
       </ul>
 
       {showForm ? (
         <form className={styles.addPhaseForm} onSubmit={handleAddPhase}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div style={{ gridColumn: '1 / 2' }}>
               <label className={styles.editLabel}>Phase name *</label>
               <input
                 className={sharedStyles.input}
@@ -433,6 +485,17 @@ export default function PhaseTracker({ project }) {
                 className={sharedStyles.input}
                 value={newPhase.targetDate}
                 onChange={(e) => setNewPhase((f) => ({ ...f, targetDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className={styles.editLabel}>Duration (days)</label>
+              <input
+                type="number"
+                min={1}
+                className={sharedStyles.input}
+                placeholder="e.g. 14"
+                value={newPhase.duration}
+                onChange={(e) => setNewPhase((f) => ({ ...f, duration: e.target.value }))}
               />
             </div>
           </div>

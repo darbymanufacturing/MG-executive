@@ -126,6 +126,8 @@ export function ProjectProvider({ children }) {
         scopeCap:     phase.scopeCap || '',
         parallel:     phase.parallel || false,
         tasks:        phase.tasks || [],
+        duration:     phase.duration || null,
+        dependencies: phase.dependencies || [],
       },
     ];
     await updateDoc(doc(db, PROJECTS_COL, docId), { phases, updatedAt: serverTimestamp() });

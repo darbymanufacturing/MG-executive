@@ -1,0 +1,252 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Summary strip ── */
+.summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 90px;
+}
+
+.summaryCardCritical {
+  background: color-mix(in srgb, #E84545 8%, transparent);
+  border-color: color-mix(in srgb, #E84545 35%, transparent);
+}
+
+.summaryNum {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.summaryCardCritical .summaryNum { color: #E84545; }
+
+.summaryLabel {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* ── Hint ── */
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, #F5A623 8%, transparent);
+  border: 1px solid color-mix(in srgb, #F5A623 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+/* ── Critical path chain ── */
+.cpChain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: color-mix(in srgb, #E84545 6%, transparent);
+  border: 1px solid color-mix(in srgb, #E84545 25%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.cpLabel {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: #E84545;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 6px;
+}
+
+.cpStep {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cpArrow {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-right: 2px;
+}
+
+.cpName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cpDays {
+  font-size: 10px;
+  color: #E84545;
+  background: color-mix(in srgb, #E84545 12%, transparent);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+
+/* ── Table ── */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  vertical-align: middle;
+}
+
+.tdNum {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rowCritical {
+  background: color-mix(in srgb, #E84545 4%, transparent);
+}
+
+.rowCritical .td,
+.rowCritical .tdNum {
+  border-bottom-color: color-mix(in srgb, #E84545 15%, transparent);
+}
+
+table tbody tr:last-child .td,
+table tbody tr:last-child .tdNum {
+  border-bottom: none;
+}
+
+.phaseName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.criticalTag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #E84545;
+  background: color-mix(in srgb, #E84545 12%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.floatZero { color: #E84545; font-weight: 700; }
+.floatPos  { color: #00C896; }
+
+/* ── Float bar (mini Gantt inside table) ── */
+.barWrap {
+  display: flex;
+  align-items: center;
+  height: 12px;
+  width: 100%;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.workBar {
+  height: 100%;
+  background: var(--color-primary-light);
+  border-radius: 2px 0 0 2px;
+  flex-shrink: 0;
+}
+
+.workBarCritical {
+  background: #E84545;
+}
+
+.floatBar {
+  height: 100%;
+  background: color-mix(in srgb, #00C896 35%, transparent);
+  flex-shrink: 0;
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.legendSwatch {
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.legendSwatchCritical { background: #E84545; }
+.legendSwatchFloat { background: color-mix(in srgb, #00C896 35%, transparent); border: 1px solid #00C896; }
+
+.legendDesc {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  flex: 1;
+  min-width: 200px;
+}
