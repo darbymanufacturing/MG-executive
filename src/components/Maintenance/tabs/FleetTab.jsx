@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle, FileX, FileCheck } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
+import { useTelemetry } from '../../../context/TelemetryContext.jsx';
 import { useCosts } from '../../../context/CostContext.jsx';
 import ScooterForm from '../fleet/ScooterForm.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
@@ -18,6 +19,7 @@ const STATUS_COLOR = {
 export default function FleetTab() {
   const navigate = useNavigate();
   const { scooters, tickets, addScooter, updateScooter, deleteScooter } = useMaintenance();
+  const { events: telemetryEvents } = useTelemetry();
   const { config } = useCosts();
   const cities = config.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
 
@@ -27,6 +29,7 @@ export default function FleetTab() {
   const [cityF, setCityF]         = useState('All');
   const [statusF, setStatusF]     = useState('All');
   const [search, setSearch]       = useState('');
+  const [noCsvOnly, setNoCsvOnly] = useState(false);
 
   // Open tickets per scooter (active, not completed/donor)
   const openTicketCount = useMemo(() => {
@@ -39,16 +42,24 @@ export default function FleetTab() {
     return map;
   }, [tickets]);
 
+  // Scooter IDs that have at least one telemetry event (Status Log CSV uploaded)
+  const scootersWithData = useMemo(() => {
+    const s = new Set();
+    telemetryEvents.forEach((ev) => { if (ev.scooterId) s.add(String(ev.scooterId)); });
+    return s;
+  }, [telemetryEvents]);
+
   const filtered = useMemo(() => {
     return scooters.filter((s) => {
       if (cityF   !== 'All' && s.city   !== cityF)   return false;
       if (statusF !== 'All' && s.status !== statusF) return false;
+      if (noCsvOnly && scootersWithData.has(String(s.scooterId))) return false;
       if (search && !String(s.scooterId).includes(search) &&
           !s.model?.toLowerCase().includes(search.toLowerCase()) &&
           !s.notes?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [scooters, cityF, statusF, search]);
+  }, [scooters, cityF, statusF, search, noCsvOnly, scootersWithData]);
 
   // Summary counts
   const summary = useMemo(() => ({
@@ -57,7 +68,8 @@ export default function FleetTab() {
     inRepair: scooters.filter((s) => s.status === 'In Repair').length,
     retired:  scooters.filter((s) => s.status === 'Retired').length,
     donor:    scooters.filter((s) => s.status === 'Donor').length,
-  }), [scooters]);
+    noCsv:    scooters.filter((s) => !scootersWithData.has(String(s.scooterId))).length,
+  }), [scooters, scootersWithData]);
 
   async function handleSave(form) {
     if (editing) await updateScooter(editing._docId, form);
@@ -92,6 +104,18 @@ export default function FleetTab() {
           <span className={styles.summaryVal} style={{ color: '#ef4444' }}>{summary.donor}</span>
           <span className={styles.summaryKey}>Donor</span>
         </div>
+        <div className={styles.summaryDivider} />
+        <div
+          className={styles.summaryItem}
+          style={{ cursor: summary.noCsv > 0 ? 'pointer' : 'default' }}
+          onClick={() => summary.noCsv > 0 && setNoCsvOnly((v) => !v)}
+          title={summary.noCsv > 0 ? 'Click to filter to scooters missing CSV data' : undefined}
+        >
+          <span className={styles.summaryVal} style={{ color: summary.noCsv > 0 ? '#f59e0b' : '#22c55e' }}>
+            {summary.noCsv}
+          </span>
+          <span className={styles.summaryKey}>No CSV</span>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -121,6 +145,15 @@ export default function FleetTab() {
               onClick={() => setStatusF(s)}
             >{s}</button>
           ))}
+          <button
+            className={`${styles.chip} ${noCsvOnly ? styles.chipWarn : ''}`}
+            onClick={() => setNoCsvOnly((v) => !v)}
+            title="Show only scooters with no Status Log CSV uploaded"
+          >
+            <FileX size={11} style={{ marginRight: 3, verticalAlign: 'middle' }} />
+            No CSV
+            {summary.noCsv > 0 && <span className={styles.chipCount}>{summary.noCsv}</span>}
+          </button>
         </div>
 
         <Button variant="primary" size="sm" onClick={openNew}>
@@ -144,6 +177,7 @@ export default function FleetTab() {
                 <th>Model</th>
                 <th>City</th>
                 <th>Status</th>
+                <th>Telemetry</th>
                 <th>Open Tickets</th>
                 <th>Purchase Date</th>
                 <th>Price (€)</th>
@@ -154,6 +188,7 @@ export default function FleetTab() {
             <tbody>
               {filtered.map((s) => {
                 const openCount = openTicketCount[String(s.scooterId)] || 0;
+                const hasData   = scootersWithData.has(String(s.scooterId));
                 return (
                   <tr
                     key={s._docId}
@@ -170,6 +205,17 @@ export default function FleetTab() {
                       >
                         {s.status}
                       </span>
+                    </td>
+                    <td>
+                      {hasData ? (
+                        <span className={styles.dataOkBadge}>
+                          <FileCheck size={11} /> Loaded
+                        </span>
+                      ) : (
+                        <span className={styles.noDataBadge}>
+                          <FileX size={11} /> No CSV
+                        </span>
+                      )}
                     </td>
                     <td>
                       {openCount > 0 ? (

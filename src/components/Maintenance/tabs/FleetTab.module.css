@@ -139,6 +139,61 @@
 }
 .ticketNone { color: var(--color-text-muted); }
 
+/* ── Telemetry data badges ── */
+.dataOkBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.noDataBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* ── No CSV filter chip variant ── */
+.chipWarn {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #f59e0b;
+}
+.chipWarn:hover { background: rgba(245, 158, 11, 0.22); color: #f59e0b; }
+
+.chipCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 158, 11, 0.25);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  margin-left: 4px;
+  min-width: 16px;
+}
+
+/* ── Summary divider ── */
+.summaryDivider {
+  width: 1px;
+  background: var(--color-border);
+  align-self: stretch;
+  margin: 0 4px;
+}
+
 /* ── Row actions ── */
 .actionsCell {
   white-space: nowrap;
