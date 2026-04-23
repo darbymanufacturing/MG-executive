@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X, Tag } from 'lucide-react';
+import { Plus, X, Tag, Check, Archive, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import styles from './Brainstorm.module.css';
 import sharedStyles from './Projects.module.css';
@@ -7,12 +7,13 @@ import sharedStyles from './Projects.module.css';
 const TAGS = ['General', 'Revenue', 'Operations', 'Technology', 'Fleet', 'Cities'];
 
 export default function Brainstorm() {
-  const { brainstormIdeas, addBrainstormIdea, deleteBrainstormIdea } = useProjects();
-  const [showForm, setShowForm] = useState(false);
-  const [text, setText] = useState('');
-  const [tag, setTag] = useState('General');
-  const [filterTag, setFilterTag] = useState('All');
-  const [saving, setSaving] = useState(false);
+  const { brainstormIdeas, addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea } = useProjects();
+  const [showForm, setShowForm]       = useState(false);
+  const [text, setText]               = useState('');
+  const [tag, setTag]                 = useState('General');
+  const [filterTag, setFilterTag]     = useState('All');
+  const [showArchived, setShowArchived] = useState(false);
+  const [saving, setSaving]           = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -25,9 +26,34 @@ export default function Brainstorm() {
     setSaving(false);
   }
 
-  const filtered = filterTag === 'All'
-    ? brainstormIdeas
-    : brainstormIdeas.filter((i) => i.tag === filterTag);
+  function toggleDone(idea) {
+    updateBrainstormIdea(idea._docId, { done: !idea.done });
+  }
+
+  function archiveIdea(idea) {
+    updateBrainstormIdea(idea._docId, { archived: true, archivedAt: new Date().toISOString() });
+  }
+
+  function restoreIdea(idea) {
+    updateBrainstormIdea(idea._docId, { archived: false, archivedAt: null });
+  }
+
+  const active   = brainstormIdeas.filter((i) => !i.archived);
+  const archived = brainstormIdeas.filter((i) => i.archived);
+
+  const filteredActive = filterTag === 'All'
+    ? active
+    : active.filter((i) => i.tag === filterTag);
+
+  // Put done ideas at the bottom of the active list
+  const sortedActive = [
+    ...filteredActive.filter((i) => !i.done),
+    ...filteredActive.filter((i) =>  i.done),
+  ];
+
+  const filteredArchived = filterTag === 'All'
+    ? archived
+    : archived.filter((i) => i.tag === filterTag);
 
   return (
     <div className={styles.page}>
@@ -91,36 +117,113 @@ export default function Brainstorm() {
         ))}
       </div>
 
-      {/* Ideas list */}
-      {filtered.length === 0 ? (
+      {/* Active ideas list */}
+      {sortedActive.length === 0 ? (
         <p className={sharedStyles.empty}>
-          {brainstormIdeas.length === 0
+          {active.length === 0
             ? 'No ideas yet — hit "Add Idea" to capture your first one.'
             : 'No ideas with this tag.'}
         </p>
       ) : (
         <ul className={styles.list}>
-          {filtered.map((idea) => (
-            <li key={idea._docId} className={styles.entry}>
+          {sortedActive.map((idea) => (
+            <li key={idea._docId} className={`${styles.entry} ${idea.done ? styles.entryDone : ''}`}>
               <div className={styles.entryMeta}>
                 <span className={styles.date}>{idea.createdAt?.slice(0, 10)}</span>
                 {idea.tag && idea.tag !== 'General' && (
                   <span className={styles.tagBadge}>{idea.tag}</span>
                 )}
+                {idea.done && <span className={styles.doneBadge}>Done</span>}
               </div>
               <div className={styles.entryBody}>
-                <span className={styles.ideaText}>{idea.text}</span>
-                <button
-                  className={styles.deleteBtn}
-                  onClick={() => deleteBrainstormIdea(idea._docId)}
-                  title="Remove"
-                >
-                  <X size={13} />
-                </button>
+                <span className={`${styles.ideaText} ${idea.done ? styles.ideaTextDone : ''}`}>
+                  {idea.text}
+                </span>
+                <div className={styles.entryActions}>
+                  <button
+                    className={`${styles.actionBtn} ${idea.done ? styles.actionBtnDone : ''}`}
+                    onClick={() => toggleDone(idea)}
+                    title={idea.done ? 'Mark as active' : 'Mark as done'}
+                  >
+                    <Check size={13} />
+                  </button>
+                  {idea.done && (
+                    <button
+                      className={`${styles.actionBtn} ${styles.actionBtnArchive}`}
+                      onClick={() => archiveIdea(idea)}
+                      title="Archive this idea"
+                    >
+                      <Archive size={13} />
+                    </button>
+                  )}
+                  <button
+                    className={styles.deleteBtn}
+                    onClick={() => deleteBrainstormIdea(idea._docId)}
+                    title="Delete"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               </div>
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Archived section */}
+      {archived.length > 0 && (
+        <div className={styles.archivedSection}>
+          <button
+            className={styles.archivedToggle}
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            {showArchived ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            Archived
+            <span className={styles.archivedCount}>{archived.length}</span>
+          </button>
+
+          {showArchived && (
+            <ul className={styles.list} style={{ marginTop: 8 }}>
+              {filteredArchived.map((idea) => (
+                <li key={idea._docId} className={`${styles.entry} ${styles.entryArchived}`}>
+                  <div className={styles.entryMeta}>
+                    <span className={styles.date}>{idea.createdAt?.slice(0, 10)}</span>
+                    {idea.tag && idea.tag !== 'General' && (
+                      <span className={styles.tagBadge}>{idea.tag}</span>
+                    )}
+                    <span className={styles.archivedBadge}>Archived</span>
+                  </div>
+                  <div className={styles.entryBody}>
+                    <span className={`${styles.ideaText} ${styles.ideaTextDone}`}>
+                      {idea.text}
+                    </span>
+                    <div className={styles.entryActions}>
+                      <button
+                        className={`${styles.actionBtn} ${styles.actionBtnRestore}`}
+                        onClick={() => restoreIdea(idea)}
+                        title="Restore to active"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                      <button
+                        className={styles.deleteBtn}
+                        onClick={() => deleteBrainstormIdea(idea._docId)}
+                        title="Delete permanently"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+              {filteredArchived.length === 0 && (
+                <p className={sharedStyles.empty} style={{ padding: '12px 16px' }}>
+                  No archived ideas with this tag.
+                </p>
+              )}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

@@ -162,3 +162,108 @@
   transition: all var(--transition-fast);
 }
 .deleteBtn:hover { color: #E84545; opacity: 1; }
+
+/* ── Entry states ── */
+.entryDone {
+  opacity: 0.75;
+  border-color: color-mix(in srgb, #00C896 25%, transparent);
+  background: color-mix(in srgb, #00C896 4%, transparent);
+}
+
+.entryArchived {
+  opacity: 0.6;
+  background: var(--color-surface);
+}
+
+.ideaTextDone {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+/* ── Done / archived badges ── */
+.doneBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #00C896;
+  background: rgba(0, 200, 150, 0.12);
+  border: 1px solid rgba(0, 200, 150, 0.3);
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+}
+
+.archivedBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+}
+
+/* ── Entry action buttons ── */
+.entryActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  display: flex;
+  align-items: center;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+}
+.actionBtn:hover { opacity: 1; border-color: #00C896; color: #00C896; }
+
+.actionBtnDone {
+  opacity: 1;
+  background: rgba(0, 200, 150, 0.1);
+  border-color: rgba(0, 200, 150, 0.4);
+  color: #00C896;
+}
+.actionBtnDone:hover { background: rgba(0, 200, 150, 0.2); }
+
+.actionBtnArchive:hover { border-color: var(--color-primary-light); color: var(--color-primary-light); }
+
+.actionBtnRestore:hover { border-color: #3B82F6; color: #3B82F6; }
+
+/* ── Archived section ── */
+.archivedSection {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+}
+
+.archivedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color var(--transition-fast);
+}
+.archivedToggle:hover { color: var(--color-text-secondary); }
+
+.archivedCount {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 0 7px;
+  color: var(--color-text-muted);
+  min-width: 18px;
+  text-align: center;
+}
