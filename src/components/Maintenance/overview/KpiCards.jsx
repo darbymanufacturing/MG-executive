@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import {
-  Activity, Wrench, TrendingDown, Clock,
+  Activity, Wrench, Zap, Clock,
   AlertTriangle, Package, DollarSign, CheckCircle2,
 } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import MetricCard from './MetricCard.jsx';
 import styles from './KpiCards.module.css';
 
+const MONTH_KEYS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
 export default function KpiCards({ filteredTickets }) {
-  const { parts, config, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts } = useMaintenance();
+  const { parts, scooters, config, activeCount, isAtMaxActive, lowStockParts } = useMaintenance();
 
   const cards = useMemo(() => {
     const now = new Date();
@@ -21,11 +23,26 @@ export default function KpiCards({ filteredTickets }) {
     // 2. Total open (non-completed)
     const totalOpen = filteredTickets.filter((t) => t.status !== 'Completed').length;
 
-    // 3. Revenue at risk (from filteredTickets open)
-    const filteredRevenueLost = filteredTickets
-      .filter((t) => t.status !== 'Completed')
-      .reduce((s, t) => s + (t.revenueLost ?? 0), 0);
-    const revenueVariant = filteredRevenueLost > 500 ? 'danger' : filteredRevenueLost > 100 ? 'warning' : 'default';
+    // 3. Revenue bleedthrough per day
+    // Idle = scooters with status "In Repair" (pulling revenue out of service)
+    const monthKey   = MONTH_KEYS[currentMonth];
+    const dailyRate  = config.seasonalityIndex?.[monthKey] ?? config.revenueRatePerDay ?? 3.67;
+    const idleScooters = scooters.filter((s) => s.status === 'In Repair');
+    const bleedthroughPerDay = idleScooters.length * dailyRate;
+
+    // City breakdown for sublabel
+    const byCity = idleScooters.reduce((acc, s) => {
+      const city = s.city || 'Unknown';
+      acc[city] = (acc[city] || 0) + 1;
+      return acc;
+    }, {});
+    const cityStr = Object.entries(byCity)
+      .map(([city, count]) => `${city}: ${count}`)
+      .join(' · ');
+    const bleedSublabel = idleScooters.length === 0
+      ? 'no scooters in repair'
+      : cityStr || `${idleScooters.length} in repair`;
+    const bleedVariant = bleedthroughPerDay > 30 ? 'danger' : bleedthroughPerDay > 10 ? 'warning' : 'default';
 
     // 4. Avg days open
     const openTickets = filteredTickets.filter((t) => t.status !== 'Completed');
@@ -64,11 +81,11 @@ export default function KpiCards({ filteredTickets }) {
         variant: 'default',
       },
       {
-        label:    'Revenue at Risk',
-        value:    `€${filteredRevenueLost.toFixed(0)}`,
-        icon:     TrendingDown,
-        sublabel: 'non-completed tickets',
-        variant:  revenueVariant,
+        label:    'Revenue Bleedthrough / day',
+        value:    `€${bleedthroughPerDay.toFixed(2)}`,
+        icon:     Zap,
+        sublabel: bleedSublabel,
+        variant:  bleedVariant,
       },
       {
         label:    'Avg Days Open',
@@ -105,7 +122,7 @@ export default function KpiCards({ filteredTickets }) {
         variant:  'success',
       },
     ];
-  }, [filteredTickets, parts, config, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts]);
+  }, [filteredTickets, parts, scooters, config, activeCount, isAtMaxActive, lowStockParts]);
 
   return (
     <div className={styles.grid}>
