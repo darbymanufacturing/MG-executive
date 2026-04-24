@@ -1,35 +1,49 @@
 import { useState, useRef } from 'react';
-import { Camera, Loader2, CheckCircle, X } from 'lucide-react';
+import { Camera, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebase.js';
 import styles from './PhotoUpload.module.css';
 
 export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onChange }) {
   const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState(null);
   const [inputKey, setInputKey]   = useState(0);
-  const inputRef   = useRef();
-  // Keep a ref to the latest photoUrls to avoid stale closure mid-upload
-  const urlsRef    = useRef(photoUrls);
-  urlsRef.current  = photoUrls;
+  const inputRef    = useRef(null);
+
+  // Synchronous guard — React state updates are async so checking `uploading`
+  // state inside handleFile can't stop a second iOS onChange that fires before
+  // the first setUploading(true) has caused a re-render.
+  const inFlightRef = useRef(false);
+  // Mirror photoUrls into a ref so the closure always reads the latest list
+  // even if the parent re-rendered while the upload was in progress.
+  const urlsRef     = useRef(photoUrls);
+  urlsRef.current   = photoUrls;
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
-    if (!file || uploading) return;
+    if (!file || inFlightRef.current) return;
+
+    inFlightRef.current = true;
     setUploading(true);
-    // Reset the input immediately so the same file can be re-selected later.
-    // Using a key-increment remounts the element, which is the safe React way
-    // to reset a file input without triggering a spurious onChange.
-    setInputKey((k) => k + 1);
+    setError(null);
+
     try {
-      const ext  = file.name.split('.').pop() || 'jpg';
-      const path = `repair-photos/${sessionId}/${stepNumber}-${Date.now()}.${ext}`;
+      const ext        = file.name.split('.').pop() || 'jpg';
+      const path       = `repair-photos/${sessionId}/${stepNumber}-${Date.now()}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       onChange([...urlsRef.current, url]);
+      // Remount the input only after a successful upload (not at the start).
+      // On iOS WebKit, replacing the input element while a camera handoff is
+      // still in progress fires another spurious onChange — doing it here,
+      // after the upload is fully done, avoids that window.
+      setInputKey((k) => k + 1);
     } catch (err) {
       console.error('Photo upload failed:', err);
+      setError('Upload failed — tap to retry');
     } finally {
+      inFlightRef.current = false;
       setUploading(false);
     }
   }
@@ -53,12 +67,14 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
         </div>
       )}
 
+      {/* No capture="environment": iOS already offers "Take Photo / Choose from
+          Library" natively for accept="image/*". The capture attribute causes
+          extra spurious onChange events during iOS camera-app handoff. */}
       <input
         key={inputKey}
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         style={{ display: 'none' }}
         onChange={handleFile}
       />
@@ -76,6 +92,12 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
             : <><Camera size={16} /> Take / choose photo</>
         }
       </button>
+
+      {error && (
+        <span className={styles.errorMsg}>
+          <AlertCircle size={13} /> {error}
+        </span>
+      )}
     </div>
   );
 }
