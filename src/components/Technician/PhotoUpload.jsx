@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import { Camera, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../lib/firebase.js';
 import styles from './PhotoUpload.module.css';
+
+const CLOUDINARY_CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = 'repair_photos';
 
 export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onChange }) {
   const [uploading, setUploading] = useState(false);
@@ -28,11 +29,27 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
     setError(null);
 
     try {
-      const ext        = file.name.split('.').pop() || 'jpg';
-      const path       = `repair-photos/${sessionId}/${stepNumber}-${Date.now()}.${ext}`;
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      if (!CLOUDINARY_CLOUD_NAME) {
+        throw new Error('Missing VITE_CLOUDINARY_CLOUD_NAME env var');
+      }
+
+      const form = new FormData();
+      form.append('file', file);
+      form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      form.append('folder', `repair-photos/${sessionId}`);
+      form.append('public_id', `${stepNumber}-${Date.now()}`);
+      form.append('context', `sessionId=${sessionId}|stepNumber=${stepNumber}`);
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: 'POST', body: form }
+      );
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Cloudinary ${res.status}: ${body}`);
+      }
+      const data = await res.json();
+      const url  = data.secure_url;
       onChange([...urlsRef.current, url]);
       // Remount the input only after a successful upload (not at the start).
       // On iOS WebKit, replacing the input element while a camera handoff is
