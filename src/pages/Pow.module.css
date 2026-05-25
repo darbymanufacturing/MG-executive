@@ -323,6 +323,14 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 768px) {
-  .page { padding: var(--space-4); }
+  .page { padding: var(--space-4); gap: var(--space-5); }
   .pageHeader { flex-direction: column; }
+  .headerControls { width: 100%; }
+  .weekBlock { flex-wrap: wrap; }
+  .weekBtn { padding: 6px 10px; min-height: 36px; }
+  .catTab { padding: 6px 12px; min-height: 36px; }
+  .personBtn { padding: 6px 14px; min-height: 36px; }
+  .toggleBtn { padding: var(--space-2) var(--space-4); min-height: 36px; }
+  .addBtn { padding: var(--space-2) var(--space-4); min-height: 36px; }
+  .todoGrid { grid-template-columns: 1fr; }
 }

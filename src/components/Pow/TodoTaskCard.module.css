@@ -165,3 +165,12 @@
   white-space: pre-wrap;
   line-height: 1.6;
 }
+
+/* Touch devices: actions always visible, bigger tap targets, wrapping assign row */
+@media (hover: none) {
+  .actions { opacity: 1; }
+  .statusBtn { padding: 4px; }
+  .iconBtn { padding: 6px; min-width: 32px; min-height: 32px; justify-content: center; }
+  .assignRow { flex-wrap: wrap; }
+  .assignToggle { padding: 5px 12px; min-height: 32px; }
+}
