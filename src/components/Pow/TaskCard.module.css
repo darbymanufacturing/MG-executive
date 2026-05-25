@@ -2,7 +2,7 @@
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -25,6 +25,10 @@
   flex-shrink: 0;
   margin-top: 1px;
   display: flex;
+  min-width: 24px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
 }
 .doneIcon { color: var(--color-success); }
 .todoIcon { color: var(--color-text-muted); }
@@ -44,6 +48,7 @@
   gap: var(--space-1);
   opacity: 0;
   transition: opacity var(--transition-fast);
+  flex-shrink: 0;
 }
 .card:hover .actions { opacity: 1; }
 
@@ -51,12 +56,15 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
   transition: all var(--transition-fast);
+  min-width: 28px;
+  min-height: 28px;
+  justify-content: center;
 }
 .iconBtn:hover { color: var(--color-text-primary); background: var(--color-border); }
 .iconBtn.danger:hover { color: var(--color-danger); }
@@ -96,6 +104,7 @@
   color: var(--color-text-muted);
   padding-left: calc(17px + var(--space-2));
   transition: color var(--transition-fast);
+  min-height: 28px;
 }
 .expandBtn:hover { color: var(--color-primary-light); }
 
@@ -143,9 +152,31 @@
   padding-left: calc(17px + var(--space-2));
 }
 
-/* Touch devices: actions always visible, bigger tap targets */
-@media (hover: none) {
+/* Mobile: always-visible actions, larger tap targets */
+@media (max-width: 768px) {
   .actions { opacity: 1; }
-  .statusBtn { padding: 4px; }
-  .iconBtn { padding: 6px; min-width: 32px; min-height: 32px; justify-content: center; }
+
+  .card {
+    padding: var(--space-3) var(--space-3) var(--space-2);
+    border-radius: var(--radius-lg);
+  }
+
+  .statusBtn {
+    min-width: 36px;
+    min-height: 36px;
+    margin-top: 0;
+  }
+
+  .iconBtn {
+    padding: 6px 8px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .expandBtn { min-height: 36px; }
+}
+
+/* Board mobile: even more compact inside 200px columns */
+@media (max-width: 768px) {
+  .card .title { font-size: var(--text-xs); }
 }

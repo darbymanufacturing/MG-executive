@@ -20,6 +20,8 @@
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
+  max-height: calc(100dvh - 80px);
+  overflow: hidden;
 }
 
 .header {
@@ -27,6 +29,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
+  flex-shrink: 0;
 }
 
 .header h2 {
@@ -53,6 +56,9 @@
   align-items: center;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
 }
 .closeBtn:hover { color: var(--color-text-primary); }
 
@@ -60,6 +66,7 @@
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
   margin: 0;
+  flex-shrink: 0;
 }
 
 .stepsList {
@@ -68,6 +75,9 @@
   gap: var(--space-2);
   max-height: 320px;
   overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 .step {
@@ -80,6 +90,7 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   background: var(--color-surface-2);
+  min-height: 44px;
 }
 .step:hover { border-color: var(--color-primary); }
 .step.selected {
@@ -92,8 +103,8 @@
   flex-shrink: 0;
   accent-color: var(--color-primary);
   cursor: pointer;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .stepNum {
@@ -115,6 +126,7 @@
   gap: var(--space-3);
   padding-top: var(--space-2);
   border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .cancelBtn {
@@ -142,15 +154,56 @@
 }
 .confirmBtn:hover { opacity: 0.9; }
 
-@media (max-width: 600px) {
-  .modal { padding: var(--space-4); }
+/* ── Mobile: bottom sheet ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    max-height: 88dvh;
+    max-width: 100%;
+    padding: var(--space-2) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+    gap: var(--space-3);
+    animation: slideUp 220ms cubic-bezier(0.34, 1.0, 0.64, 1) both;
+  }
+
+  /* Drag handle */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-border-subtle);
+    margin: var(--space-1) auto;
+    flex-shrink: 0;
+  }
+
+  .stepsList {
+    max-height: 45dvh;
+  }
+
+  .step { min-height: 48px; }
+
   .actions {
     flex-direction: column-reverse;
     gap: var(--space-2);
   }
+
   .confirmBtn, .cancelBtn {
     width: 100%;
     text-align: center;
     padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
   }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0.8; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
