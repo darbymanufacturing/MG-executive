@@ -1,0 +1,93 @@
+import { createContext, useContext, useState, useEffect } from 'react';
+import {
+  collection, query, orderBy, onSnapshot, addDoc, updateDoc,
+  doc, serverTimestamp, where, arrayUnion,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
+import { useAuth } from './AuthContext.jsx';
+
+const IssueContext = createContext(null);
+
+const COLLECTION = 'issues';
+
+export function IssueProvider({ children }) {
+  const { user } = useAuth();
+  const [issues, setIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      setIssues(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [user]);
+
+  async function createIssue(fields) {
+    if (!user) throw new Error('Not authenticated');
+    return addDoc(collection(db, COLLECTION), {
+      title: '',
+      description: '',
+      type: 'other',
+      status: 'new',
+      urgency: 'medium',
+      owner: user.uid,
+      createdBy: user.uid,
+      visibility: 'admin',
+      attachments: [],
+      notes: [],
+      nextAction: '',
+      relatedEntity: null,
+      dueDate: null,
+      snoozeUntil: null,
+      ...fields,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function updateIssue(id, fields) {
+    return updateDoc(doc(db, COLLECTION, id), {
+      ...fields,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function snoozeIssue(id, until) {
+    return updateIssue(id, { status: 'snoozed', snoozeUntil: until });
+  }
+
+  async function resolveIssue(id) {
+    return updateIssue(id, { status: 'done' });
+  }
+
+  async function addNote(id, text) {
+    if (!user) throw new Error('Not authenticated');
+    return updateDoc(doc(db, COLLECTION, id), {
+      notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  /* Active (non-done, non-snoozed) issues for inbox */
+  const activeIssues = issues.filter(i => i.status !== 'done' && i.status !== 'snoozed');
+
+  return (
+    <IssueContext.Provider value={{ issues, activeIssues, loading, createIssue, updateIssue, snoozeIssue, resolveIssue, addNote }}>
+      {children}
+    </IssueContext.Provider>
+  );
+}
+
+export function useIssues() {
+  const ctx = useContext(IssueContext);
+  if (!ctx) throw new Error('useIssues must be used inside IssueProvider');
+  return ctx;
+}
+
+export function useIssue(id) {
+  const { issues } = useIssues();
+  return issues.find(i => i.id === id) || null;
+}

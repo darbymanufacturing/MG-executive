@@ -1,92 +1,193 @@
-import { useState, useCallback } from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Receipt, Settings, LogOut, Radar, Wrench, Crosshair, ClipboardList, Activity, HardHat, TrendingUp, Bike, Zap } from 'lucide-react';
+import { useCallback } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  Inbox, Sparkles, Activity, Bell, Flag, Wrench, Folder,
+  Users, Receipt, Landmark, Package, Settings, ChevronLeft, ChevronRight,
+  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, HardHat, ClipboardList,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
-import SparkleBurst from '../PME/shared/SparkleBurst.jsx';
 import styles from './Sidebar.module.css';
 
-const NAV = [
-  { to: '/',            icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/projects',    icon: ClipboardList,   label: 'Projects' },
-  { to: '/war-room',    icon: Crosshair,       label: 'War Room' },
-  { to: '/scooters',    icon: Bike,            label: 'Scooters' },
-  { to: '/investment',  icon: TrendingUp,      label: 'Investment' },
-  { to: '/costs',       icon: ListChecks,      label: 'Cost Manager' },
-  { to: '/revenue',     icon: Receipt,         label: 'Revenue' },
-  { to: '/spr',         icon: Radar,           label: 'SPR' },
-  { to: '/maintenance', icon: Wrench,          label: 'Maintenance' },
-  { to: '/technician',  icon: HardHat,         label: 'Tech Queue' },
-  { to: '/pme',         icon: Activity,        label: 'PME',         sparkle: true },
-  { to: '/pow',         icon: Zap,             label: 'POW v3' },
-  { to: '/settings',    icon: Settings,        label: 'Settings' },
+/* ─── Nav structure ─── */
+const NAV_PRIMARY = [
+  { to: '/',       icon: Inbox,     label: 'Inbox',         key: 'inbox' },
+  { to: '/brief',  icon: Sparkles,  label: 'Daily Brief',   key: 'brief' },
+  { to: '/pulse',  icon: Activity,  label: 'Pulse',         key: 'pulse' },
 ];
 
-export default function Sidebar({ open, onClose }) {
-  const { user, signOut } = useAuth();
-  const { badgeCount } = useNotifications();
-  const [burst, setBurst] = useState(null); // { x, y } or null
+const NAV_OPERATIONS = [
+  { to: '/issues',      icon: Flag,        label: 'Issues',    key: 'issues'   },
+  { to: '/maintenance', icon: Wrench,      label: 'Tickets',   key: 'tickets'  },
+  { to: '/projects',    icon: ClipboardList,label: 'Projects',  key: 'projects' },
+  { to: '/crew',        icon: Users,       label: 'Crew',      key: 'crew'     },
+  { to: '/war-room',    icon: Crosshair,   label: 'War Room',  key: 'warroom'  },
+  { to: '/scooters',    icon: Bike,        label: 'Scooters',  key: 'scooters' },
+  { to: '/pme',         icon: Activity,    label: 'PME',       key: 'pme'      },
+  { to: '/pow',         icon: Zap,         label: 'POW v3',    key: 'pow'      },
+];
 
-  const handlePmeClick = useCallback((e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setBurst({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-    onClose?.();
-  }, [onClose]);
+const NAV_FINANCE = [
+  { to: '/costs',      icon: Receipt,    label: 'Costs',    key: 'costs'    },
+  { to: '/revenue',    icon: TrendingUp, label: 'Revenue',  key: 'revenue'  },
+  { to: '/investment', icon: Landmark,   label: 'Investment', key: 'invest' },
+  { to: '/spr',        icon: Radar,      label: 'SPR',      key: 'spr'      },
+];
+
+function Avatar({ name = 'U', size = 28 }) {
+  const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: 'var(--accent)', color: '#fff',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: size * 0.42,
+      flexShrink: 0, letterSpacing: '-0.01em',
+    }}>{initials}</div>
+  );
+}
+
+function NavItem({ to, icon: Icon, label, badge, collapsed, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) =>
+        `${styles.navItem} ${isActive ? styles.active : ''} ${collapsed ? styles.collapsed : ''}`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && !collapsed && <div className={styles.activeStripe} />}
+          <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} />
+          {!collapsed && (
+            <span className="omni-sidebar-label" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+              {label}
+            </span>
+          )}
+          {badge != null && !collapsed && (
+            <span className={`omni-sidebar-badge ${styles.badge} ${isActive ? styles.badgeActive : ''}`}>
+              {badge}
+            </span>
+          )}
+          {badge != null && collapsed && <span className={styles.badgeDot} />}
+        </>
+      )}
+    </NavLink>
+  );
+}
+
+function SidebarSection({ label, children, collapsed }) {
+  return (
+    <div className={styles.section}>
+      {!collapsed ? (
+        <div className={`omni-sidebar-section ${styles.sectionLabel}`}>{label}</div>
+      ) : (
+        <div className={styles.sectionDivider} />
+      )}
+      {children}
+    </div>
+  );
+}
+
+export default function Sidebar({ open, onClose, collapsed = false, onCollapse }) {
+  const { user, signOut, userRole } = useAuth();
+  const { badgeCount } = useNotifications();
+  const navigate = useNavigate();
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    navigate('/login');
+  }, [signOut, navigate]);
+
+  /* Crew members only see the /crew shell */
+  if (userRole === 'technician' || userRole === 'crew') return null;
+
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
 
   return (
-    <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
-      <div className={styles.logo}>
-        <img src="/logo.svg" alt="XSlide" className={styles.logoImg} />
-      </div>
+    <>
+      {/* Mobile overlay */}
+      {open && <div className={styles.overlay} onClick={onClose} />}
 
-      <nav className={styles.nav}>
-        {NAV.map(({ to, icon: Icon, label, sparkle }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            onClick={sparkle ? handlePmeClick : onClose}
-            onMouseEnter={to === '/war-room' ? () => {
-              // Ensure mapbox-gl chunk is cached before the click lands
-              import('mapbox-gl').catch(() => {});
-            } : undefined}
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''} ${sparkle ? styles.pmeItem : ''}`
-            }
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-            {to === '/projects' && badgeCount > 0 && (
-              <span className={styles.badge}>{badgeCount}</span>
-            )}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Sparkle burst on PME click */}
-      {burst && (
-        <SparkleBurst
-          x={burst.x}
-          y={burst.y}
-          onDone={() => setBurst(null)}
-        />
-      )}
-
-      <div className={styles.footer}>
-        <div className={styles.userInfo}>
-          <span className={styles.userEmail} title={user?.email}>
-            {user?.email}
-          </span>
+      <aside
+        className={`omni-sidebar ${styles.sidebar} ${open ? styles.open : ''}`}
+        data-collapsed={collapsed}
+        style={{ width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }}
+      >
+        {/* Brand + collapse toggle */}
+        <div className={`${styles.brand} ${collapsed ? styles.brandCollapsed : ''}`}>
+          {/* Omni mark */}
+          <div className={styles.omniMark}>
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+              <rect width="26" height="26" rx="7" fill="var(--accent)" />
+              <path d="M7 13C7 9.69 9.69 7 13 7s6 2.69 6 6-2.69 6-6 6-6-2.69-6-6z" stroke="#fff" strokeWidth="2.2" fill="none"/>
+              <circle cx="13" cy="13" r="2.2" fill="#fff"/>
+            </svg>
+          </div>
+          {!collapsed && (
+            <span className={`omni-sidebar-brandtext ${styles.brandText}`}>Omni</span>
+          )}
           <button
-            className={styles.logoutBtn}
-            onClick={signOut}
-            title="Sign out"
-            aria-label="Sign out"
+            className={styles.collapseBtn}
+            onClick={() => onCollapse?.(!collapsed)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand' : 'Collapse'}
           >
-            <LogOut size={14} />
+            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
           </button>
         </div>
-      </div>
-    </aside>
+
+        {/* Primary nav */}
+        <nav className={styles.nav}>
+          <NavItem to="/" icon={Inbox} label="Inbox" badge={badgeCount > 0 ? badgeCount : undefined} collapsed={collapsed} end />
+          <NavItem to="/brief" icon={Sparkles} label="Daily Brief" collapsed={collapsed} />
+          <NavItem to="/pulse" icon={Activity} label="Pulse" collapsed={collapsed} />
+          <NavItem to="/notifications" icon={Bell} label="Notifications" collapsed={collapsed} />
+        </nav>
+
+        {/* Operations section */}
+        <SidebarSection label="Operations" collapsed={collapsed}>
+          <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={8} collapsed={collapsed} />
+          <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={23} collapsed={collapsed} />
+          <NavItem to="/projects"    icon={ClipboardList} label="Projects"  collapsed={collapsed} />
+          <NavItem to="/crew"        icon={Users}         label="Crew"      collapsed={collapsed} />
+          <NavItem to="/war-room"    icon={Crosshair}     label="War Room"  collapsed={collapsed} />
+          <NavItem to="/scooters"    icon={Bike}          label="Scooters"  collapsed={collapsed} />
+          <NavItem to="/pme"         icon={Activity}      label="PME"       collapsed={collapsed} />
+          <NavItem to="/pow"         icon={Zap}           label="POW v3"    collapsed={collapsed} />
+        </SidebarSection>
+
+        {/* Finance section */}
+        <SidebarSection label="Finance" collapsed={collapsed}>
+          <NavItem to="/costs"      icon={Receipt}    label="Costs"      collapsed={collapsed} />
+          <NavItem to="/revenue"    icon={TrendingUp} label="Revenue"    collapsed={collapsed} />
+          <NavItem to="/investment" icon={Landmark}   label="Investment" collapsed={collapsed} />
+          <NavItem to="/spr"        icon={Radar}      label="SPR"        collapsed={collapsed} />
+        </SidebarSection>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Footer */}
+        <div className={styles.footer}>
+          <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} />
+          <div className={`omni-sidebar-user ${styles.userRow} ${collapsed ? styles.userRowCollapsed : ''}`}>
+            <Avatar name={displayName} size={28} />
+            {!collapsed && (
+              <div className={`omni-sidebar-user-text ${styles.userInfo}`}>
+                <span className={styles.userName}>{displayName}</span>
+                <span className={styles.userRole}>Founder · Admin</span>
+              </div>
+            )}
+            {!collapsed && (
+              <button className={styles.logoutBtn} onClick={handleSignOut} title="Sign out" aria-label="Sign out">
+                <LogOut size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }

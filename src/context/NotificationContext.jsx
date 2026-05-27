@@ -70,6 +70,7 @@ export function NotificationProvider({ children }) {
         notifications,
         activeNotifications,
         badgeCount,
+        unreadCount: badgeCount, /* Omni alias */
         pushNotification,
         dismissNotification,
         dismissAll,

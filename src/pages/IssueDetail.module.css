@@ -1,0 +1,162 @@
+.page { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.back { margin-bottom: 20px; }
+.notFound { padding: 40px; text-align: center; color: var(--fg-muted); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+}
+.main { display: flex; flex-direction: column; gap: 16px; }
+.rail { display: flex; flex-direction: column; gap: 12px; }
+
+.card { padding: 20px; }
+
+/* Header card */
+.pillRow { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.ageText { font-size: 12px; color: var(--fg-muted); }
+.issueTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--fg-strong);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-bottom: 14px;
+}
+.metaRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.metaItem { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-secondary); }
+
+/* Next action card */
+.nextActionCard { border-color: color-mix(in oklab, var(--accent) 40%, var(--border)); }
+.nextActionText {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.nextArrow { color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+.nextActionText span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--fg-strong);
+  line-height: 1.3;
+}
+.nextActionEdit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.nextActionInput {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--fg-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  outline: none;
+}
+.actionBtns { display: flex; gap: 8px; }
+
+/* Description */
+.description { font-size: 14px; line-height: 1.7; color: var(--fg-primary); }
+
+/* Attachments */
+.sectionHeader { display: flex; align-items: center; margin-bottom: 12px; }
+.sectionHeader .eyebrow { margin: 0; flex: 1; }
+.attachGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.attachTile {
+  height: 80px;
+  border-radius: 8px;
+  background: var(--bg-section);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fg-secondary);
+  text-align: center;
+  padding: 8px;
+  overflow: hidden;
+}
+.attachTile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.attachAdd {
+  background: transparent;
+  border-style: dashed;
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+.attachAdd:hover { background: var(--bg-hover); }
+
+/* Notes */
+.note { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); }
+.note:first-of-type { border-top: none; }
+.noteAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.noteBody { flex: 1; }
+.noteMeta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+.noteAuthor { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+.noteTime { font-size: 11px; color: var(--fg-muted); }
+.noteText { font-size: 13px; color: var(--fg-primary); line-height: 1.6; }
+.noNotes { font-size: 13px; color: var(--fg-muted); padding: 8px 0; }
+.noteComposer { display: flex; gap: 8px; margin-top: 14px; }
+.noteInput {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--fg-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.noteInput:focus { border-color: var(--accent); }
+
+/* Rail */
+.visibilityRow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-primary); }
+.visLabel { }
+.visNote { font-size: 12px; color: var(--fg-muted); margin-top: 6px; }
+.linkRow { display: flex; gap: 10px; align-items: center; }
+.linkLabel { font-size: 13px; color: var(--fg-primary); font-weight: 500; }
+.statusButtons { display: flex; flex-wrap: wrap; gap: 6px; }
+.statusActive { font-weight: 600; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .rail { order: -1; }
+}
+@media (max-width: 480px) {
+  .attachGrid { grid-template-columns: repeat(3, 1fr); }
+}

@@ -13,8 +13,8 @@ html {
 
 body {
   font-family: var(--font-body);
-  background-color: var(--color-bg);
-  color: var(--color-text-primary);
+  background-color: var(--color-bg, #F8FAFC);
+  color: var(--color-text-primary, #0F172A);
   line-height: 1.6;
   min-height: 100vh;
 }
@@ -26,8 +26,8 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-text-primary);
 }
 
-a { color: var(--color-primary-light); text-decoration: none; }
-a:hover { color: var(--color-secondary); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-soft); }
 
 button { cursor: pointer; font-family: var(--font-body); }
 
@@ -37,10 +37,120 @@ input, select, textarea {
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--color-surface); }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong, #CBD5E1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent, #A0521D); }
 
 /* Selection */
-::selection { background: rgba(160,82,29,0.35); color: var(--color-white); }
+::selection { background: rgba(160,82,29,0.25); color: inherit; }
+
+/* ===== Omni component primitives (shared across all pages) ===== */
+.omni-app {
+  font-family: var(--font-body);
+  color: var(--fg-primary);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Theme crossfade */
+.omni-app.theme-transitioning,
+.omni-app.theme-transitioning *:not(.no-theme-transition) {
+  transition:
+    background-color 520ms cubic-bezier(.4,0,.2,1),
+    color 380ms cubic-bezier(.4,0,.2,1),
+    border-color 520ms cubic-bezier(.4,0,.2,1),
+    fill 380ms cubic-bezier(.4,0,.2,1),
+    stroke 380ms cubic-bezier(.4,0,.2,1),
+    box-shadow 520ms cubic-bezier(.4,0,.2,1) !important;
+}
+
+/* Sidebar collapse */
+.omni-sidebar { transition: width 280ms cubic-bezier(.2,.7,.2,1); overflow: hidden; }
+.omni-sidebar[data-collapsed="true"] .omni-sidebar-label,
+.omni-sidebar[data-collapsed="true"] .omni-sidebar-section,
+.omni-sidebar[data-collapsed="true"] .omni-sidebar-brandtext,
+.omni-sidebar[data-collapsed="true"] .omni-sidebar-user-text,
+.omni-sidebar[data-collapsed="true"] .omni-sidebar-badge {
+  opacity: 0; pointer-events: none;
+}
+
+/* Utility classes */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 14px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 500;
+  border-radius: var(--radius-md); border: 1px solid transparent;
+  cursor: pointer; user-select: none;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-soft); }
+.btn-ghost { background: transparent; color: var(--fg-secondary); border: none; }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.btn-outline { background: transparent; color: var(--fg-primary); border-color: var(--border); }
+.btn-outline:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.btn-sm { height: 28px; padding: 0 10px; font-size: 13px; }
+.btn-xs { height: 24px; padding: 0 8px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  border-radius: var(--radius-sm); text-transform: uppercase;
+  font-family: var(--font-body);
+}
+.pill-red    { background: var(--status-red-bg);   color: var(--status-red); }
+.pill-amber  { background: var(--status-amber-bg); color: var(--status-amber); }
+.pill-green  { background: var(--status-green-bg); color: var(--status-green); }
+.pill-blue   { background: var(--status-blue-bg);  color: var(--status-blue); }
+.pill-grey   { background: var(--bg-hover);        color: var(--fg-muted); }
+.pill-accent { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
+
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--fg-secondary);
+  border: 1px solid var(--border);
+}
+
+.num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+/* Focus ring */
+.omni-app :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Animations */
+@keyframes omni-spin { to { transform: rotate(360deg); } }
+@keyframes omni-blink { 50% { opacity: 0; } }
+@keyframes omni-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes omni-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }

@@ -1,88 +1,222 @@
-/* XSlide Brand Design System */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+/* ====================================================================
+   Omni — Design Tokens (replaces legacy XSlide variables.css)
+   ==================================================================== */
+
+@font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Regular.ttf") format("truetype");  font-weight: 400; font-display: swap; }
+@font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Medium.ttf") format("truetype");   font-weight: 500; font-display: swap; }
+@font-face { font-family: "Poppins"; src: url("./fonts/Poppins-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Bold.ttf") format("truetype");     font-weight: 700; font-display: swap; }
+@font-face { font-family: "Poppins"; src: url("./fonts/Poppins-ExtraBold.ttf") format("truetype");font-weight: 800; font-display: swap; }
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
-  /* ── Primary Palette ── */
+  /* --- Brand --- */
+  --xs-orange:        #A0521D;
+  --xs-orange-hover:  #8C4516;
+  --xs-orange-soft:   #C97D49;
+  --xs-orange-tint:   #F4E6DA;
+  --xs-ink:           #0F172A;
+  --xs-ink-soft:      #1E293B;
+  --xs-white:         #FFFFFF;
+  --xs-slate-50:      #F8FAFC;
+  --xs-slate-100:     #F1F5F9;
+  --xs-slate-200:     #E2E8F0;
+  --xs-slate-300:     #CBD5E1;
+  --xs-slate-500:     #64748B;
+  --xs-slate-700:     #334155;
+  --xs-red:           #DC2626;
+  --xs-green:         #15803D;
+  --xs-amber:         #D97706;
+
+  /* Legacy compat aliases (used by existing components) */
   --color-primary:        #A0521D;
   --color-primary-light:  #C97D49;
   --color-primary-dark:   #7A3E16;
-  --color-black:          #000000;
-  --color-white:          #FFFFFF;
-
-  /* ── Secondary Palette ── */
   --color-secondary:      #C97D49;
-  --color-gray:           #CCCCCC;
-  --color-light-gray:     #E5E5E5;
-
-  /* ── Gradient ── */
+  --color-success:        #15803D;
+  --color-warning:        #D97706;
+  --color-danger:         #DC2626;
+  --color-info:           #2563EB;
   --gradient-primary:     linear-gradient(135deg, #A0521D 0%, #C97D49 100%);
   --gradient-dark:        linear-gradient(135deg, #7A3E16 0%, #A0521D 100%);
 
-  /* ── Semantic / UI colours ── */
-  --color-bg:             #000000;          /* black background per brand */
-  --color-surface:        #111111;          /* cards / panels */
-  --color-surface-2:      #1a1a1a;          /* nested surfaces */
-  --color-border:         #2a2a2a;
-  --color-border-subtle:  #1f1f1f;
+  /* --- Typography --- */
+  --font-display: "Poppins", system-ui, sans-serif;
+  --font-body:    "Inter", system-ui, sans-serif;
+  --font-heading: "Poppins", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
 
-  --color-text-primary:   #FFFFFF;
-  --color-text-secondary: #CCCCCC;
-  --color-text-muted:     #888888;
+  /* --- Default accent = rust --- */
+  --accent:         var(--xs-orange);
+  --accent-hover:   var(--xs-orange-hover);
+  --accent-soft:    var(--xs-orange-soft);
+  --accent-tint:    var(--xs-orange-tint);
+  --accent-glow:    rgba(160, 82, 29, 0.22);
 
-  --color-success:        #4CAF50;
-  --color-warning:        #FF9800;
-  --color-danger:         #F44336;
-  --color-info:           #2196F3;
+  /* --- Spacing (4px base grid) --- */
+  --space-1:  4px;  --space-2:  8px;  --space-3:  12px; --space-4:  16px;
+  --space-5:  20px; --space-6:  24px; --space-8:  32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
 
-  /* ── Category Colours (for charts / badges) ── */
-  --color-cat-one-off:    #A0521D;
-  --color-cat-fixed:      #C97D49;
-  --color-cat-variable:   #CCCCCC;
-  --color-cat-investment: #7A3E16;
-
-  /* ── Typography ── */
-  --font-heading:  'Poppins', sans-serif;
-  --font-body:     'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-
-  /* ── Font Sizes ── */
-  --text-xs:   0.75rem;    /* 12px */
-  --text-sm:   0.875rem;   /* 14px */
-  --text-base: 1rem;       /* 16px */
-  --text-lg:   1.125rem;   /* 18px */
-  --text-xl:   1.25rem;    /* 20px */
-  --text-2xl:  1.5rem;     /* 24px */
-  --text-3xl:  1.875rem;   /* 30px */
-  --text-4xl:  2.25rem;    /* 36px */
-
-  /* ── Spacing ── */
-  --space-1:   4px;
-  --space-2:   8px;
-  --space-3:   12px;
-  --space-4:   16px;
-  --space-5:   20px;
-  --space-6:   24px;
-  --space-8:   32px;
-  --space-10:  40px;
-  --space-12:  48px;
-  --space-16:  64px;
-
-  /* ── Border Radius ── */
-  --radius-sm:  4px;
+  /* --- Radii --- */
+  --radius-xs:  4px;
+  --radius-sm:  6px;
   --radius-md:  8px;
   --radius-lg:  12px;
-  --radius-xl:  16px;
+  --radius-xl:  20px;
+  --radius-pill: 999px;
   --radius-full: 9999px;
 
-  /* ── Shadows ── */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:  0 4px 12px rgba(0,0,0,0.5);
-  --shadow-lg:  0 8px 24px rgba(0,0,0,0.6);
-  --shadow-glow: 0 0 20px rgba(160,82,29,0.3);
+  /* --- Motion --- */
+  --ease-standard:  cubic-bezier(.2,.7,.2,1);
+  --duration-fast:  120ms;
+  --duration-base:  200ms;
 
-  /* ── Sidebar ── */
-  --sidebar-width: 240px;
+  /* --- Layout --- */
+  --sidebar-width:           232px;
+  --sidebar-width-collapsed: 64px;
+  --topbar-height:           64px;
 
-  /* ── Transitions ── */
-  --transition-fast:   150ms ease;
-  --transition-normal: 250ms ease;
+  /* Font sizes (legacy compat) */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+}
+
+/* ===== Accent variants ===== */
+[data-accent="amber"] {
+  --accent:       #D97706;
+  --accent-hover: #B45309;
+  --accent-soft:  #F59E0B;
+  --accent-tint:  #FEF3C7;
+  --accent-glow:  rgba(217, 119, 6, 0.28);
+}
+[data-accent="green"] {
+  --accent:       #15803D;
+  --accent-hover: #166534;
+  --accent-soft:  #22C55E;
+  --accent-tint:  #DCFCE7;
+  --accent-glow:  rgba(21, 128, 61, 0.28);
+}
+
+/* ============================================================
+   LIGHT THEME (default)
+   ============================================================ */
+.omni-app[data-theme="light"],
+.omni-app:not([data-theme]) {
+  --bg-page:     var(--xs-white);
+  --bg-canvas:   var(--xs-slate-50);
+  --bg-elev:     var(--xs-white);
+  --bg-section:  var(--xs-slate-100);
+  --bg-sidebar:  var(--xs-ink);
+  --bg-topbar:   var(--xs-white);
+  --bg-input:    var(--xs-white);
+  --bg-hover:    var(--xs-slate-100);
+  --bg-pulse:    #F8FAFC;
+
+  --fg-strong:   var(--xs-ink);
+  --fg-primary:  var(--xs-ink);
+  --fg-secondary:var(--xs-slate-700);
+  --fg-muted:    var(--xs-slate-500);
+  --fg-on-dark:  var(--xs-white);
+
+  --border:        #E2E8F0;
+  --border-strong: #CBD5E1;
+  --divider:       #F1F5F9;
+
+  --status-red:   #DC2626;
+  --status-amber: #D97706;
+  --status-green: #15803D;
+  --status-blue:  #2563EB;
+  --status-grey:  #64748B;
+
+  --status-red-bg:   #FEF2F2;
+  --status-amber-bg: #FFFBEB;
+  --status-green-bg: #F0FDF4;
+  --status-blue-bg:  #EFF6FF;
+
+  --shadow-xs: 0 1px 2px rgba(15,23,42,.05);
+  --shadow-sm: 0 2px 6px rgba(15,23,42,.06);
+  --shadow-md: 0 6px 18px rgba(15,23,42,.08);
+  --shadow-lg: 0 16px 40px rgba(15,23,42,.12);
+
+  --chart-grid: #F1F5F9;
+  --chart-axis: #94A3B8;
+
+  /* Legacy compat */
+  --color-bg:            var(--xs-white);
+  --color-surface:       var(--xs-slate-50);
+  --color-surface-2:     var(--xs-slate-100);
+  --color-border:        #E2E8F0;
+  --color-border-subtle: #F1F5F9;
+  --color-text-primary:  var(--xs-ink);
+  --color-text-secondary:var(--xs-slate-700);
+  --color-text-muted:    var(--xs-slate-500);
+  --color-black:         var(--xs-ink);
+  --color-white:         var(--xs-white);
+  --color-gray:          #CBD5E1;
+  --color-light-gray:    #E2E8F0;
+}
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+.omni-app[data-theme="dark"] {
+  --bg-page:     #0A0E14;
+  --bg-canvas:   #060810;
+  --bg-elev:     #11161F;
+  --bg-section:  #161C26;
+  --bg-sidebar:  #0A0E14;
+  --bg-topbar:   #0A0E14;
+  --bg-input:    #11161F;
+  --bg-hover:    #1A2030;
+  --bg-pulse:    #0E131C;
+
+  --fg-strong:   #F8FAFC;
+  --fg-primary:  #E2E8F0;
+  --fg-secondary:#94A3B8;
+  --fg-muted:    #64748B;
+  --fg-on-dark:  #F8FAFC;
+
+  --border:        #1F2937;
+  --border-strong: #334155;
+  --divider:       #161C26;
+
+  --status-red:   #F87171;
+  --status-amber: #FBBF24;
+  --status-green: #4ADE80;
+  --status-blue:  #60A5FA;
+  --status-grey:  #94A3B8;
+
+  --status-red-bg:   rgba(248,113,113,.10);
+  --status-amber-bg: rgba(251,191,36,.10);
+  --status-green-bg: rgba(74,222,128,.10);
+  --status-blue-bg:  rgba(96,165,250,.10);
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.35);
+  --shadow-sm: 0 2px 6px rgba(0,0,0,.45);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.55);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,.65);
+
+  --chart-grid: #1A2030;
+  --chart-axis: #475569;
+
+  /* Legacy compat */
+  --color-bg:            #0A0E14;
+  --color-surface:       #11161F;
+  --color-surface-2:     #161C26;
+  --color-border:        #1F2937;
+  --color-border-subtle: #161C26;
+  --color-text-primary:  #E2E8F0;
+  --color-text-secondary:#94A3B8;
+  --color-text-muted:    #64748B;
+  --color-black:         #0A0E14;
+  --color-white:         #F8FAFC;
+  --color-gray:          #334155;
+  --color-light-gray:    #1F2937;
 }

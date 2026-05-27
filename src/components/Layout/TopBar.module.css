@@ -1,0 +1,142 @@
+.topbar {
+  height: var(--topbar-height, 64px);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-topbar, #fff);
+  border-bottom: 1px solid var(--border, #E2E8F0);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.menuBtn {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--fg-secondary);
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+.menuBtn:hover { background: var(--bg-hover); }
+
+.titleArea {
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--fg-strong);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* ─── Capture bar ─── */
+.captureBar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-width: 720px;
+  cursor: text;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.captureBar:hover {
+  border-color: var(--accent-soft);
+}
+.captureBar:focus-within,
+.captureBar:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.captureIcon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.capturePlaceholder {
+  flex: 1;
+  font-size: 14px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.captureRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+/* ─── Actions ─── */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.bellBtn {
+  position: relative;
+}
+.bellDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--status-red);
+  border: 2px solid var(--bg-topbar);
+}
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ─── Mobile ─── */
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 16px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+  }
+  .menuBtn {
+    display: flex;
+  }
+  .captureBar {
+    max-width: none;
+  }
+  .captureRight {
+    display: none;
+  }
+  .titleArea {
+    display: none;
+  }
+  .divider {
+    display: none;
+  }
+}

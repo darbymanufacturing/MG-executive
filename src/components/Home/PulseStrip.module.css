@@ -1,0 +1,42 @@
+.pulseSection {
+  margin-top: 24px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.tile {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tileLabel {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+.tileDelta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tileValue {
+  font-size: 24px;
+  color: var(--fg-strong);
+}
+
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
