@@ -30,3 +30,27 @@ function getDb(app) {
 export const db      = getDb(app);
 export const auth    = getAuth(app);
 export const storage = getStorage(app);
+
+/* ─── Firestore collection name constants ─── */
+export const COLLECTIONS = {
+  /* Existing */
+  COSTS:               'costs',
+  REVENUE:             'revenue',
+  TICKETS:             'tickets',
+  PARTS:               'parts',
+  SCOOTERS:            'scooters',
+  PROJECTS:            'projects',
+  BRAINSTORM:          'brainstorm',
+  GATES:               'gates',
+  DIARY:               'diary',
+  USERS:               'users',
+  REPAIR_PROCEDURES:   'repair_procedures',
+  REPAIR_SESSIONS:     'repair_sessions',
+  TRIPS:               'trips',
+
+  /* Omni Phase 1 — new */
+  ISSUES:              'issues',
+  NOTIFICATIONS:       'notifications',
+  BRIEFS:              'briefs',
+  ACCOUNTANT_FORWARDS: 'accountant_forwards',
+};

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
   DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart, ClipboardList,
-  Users, UserPlus, Loader2, CheckCircle, AlertCircle,
+  Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal,
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
@@ -557,6 +557,56 @@ export default function Settings() {
                 <Trash2 size={14} /> Clear Everything
               </Button>
             </div>
+          </div>
+        </section>
+
+        {/* V1 Backup restore */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Archive size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>V1 Backup</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            The pre-Omni version of this app is preserved as a git tag.
+            Use the command below in your terminal to restore it to a branch, or browse the code on GitHub.
+          </p>
+          <div className={styles.dataCard} style={{ borderColor: 'var(--status-amber-bg)' }}>
+            <div className={styles.dataCardHeader}>
+              <Terminal size={16} />
+              <span>Restore V1 locally</span>
+            </div>
+            <p className={styles.dataCardDesc} style={{ marginBottom: 10 }}>
+              Tagged as <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--bg-section)', padding: '2px 6px', borderRadius: 4 }}>v1-backup</code> on the main branch.
+            </p>
+            <pre style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12,
+              background: 'var(--bg-section)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              overflowX: 'auto',
+              color: 'var(--fg-secondary)',
+              margin: '0 0 12px',
+              lineHeight: 1.6,
+            }}>
+{`# Browse the V1 snapshot
+git checkout v1-backup
+
+# Or create a branch from it
+git checkout -b v1-restore v1-backup
+
+# Return to Omni
+git checkout main`}
+            </pre>
+            <a
+              href="https://github.com/darbymanufacturing/MG-executive/releases/tag/v1-backup"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-outline btn-sm"
+            >
+              View V1 on GitHub
+            </a>
           </div>
         </section>
 

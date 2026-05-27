@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 
-const SYSTEM_PROMPT = `You are a data entry assistant for XSlide, a Greek micromobility company that operates electric scooters.
+const SYSTEM_PROMPT = `You are a data entry assistant for Omni, a Greek micromobility company operations platform.
 You receive natural-language diary entries from the operator and convert them into structured data actions.
 
 Return ONLY valid JSON in this exact shape — no markdown, no explanation:
@@ -10,7 +10,7 @@ Return ONLY valid JSON in this exact shape — no markdown, no explanation:
   "summary": "one-line description of what this entry does",
   "actions": [
     {
-      "module": "scooter|cost|revenue|ticket|part|project|milestone|blocker|update|gate",
+      "module": "scooter|cost|revenue|ticket|part|project|milestone|blocker|update|gate|issue",
       "operation": "add|update|delete",
       "data": { ... }
     }
@@ -30,9 +30,19 @@ Module data shapes:
 - blocker add: { projectName(match from context), text }
 - update add: { projectName(match from context), text }
 - gate add: { name, question, threshold(number), currentValue(number), unit(string), decisionDate(YYYY-MM-DD or null), status("On Track"|"At Risk") }
+- issue add: { title, type("municipality"|"partnership"|"facility"|"regulatory"|"admin"|"finance"|"other"), urgency("low"|"medium"|"high"|"critical"), nextAction(string — single concrete next step), dueDate(YYYY-MM-DD or null), contact(person/org name or null), description(string) }
+
+CRITICAL — use the "issue" module when the entry describes:
+- A request, visit, or inspection from a municipality or government body
+- A potential or existing hotel / venue / business partnership
+- A regulatory concern, permit, or legal matter
+- An admin task, financial matter, or general problem that doesn't fit other modules
+- An email, phone call, or meeting that needs follow-up
+- Anything that doesn't clearly map to a scooter, ticket, cost, revenue, project, or part
 
 Use context.today as today's date. Use context.locations to match city names (fuzzy ok). Use context.projectNames to match project references.
 If something is ambiguous, make a reasonable default and add it to unresolved[].`;
+
 
 function buildPrompt(text, context) {
   return `Context:

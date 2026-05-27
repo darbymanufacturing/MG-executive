@@ -21,6 +21,7 @@
     "react-map-gl": "^8.1.1",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
+    "resend": "^6.12.4",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

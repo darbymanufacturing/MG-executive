@@ -87,14 +87,17 @@ export default function CaptureModal({ open, onClose }) {
       /* Extract the first issue-like action, or create a generic one */
       let issueAction = null;
       if (parsed?.actions?.length) {
-        issueAction = parsed.actions.find(a => a.type === 'issue' || ACTION_TO_ISSUE_TYPE[a.type]);
+        /* diary-parse uses `module` (not `type`) for the action kind */
+        issueAction = parsed.actions.find(a => a.module === 'issue' || ACTION_TO_ISSUE_TYPE[a.module]);
       }
 
       /* Build the issue fields */
-      const type = issueAction?.type ? (ACTION_TO_ISSUE_TYPE[issueAction.type] || 'other') : 'other';
-      const title = issueAction?.title || parsed?.summary || text.slice(0, 80).trim();
-      const nextAction = issueAction?.nextAction || issueAction?.suggestedAction || '';
-      const urgency = issueAction?.urgency || 'medium';
+      const moduleKey = issueAction?.module;
+      const type = moduleKey ? (ACTION_TO_ISSUE_TYPE[moduleKey] || 'other') : 'other';
+      const data = issueAction?.data || {};
+      const title = data.title || parsed?.summary || text.slice(0, 80).trim();
+      const nextAction = data.nextAction || data.suggestedAction || '';
+      const urgency = data.urgency || 'medium';
 
       /* Create in Firestore */
       const ref = await createIssue({
@@ -111,7 +114,7 @@ export default function CaptureModal({ open, onClose }) {
         type: type.charAt(0).toUpperCase() + type.slice(1),
         urgency: urgency.charAt(0).toUpperCase() + urgency.slice(1),
         nextAction,
-        contact: issueAction?.contact || '',
+        contact: data.contact || data.counterparty || '',
       });
       setStage('confirmed');
 

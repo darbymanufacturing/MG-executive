@@ -1,0 +1,144 @@
+/**
+ * api/accountant-forward.js — Email a cost attachment to the accountant.
+ *
+ * POST /api/accountant-forward
+ * Body (JSON):
+ *   {
+ *     costId:          string,
+ *     vendor:          string,
+ *     amount:          number,
+ *     date:            "YYYY-MM-DD",
+ *     attachmentUrl:   string,        // Firebase Storage public URL
+ *     attachmentName:  string,        // filename, e.g. "invoice_2024_01.pdf"
+ *     senderEmail:     string,        // logged-in user's email (for Reply-To)
+ *     senderName:      string,
+ *   }
+ *
+ * Returns:
+ *   { success: true, messageId } | { error }
+ *
+ * Env vars required:
+ *   RESEND_API_KEY         — Resend API key
+ *   ACCOUNTANT_EMAIL       — recipient (the accountant's email)
+ *   RESEND_FROM_EMAIL      — verified sender domain email, e.g. ops@yourcompany.com
+ */
+
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+function buildEmailHtml({ vendor, amount, date, attachmentName, senderName }) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a202c;">
+      <div style="background: #A0521D; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em;">
+          Invoice forwarded for accounting
+        </h1>
+      </div>
+      <div style="background: #fff; border: 1px solid #e2e8f0; border-top: none; padding: 28px 32px; border-radius: 0 0 8px 8px;">
+        <p style="color: #4a5568; margin: 0 0 20px;">Hi,</p>
+        <p style="color: #4a5568; margin: 0 0 20px;">
+          ${senderName} has forwarded an invoice for processing:
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+          <tr style="background: #f7fafc;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; width: 40%; border: 1px solid #e2e8f0;">Vendor</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${vendor || '—'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">Amount</td>
+            <td style="padding: 10px 14px; color: #1a202c; font-weight: 700; border: 1px solid #e2e8f0;">€${Number(amount || 0).toLocaleString('el-GR', { minimumFractionDigits: 2 })}</td>
+          </tr>
+          <tr style="background: #f7fafc;">
+            <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">Date</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${date || '—'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">File</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${attachmentName || 'See attachment'}</td>
+          </tr>
+        </table>
+        <p style="color: #718096; font-size: 13px; margin: 0;">
+          Sent via Omni · Micromobility operations platform
+        </p>
+      </div>
+    </div>
+  `.trim();
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { RESEND_API_KEY, ACCOUNTANT_EMAIL, RESEND_FROM_EMAIL } = process.env;
+
+  if (!RESEND_API_KEY) {
+    return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
+  }
+  if (!ACCOUNTANT_EMAIL) {
+    return res.status(500).json({ error: 'ACCOUNTANT_EMAIL not configured' });
+  }
+
+  const {
+    costId, vendor, amount, date,
+    attachmentUrl, attachmentName,
+    senderEmail, senderName = 'Omni Team',
+  } = req.body || {};
+
+  if (!attachmentUrl) {
+    return res.status(400).json({ error: 'attachmentUrl is required' });
+  }
+
+  try {
+    /* Fetch the attachment file to embed it */
+    let attachmentData = null;
+    if (attachmentUrl) {
+      try {
+        const fileRes = await fetch(attachmentUrl);
+        if (fileRes.ok) {
+          const buffer = await fileRes.arrayBuffer();
+          attachmentData = Buffer.from(buffer).toString('base64');
+        }
+      } catch (fetchErr) {
+        console.warn('Could not fetch attachment for embedding:', fetchErr.message);
+      }
+    }
+
+    const emailPayload = {
+      from: RESEND_FROM_EMAIL || 'Omni <noreply@mgexecutive.app>',
+      to: [ACCOUNTANT_EMAIL],
+      ...(senderEmail ? { replyTo: senderEmail } : {}),
+      subject: `Invoice: ${vendor || 'Unknown vendor'} — €${Number(amount || 0).toFixed(2)} (${date || 'no date'})`,
+      html: buildEmailHtml({ vendor, amount, date, attachmentName, senderName }),
+    };
+
+    /* Attach file if we fetched it successfully */
+    if (attachmentData && attachmentName) {
+      emailPayload.attachments = [
+        {
+          filename: attachmentName,
+          content: attachmentData,
+        },
+      ];
+    }
+
+    const result = await resend.emails.send(emailPayload);
+
+    if (result.error) {
+      console.error('Resend error:', result.error);
+      return res.status(500).json({ error: result.error.message || 'Email send failed' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      messageId: result.data?.id,
+      costId,
+      forwardedAt: new Date().toISOString(),
+    });
+
+  } catch (err) {
+    console.error('accountant-forward error:', err);
+    return res.status(500).json({ error: err.message || 'Forward failed' });
+  }
+}

@@ -1,0 +1,127 @@
+/**
+ * api/daily-brief.js — Generate a Claude-narrated daily brief.
+ *
+ * POST /api/daily-brief
+ * Body (JSON):
+ *   {
+ *     userId: string,
+ *     date: "YYYY-MM-DD",
+ *     data: {
+ *       openIssues:        [{ title, urgency, type, nextAction }],
+ *       overdueTickets:    [{ issueDescription, daysOpen, status }],
+ *       activeTickets:     number,
+ *       completedToday:    number,
+ *       openProjects:      [{ name, status, blockers }],
+ *       revenueThisWeek:   number,       // EUR
+ *       revenuePrevWeek:   number,       // EUR
+ *       costsThisMonth:    number,       // EUR
+ *       criticalIssues:    number,
+ *       fleetSize:         number,
+ *       inRepair:          number,
+ *     }
+ *   }
+ *
+ * Returns:
+ *   { narrative, sections: [{title, items:[]}], generatedAt }
+ */
+
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
+
+function buildPrompt(date, data) {
+  const {
+    openIssues = [], overdueTickets = [], activeTickets = 0, completedToday = 0,
+    openProjects = [], revenueThisWeek = 0, revenuePrevWeek = 0,
+    costsThisMonth = 0, criticalIssues = 0, fleetSize = 0, inRepair = 0,
+  } = data;
+
+  const revChange = revenuePrevWeek > 0
+    ? (((revenueThisWeek - revenuePrevWeek) / revenuePrevWeek) * 100).toFixed(1)
+    : null;
+
+  const criticalIssuesList = openIssues.filter(i => i.urgency === 'critical' || i.urgency === 'high');
+  const blockedProjects = openProjects.filter(p => p.blockers?.length > 0 || p.status === 'Red');
+
+  return `Today is ${date}. Generate a concise daily operational brief for the founder of a Greek micromobility company (Omni platform).
+
+OPERATIONAL DATA:
+- Fleet: ${fleetSize} scooters total, ${inRepair} in repair (${fleetSize > 0 ? ((inRepair/fleetSize)*100).toFixed(0) : 0}% offline)
+- Revenue this week: €${revenueThisWeek.toLocaleString()}${revChange ? ` (${revChange > 0 ? '+' : ''}${revChange}% vs last week)` : ''}
+- Costs this month: €${costsThisMonth.toLocaleString()}
+- Maintenance: ${activeTickets} active tickets, ${overdueTickets.length} overdue (>7 days), ${completedToday} closed today
+- Issues: ${openIssues.length} open (${criticalIssues} critical/high)
+${criticalIssuesList.length ? `- Critical/high issues:\n${criticalIssuesList.slice(0, 3).map(i => `  • [${i.urgency.toUpperCase()}] ${i.title}${i.nextAction ? ` → ${i.nextAction}` : ''}`).join('\n')}` : ''}
+${blockedProjects.length ? `- Blocked projects:\n${blockedProjects.slice(0, 2).map(p => `  • ${p.name}${p.blockers?.[0]?.text ? `: ${p.blockers[0].text.slice(0, 60)}` : ''}`).join('\n')}` : ''}
+${overdueTickets.length ? `- Most overdue tickets:\n${overdueTickets.slice(0, 2).map(t => `  • ${t.issueDescription?.slice(0, 60)} (${t.daysOpen}d)`).join('\n')}` : ''}
+
+Return ONLY valid JSON — no markdown:
+{
+  "narrative": "2-3 sentence plain English summary of the key operational state and biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery.",
+  "sections": [
+    {
+      "title": "Yesterday / Overnight",
+      "items": ["bullet point", "bullet point"]
+    },
+    {
+      "title": "Needs attention today",
+      "items": ["action item", "action item"]
+    },
+    {
+      "title": "Positive signals",
+      "items": ["good news", "good news"]
+    }
+  ]
+}
+
+Keep each bullet concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!process.env.ANTHROPIC_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_KEY not configured' });
+  }
+
+  const { userId, date, data } = req.body || {};
+
+  if (!userId || !date || !data) {
+    return res.status(400).json({ error: 'userId, date, and data are required' });
+  }
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: buildPrompt(date, data) }],
+    });
+
+    const raw = message.content[0]?.text || '{}';
+    const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      return res.status(200).json({
+        narrative: 'Brief generation encountered a formatting issue. Check the app for details.',
+        sections: [],
+        generatedAt: new Date().toISOString(),
+        error: 'Parse error',
+      });
+    }
+
+    return res.status(200).json({
+      narrative: parsed.narrative || '',
+      sections: parsed.sections || [],
+      generatedAt: new Date().toISOString(),
+    });
+
+  } catch (err) {
+    console.error('daily-brief error:', err);
+    return res.status(500).json({ error: err.message || 'Brief generation failed' });
+  }
+}
