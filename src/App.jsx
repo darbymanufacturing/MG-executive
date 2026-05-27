@@ -40,6 +40,7 @@ import Scooters from './pages/Scooters.jsx';
 import ScooterDetail from './pages/ScooterDetail.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
 import RepairSession from './components/Technician/RepairSession.jsx';
+import Notifications from './pages/Notifications.jsx';
 
 import './styles/variables.css';
 import './styles/globals.css';
@@ -188,6 +189,7 @@ function AppShell() {
             <Route path="/issues/:id"     element={<IssueDetail />} />
             <Route path="/pulse"          element={<Dashboard />} />      {/* old Dashboard = Pulse */}
             <Route path="/brief"          element={<Home />} />            {/* brief shown inside Home */}
+            <Route path="/notifications"  element={<Notifications />} />
             <Route path="/projects"       element={<Projects />} />
             <Route path="/projects/:id"   element={<Projects />} />
             <Route path="/war-room"       element={<WarRoomPage />} />

@@ -94,9 +94,10 @@ export function AuthProvider({ children }) {
     await firebaseSignOut(auth);
   };
 
-  // Admin-only: create a technician account without signing out the current admin.
+  // Admin-only: create a crew/staff account without signing out the current admin.
   // Uses the Firebase Auth REST API so the current session is unaffected.
-  const createTechnicianAccount = async (email, password, displayName) => {
+  // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
+  const createTechnicianAccount = async (email, password, displayName, role = 'crew') => {
     const apiKey = 'AIzaSyDo1mG2qucaWeD-rmtLhSgk2DddBz1yP4c';
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
@@ -111,8 +112,10 @@ export function AuthProvider({ children }) {
       const code = data.error?.message ?? '';
       throw new Error(friendlyError(code));
     }
+    const validRoles = ['crew', 'staff', 'admin', 'technician'];
+    const assignedRole = validRoles.includes(role) ? role : 'crew';
     await setDoc(doc(db, 'users', data.localId), {
-      role: 'technician',
+      role: assignedRole,
       displayName: displayName.trim() || email.split('@')[0],
       email,
       createdAt: serverTimestamp(),
