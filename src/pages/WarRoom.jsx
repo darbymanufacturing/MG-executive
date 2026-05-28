@@ -76,7 +76,7 @@ export default function WarRoom() {
 
         <div className={styles.titleBlock}>
           <span className={styles.title}>War Room</span>
-          <span className={styles.subtitle}>XSlide Operations · Greece</span>
+          <span className={styles.subtitle}>Omni Operations · Greece</span>
         </div>
 
         {/* Top-right quick stats (Victoria 3 resource bar style) */}

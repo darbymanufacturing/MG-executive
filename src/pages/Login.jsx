@@ -44,7 +44,7 @@ export default function Login() {
       <div className={styles.card}>
         {/* Logo */}
         <div className={styles.logoWrap}>
-          <img src="/logo.svg" alt="XSlide" className={styles.logo} />
+          <img src="/logo.svg" alt="Omni" className={styles.logo} />
         </div>
 
         {/* Heading */}
@@ -122,7 +122,7 @@ export default function Login() {
       </div>
 
       {/* Branded footer */}
-      <p className={styles.footer}>XSlide Fleet Manager · Secure access</p>
+      <p className={styles.footer}>Omni · Secure access</p>
     </div>
   );
 }

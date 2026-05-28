@@ -82,7 +82,7 @@ export const FREQUENCY_KEYS = Object.keys(FREQUENCIES);
 
 export const DEFAULT_CONFIG = {
   fleetSize: 10,
-  companyName: 'XSlide',
+  companyName: 'Omni',
   currency: 'EUR',
   targetCostPerScooter: null,
   locations: [],

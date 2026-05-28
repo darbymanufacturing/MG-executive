@@ -156,7 +156,7 @@ export default function DiaryBubble() {
           {/* Header */}
           <div className={styles.panelHeader}>
             <PenLine size={14} />
-            <span className={styles.panelTitle}>XSlide Diary</span>
+            <span className={styles.panelTitle}>Omni Diary</span>
             <div className={styles.tabBar}>
               <button
                 className={`${styles.tabBtn} ${view === 'input' ? styles.tabActive : ''}`}

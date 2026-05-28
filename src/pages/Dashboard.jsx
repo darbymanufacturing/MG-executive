@@ -274,7 +274,7 @@ export default function Dashboard() {
   return (
     <div className={styles.page} id="dashboard-export">
       <Header
-        title="Dashboard"
+        title="Pulse"
         subtitle={`Fleet overview · ${config.fleetSize} scooters`}
         actions={
           <div className={styles.headerActions}>
