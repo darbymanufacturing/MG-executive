@@ -32,11 +32,12 @@
 }
 .omniMark { flex-shrink: 0; }
 .brandText {
+  /* "omni" wordmark — Poppins ExtraBold 800, lowercase, -0.04em letter-spacing per handoff */
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 18px;
   color: #fff;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
   flex: 1;
   white-space: nowrap;
   overflow: hidden;

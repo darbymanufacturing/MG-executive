@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../Shared/Modal.jsx';
 import Button from '../../Shared/Button.jsx';
+import { validate } from '../../../utils/validateForm.js';
+import { scooterSchema } from '../../../utils/schemas/scooterSchema.js';
 import styles from './ScooterForm.module.css';
 
 const MODELS   = ['ES400B 2022', 'ES400B 2023'];
 const STATUSES = ['Active', 'In Repair', 'Retired', 'Donor'];
+
+const errorStyle = {
+  display: 'block',
+  marginTop: '4px',
+  fontSize: 'var(--text-xs)',
+  color: 'var(--status-red)',
+};
+
+const inputErrorStyle = { borderColor: 'var(--status-red)' };
 
 const EMPTY = {
   scooterId:     '',
@@ -18,24 +29,41 @@ const EMPTY = {
 
 export default function ScooterForm({ open, onClose, onSave, initial, cities = [] }) {
   const [form, setForm]   = useState(EMPTY);
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
+    if (open) {
+      setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
+      setErrors({});
+      setSaving(false);
+    }
   }, [open, initial]);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    if (errors[k]) setErrors((prev) => ({ ...prev, [k]: undefined }));
+  };
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.scooterId.trim()) return;
-    setSaving(true);
-    await onSave({
+    // Coerce purchasePrice for validation (empty string treated as omitted)
+    const payload = {
       ...form,
-      purchasePrice: form.purchasePrice === '' ? null : Number(form.purchasePrice),
-    });
-    setSaving(false);
-    onClose();
+      purchasePrice: form.purchasePrice === '' ? undefined : Number(form.purchasePrice),
+    };
+    const { isValid, errors: validationErrors } = validate(payload, scooterSchema);
+    if (!isValid) { setErrors(validationErrors); return; }
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        purchasePrice: form.purchasePrice === '' ? null : Number(form.purchasePrice),
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -48,34 +76,51 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
               value={form.scooterId}
               onChange={(e) => set('scooterId', e.target.value)}
               placeholder="e.g. 83846"
-              required
               disabled={!!initial}
+              style={errors.scooterId ? inputErrorStyle : undefined}
+              aria-invalid={!!errors.scooterId}
             />
+            {errors.scooterId && <span style={errorStyle}>{errors.scooterId}</span>}
           </div>
 
           <div className={styles.field}>
-            <label>Model</label>
-            <select value={form.model} onChange={(e) => set('model', e.target.value)}>
+            <label>Model *</label>
+            <select
+              value={form.model}
+              onChange={(e) => set('model', e.target.value)}
+              style={errors.model ? inputErrorStyle : undefined}
+            >
               {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+            {errors.model && <span style={errorStyle}>{errors.model}</span>}
           </div>
 
           <div className={styles.field}>
-            <label>City</label>
-            <select value={form.city} onChange={(e) => set('city', e.target.value)}>
+            <label>City *</label>
+            <select
+              value={form.city}
+              onChange={(e) => set('city', e.target.value)}
+              style={errors.city ? inputErrorStyle : undefined}
+            >
               <option value="">— Select city —</option>
               {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               {!cities.includes(form.city) && form.city && (
                 <option value={form.city}>{form.city}</option>
               )}
             </select>
+            {errors.city && <span style={errorStyle}>{errors.city}</span>}
           </div>
 
           <div className={styles.field}>
-            <label>Status</label>
-            <select value={form.status} onChange={(e) => set('status', e.target.value)}>
+            <label>Status *</label>
+            <select
+              value={form.status}
+              onChange={(e) => set('status', e.target.value)}
+              style={errors.status ? inputErrorStyle : undefined}
+            >
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            {errors.status && <span style={errorStyle}>{errors.status}</span>}
           </div>
 
           <div className={styles.field}>
@@ -84,7 +129,9 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
               type="date"
               value={form.purchaseDate}
               onChange={(e) => set('purchaseDate', e.target.value)}
+              style={errors.purchaseDate ? inputErrorStyle : undefined}
             />
+            {errors.purchaseDate && <span style={errorStyle}>{errors.purchaseDate}</span>}
           </div>
 
           <div className={styles.field}>
@@ -96,7 +143,9 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
               placeholder="e.g. 1800"
               min="0"
               step="0.01"
+              style={errors.purchasePrice ? inputErrorStyle : undefined}
             />
+            {errors.purchasePrice && <span style={errorStyle}>{errors.purchasePrice}</span>}
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import {
   serverTimestamp, query, orderBy,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const RepairProcedureContext = createContext(null);
 
@@ -23,22 +24,28 @@ export function RepairProcedureProvider({ children }) {
   }, []);
 
   const addProcedure = async (data) => {
-    await addDoc(collection(db, COL), {
-      ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => addDoc(collection(db, COL), {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to save repair procedure' },
+    );
   };
 
   const updateProcedure = async (id, data) => {
-    await updateDoc(doc(db, COL, id), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, COL, id), { ...data, updatedAt: serverTimestamp() }),
+      { rethrow: true, errorMessage: 'Failed to update repair procedure' },
+    );
   };
 
   const deleteProcedure = async (id) => {
-    await deleteDoc(doc(db, COL, id));
+    await safeWrite(
+      () => deleteDoc(doc(db, COL, id)),
+      { rethrow: true, errorMessage: 'Failed to delete repair procedure' },
+    );
   };
 
   return (

@@ -16,6 +16,7 @@ import {
   collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const TRIPS_COL  = 'scooterTrips';
 const BATCH_SIZE = 450;
@@ -58,7 +59,10 @@ export function TripProvider({ children }) {
         );
         written++;
       });
-      await batch.commit();
+      await safeWrite(
+        () => batch.commit(),
+        { rethrow: true, errorMessage: 'Trip import failed mid-batch' },
+      );
     }
     return { written };
   }, []);
@@ -72,7 +76,10 @@ export function TripProvider({ children }) {
     for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      await safeWrite(
+        () => batch.commit(),
+        { rethrow: true, errorMessage: 'Failed to clear trips for scooter' },
+      );
     }
     return snap.docs.length;
   }, []);

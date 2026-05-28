@@ -20,15 +20,27 @@
   gap: var(--space-6);
 }
 
-/* Logo */
+/* Logo lockup — mark + wordmark, vertically centered per BRANDING.md */
 .logoWrap {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 14px;
 }
 
 .logo {
   height: 40px;
   width: auto;
+}
+
+/* "omni" wordmark — Poppins ExtraBold 800, lowercase, -0.04em letter-spacing */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 38px;
+  letter-spacing: -0.04em;
+  color: var(--fg-strong);
+  line-height: 1;
 }
 
 /* Heading */

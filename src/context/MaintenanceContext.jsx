@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot,
-  setDoc, updateDoc, deleteDoc, writeBatch,
+  setDoc, updateDoc, deleteDoc, writeBatch, query, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 import { SEED_TICKETS, SEED_PARTS, SEED_CONFIG } from '../utils/maintenanceSeedData.js';
 
 // ── Firestore paths ───────────────────────────────────────────────────────────
@@ -12,6 +13,10 @@ const PARTS_COL    = 'maintenanceParts';
 const SCOOTERS_COL = 'scooters';
 const CONFIG_DOC   = 'config/maintenance';
 const BATCH_SIZE   = 450;
+// Hard caps on snapshot reads — Phase 1 free-tier defense.
+const MAX_TICKETS  = 2000;
+const MAX_PARTS    = 2000;
+const MAX_SCOOTERS = 1000;
 
 const DEFAULT_CONFIG = {
   revenueRatePerDay: 3.67,
@@ -138,23 +143,32 @@ export function MaintenanceProvider({ children }) {
 
   // ── Real-time listeners ───────────────────────────────────────────────────
   useEffect(() => {
-    const unsubTickets = onSnapshot(collection(db, TICKETS_COL), (snap) => {
-      setTickets(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-      markLoaded('tickets');
-    });
-    const unsubParts = onSnapshot(collection(db, PARTS_COL), (snap) => {
-      setParts(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-      markLoaded('parts');
-    });
-    const unsubScooters = onSnapshot(collection(db, SCOOTERS_COL), (snap) => {
-      setScooters(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-      markLoaded('scooters');
-    });
+    const unsubTickets = onSnapshot(
+      query(collection(db, TICKETS_COL), limit(MAX_TICKETS)),
+      (snap) => {
+        setTickets(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        markLoaded('tickets');
+      },
+    );
+    const unsubParts = onSnapshot(
+      query(collection(db, PARTS_COL), limit(MAX_PARTS)),
+      (snap) => {
+        setParts(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        markLoaded('parts');
+      },
+    );
+    const unsubScooters = onSnapshot(
+      query(collection(db, SCOOTERS_COL), limit(MAX_SCOOTERS)),
+      (snap) => {
+        setScooters(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        markLoaded('scooters');
+      },
+    );
     const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
       if (snap.exists()) {
         setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
       } else {
-        setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
+        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
       }
       markLoaded('config');
     });
@@ -196,54 +210,86 @@ export function MaintenanceProvider({ children }) {
     const existing = tickets.filter((t) => t._docId === baseId || t._docId?.startsWith(`${baseId}_`));
     const docId   = existing.length === 0 ? baseId : `${baseId}_${existing.length + 1}`;
     const now     = new Date().toISOString();
-    await setDoc(doc(db, TICKETS_COL, docId), { ...data, createdAt: now, updatedAt: now });
+    await safeWrite(
+      () => setDoc(doc(db, TICKETS_COL, docId), { ...data, createdAt: now, updatedAt: now }),
+      { rethrow: true, errorMessage: 'Failed to create ticket' },
+    );
     return docId;
   }, [tickets]);
 
   const updateTicket = useCallback(async (docId, data) => {
-    await updateDoc(doc(db, TICKETS_COL, docId), { ...data, updatedAt: new Date().toISOString() });
+    await safeWrite(
+      () => updateDoc(doc(db, TICKETS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
+      { rethrow: true, errorMessage: 'Failed to update ticket' },
+    );
   }, []);
 
   const deleteTicket = useCallback(async (docId) => {
-    await deleteDoc(doc(db, TICKETS_COL, docId));
+    await safeWrite(
+      () => deleteDoc(doc(db, TICKETS_COL, docId)),
+      { rethrow: true, errorMessage: 'Failed to delete ticket' },
+    );
   }, []);
 
   const completeTicket = useCallback(async (docId) => {
-    await updateDoc(doc(db, TICKETS_COL, docId), {
-      status: 'Completed',
-      dateCompleted: new Date().toISOString().slice(0, 10),
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, TICKETS_COL, docId), {
+        status: 'Completed',
+        dateCompleted: new Date().toISOString().slice(0, 10),
+        updatedAt: new Date().toISOString(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to complete ticket' },
+    );
   }, []);
 
   const assignTicket = useCallback(async (docId, uid, displayName) => {
-    await updateDoc(doc(db, TICKETS_COL, docId), {
-      assignedTo:     uid        || null,
-      assignedToName: displayName || null,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, TICKETS_COL, docId), {
+        assignedTo:     uid        || null,
+        assignedToName: displayName || null,
+        updatedAt: new Date().toISOString(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to assign ticket' },
+    );
   }, []);
 
   // ── Parts CRUD ────────────────────────────────────────────────────────────
   const addPart = useCallback(async (data) => {
     const docId = String(data.sku).trim();
     const now   = new Date().toISOString();
-    await setDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: now });
+    await safeWrite(
+      () => setDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: now }),
+      { rethrow: true, errorMessage: 'Failed to save part' },
+    );
   }, []);
 
   const updatePart = useCallback(async (docId, data) => {
-    await updateDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: new Date().toISOString() });
+    await safeWrite(
+      () => updateDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
+      { rethrow: true, errorMessage: 'Failed to update part' },
+    );
   }, []);
 
   const deletePart = useCallback(async (docId) => {
-    await deleteDoc(doc(db, PARTS_COL, docId));
+    await safeWrite(
+      () => deleteDoc(doc(db, PARTS_COL, docId)),
+      { rethrow: true, errorMessage: 'Failed to delete part' },
+    );
   }, []);
 
   // ── Config ────────────────────────────────────────────────────────────────
   const updateConfig = useCallback(async (updates) => {
+    const prev = config;
     const next = { ...config, ...updates };
     setConfig(next);
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to save maintenance config — change reverted',
+        optimisticRollback: () => setConfig(prev),
+      },
+    );
   }, [config]);
 
   // ── Batch import ──────────────────────────────────────────────────────────
@@ -260,7 +306,7 @@ export function MaintenanceProvider({ children }) {
         existingIds.add(docId);
         batch.set(doc(db, TICKETS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Ticket import failed mid-batch' });
     }
   }, [tickets]);
 
@@ -271,7 +317,7 @@ export function MaintenanceProvider({ children }) {
         const docId = String(row.sku).trim();
         batch.set(doc(db, PARTS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Parts import failed mid-batch' });
     }
   }, []);
 
@@ -279,15 +325,24 @@ export function MaintenanceProvider({ children }) {
   const addScooter = useCallback(async (data) => {
     const docId = String(data.scooterId).trim();
     const now   = new Date().toISOString();
-    await setDoc(doc(db, SCOOTERS_COL, docId), { ...data, createdAt: now, updatedAt: now });
+    await safeWrite(
+      () => setDoc(doc(db, SCOOTERS_COL, docId), { ...data, createdAt: now, updatedAt: now }),
+      { rethrow: true, errorMessage: 'Failed to save scooter' },
+    );
   }, []);
 
   const updateScooter = useCallback(async (docId, data) => {
-    await updateDoc(doc(db, SCOOTERS_COL, docId), { ...data, updatedAt: new Date().toISOString() });
+    await safeWrite(
+      () => updateDoc(doc(db, SCOOTERS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
+      { rethrow: true, errorMessage: 'Failed to update scooter' },
+    );
   }, []);
 
   const deleteScooter = useCallback(async (docId) => {
-    await deleteDoc(doc(db, SCOOTERS_COL, docId));
+    await safeWrite(
+      () => deleteDoc(doc(db, SCOOTERS_COL, docId)),
+      { rethrow: true, errorMessage: 'Failed to delete scooter' },
+    );
   }, []);
 
   // ── Custom tags ───────────────────────────────────────────────────────────────
@@ -296,9 +351,17 @@ export function MaintenanceProvider({ children }) {
     const current = config[key] || [];
     if (current.includes(tag)) return;
     const updated = [...current, tag];
+    const prev = config;
     const next = { ...config, [key]: updated };
     setConfig(next);
-    await updateDoc(doc(db, CONFIG_DOC), { [key]: updated });
+    await safeWrite(
+      () => updateDoc(doc(db, CONFIG_DOC), { [key]: updated }),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to save tag — change reverted',
+        optimisticRollback: () => setConfig(prev),
+      },
+    );
   }, [config]);
 
   // ── Patch part models from SKU_MODEL_MAP ─────────────────────────────────────
@@ -311,14 +374,17 @@ export function MaintenanceProvider({ children }) {
         const model = SKU_MODEL_MAP[sku] ?? 'Shared';
         batch.update(doc(db, PARTS_COL, p._docId), { model });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Part-model patch failed mid-batch' });
     }
   }, [parts]);
 
   // ── Seed data loader ──────────────────────────────────────────────────────────
   const loadSeedData = useCallback(async () => {
     // Write config first
-    await setDoc(doc(db, CONFIG_DOC), SEED_CONFIG);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), SEED_CONFIG),
+      { rethrow: true, errorMessage: 'Seed: config write failed' },
+    );
 
     // Batch-write tickets
     for (let i = 0; i < SEED_TICKETS.length; i += BATCH_SIZE) {
@@ -329,7 +395,7 @@ export function MaintenanceProvider({ children }) {
         const docId     = `${scooterId}_${dateStr}`;
         batch.set(doc(db, TICKETS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Seed: tickets batch failed' });
     }
 
     // Batch-write parts
@@ -339,7 +405,7 @@ export function MaintenanceProvider({ children }) {
         const docId = String(row.sku).trim();
         batch.set(doc(db, PARTS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Seed: parts batch failed' });
     }
   }, []);
 

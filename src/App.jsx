@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
-import { CostProvider, useCosts } from './context/CostContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
+import { ErrorBoundary } from './components/Shared/ErrorBoundary.jsx';
+import { CostProvider } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
@@ -19,6 +21,7 @@ import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import TopBar from './components/Layout/TopBar.jsx';
 import CaptureModal from './components/Capture/CaptureModal.jsx';
+import AsterismMark from './components/Shared/AsterismMark.jsx';
 
 /* Pages */
 import Home from './pages/Home.jsx';
@@ -78,12 +81,9 @@ function getTitle(pathname) {
 function LoadingScreen() {
   return (
     <div className={styles.loadingScreen}>
+      {/* Asterism mark — theme-aware via `fg="var(--fg-strong)"`; rust accent stays rust on both themes */}
       <div className={styles.loadingMark}>
-        <svg width="42" height="42" viewBox="0 0 26 26" fill="none">
-          <rect width="26" height="26" rx="7" fill="var(--accent, #A0521D)" />
-          <path d="M7 13C7 9.69 9.69 7 13 7s6 2.69 6 6-2.69 6-6 6-6-2.69-6-6z" stroke="#fff" strokeWidth="2.2" fill="none"/>
-          <circle cx="13" cy="13" r="2.2" fill="#fff"/>
-        </svg>
+        <AsterismMark size={48} fg="var(--fg-strong)" />
       </div>
       <div className={styles.spinner} />
       <p className={styles.loadingText}>Loading Omni…</p>
@@ -102,9 +102,39 @@ function ProtectedRoute({ children }) {
 /* ─── Theme key in localStorage ─── */
 const THEME_KEY = 'omni_theme';
 
+/* ─── Route-scoped provider wrappers (Phase 1.6a) ───
+ *
+ * Each wrapper mounts the providers only while its inner routes are active.
+ * Heavy collections (telemetry, trips, SPR) are unmounted on every other route,
+ * cutting initial Firestore reads roughly in half. Providers that are needed
+ * across most routes (Cost, Revenue, Maintenance, Project, Notification, Inbox,
+ * Diary, Issue) stay at the admin root.
+ *
+ * Routes inside a wrapper share the providers — navigating between siblings
+ * (e.g. /pme → /scooters) does NOT remount them; only leaving the group does.
+ */
+function ScooterScopedRoutes() {
+  return (
+    <TelemetryProvider>
+      <TripProvider>
+        <ScooterConfigProvider>
+          <ErrorBoundary><Outlet /></ErrorBoundary>
+        </ScooterConfigProvider>
+      </TripProvider>
+    </TelemetryProvider>
+  );
+}
+
+function SprScopedRoutes() {
+  return (
+    <SprProvider>
+      <ErrorBoundary><Outlet /></ErrorBoundary>
+    </SprProvider>
+  );
+}
+
 /* ─── Admin app shell ─── */
 function AppShell() {
-  const { loading } = useCosts();
   const { userRole } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -146,19 +176,18 @@ function AppShell() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  /* Preload Mapbox */
+  /* Preload Mapbox after a short idle — Phase 1.6a decoupled this from CostContext.loading
+     so the shell doesn't gate on data loading any more. Each page handles its own
+     loading skeleton (Phase 1.5 adoption). */
   useEffect(() => {
-    if (loading) return;
     const t = setTimeout(() => { import('mapbox-gl').catch(() => {}); }, 2000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, []);
 
   /* Redirect crew to /crew shell */
   if (userRole === 'technician' || userRole === 'crew') {
     return <Navigate to="/crew" replace />;
   }
-
-  if (loading) return <LoadingScreen />;
 
   const title = getTitle(location.pathname);
 
@@ -191,29 +220,39 @@ function AppShell() {
 
         <main className={styles.main}>
           <Routes>
-            <Route path="/"               element={<Home />} />
-            <Route path="/issues"         element={<Issues />} />
-            <Route path="/issues/:id"     element={<IssueDetail />} />
-            <Route path="/pulse"          element={<Dashboard />} />      {/* old Dashboard = Pulse */}
-            <Route path="/brief"          element={<Home />} />            {/* brief shown inside Home */}
-            <Route path="/notifications"  element={<Notifications />} />
-            <Route path="/projects"       element={<Projects />} />
-            <Route path="/projects/:id"   element={<Projects />} />
-            <Route path="/war-room"       element={<WarRoomPage />} />
-            <Route path="/scooters"       element={<Scooters />} />
-            <Route path="/scooters/:id"   element={<ScooterDetail />} />
-            <Route path="/investment"     element={<Investment />} />
-            <Route path="/costs"          element={<CostManager />} />
-            <Route path="/revenue"        element={<Revenue />} />
-            <Route path="/spr"            element={<Spr />} />
-            <Route path="/maintenance"    element={<Maintenance />} />
-            <Route path="/pme"            element={<PredictiveMaintenance />} />
-            <Route path="/pow"            element={<Pow />} />
-            <Route path="/settings"       element={<Settings />} />
+            {/* Always-on routes — providers at admin root cover everything here. */}
+            <Route path="/"               element={<ErrorBoundary><Home /></ErrorBoundary>} />
+            <Route path="/issues"         element={<ErrorBoundary><Issues /></ErrorBoundary>} />
+            <Route path="/issues/:id"     element={<ErrorBoundary><IssueDetail /></ErrorBoundary>} />
+            <Route path="/pulse"          element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/brief"          element={<ErrorBoundary><Home /></ErrorBoundary>} />
+            <Route path="/notifications"  element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+            <Route path="/projects"       element={<ErrorBoundary><Projects /></ErrorBoundary>} />
+            <Route path="/projects/:id"   element={<ErrorBoundary><Projects /></ErrorBoundary>} />
+            <Route path="/war-room"       element={<ErrorBoundary><WarRoomPage /></ErrorBoundary>} />
+            <Route path="/investment"     element={<ErrorBoundary><Investment /></ErrorBoundary>} />
+            <Route path="/costs"          element={<ErrorBoundary><CostManager /></ErrorBoundary>} />
+            <Route path="/revenue"        element={<ErrorBoundary><Revenue /></ErrorBoundary>} />
+            <Route path="/maintenance"    element={<ErrorBoundary><Maintenance /></ErrorBoundary>} />
+            <Route path="/pow"            element={<ErrorBoundary><Pow /></ErrorBoundary>} />
+            <Route path="/settings"       element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+
+            {/* Scoped — heavy telemetry stack only mounts while user is on these routes */}
+            <Route element={<ScooterScopedRoutes />}>
+              <Route path="/scooters"     element={<Scooters />} />
+              <Route path="/scooters/:id" element={<ScooterDetail />} />
+              <Route path="/pme"          element={<PredictiveMaintenance />} />
+            </Route>
+
+            {/* Scoped — SPR */}
+            <Route element={<SprScopedRoutes />}>
+              <Route path="/spr"          element={<Spr />} />
+            </Route>
+
             {/* Redirect old paths */}
             <Route path="/technician"     element={<Navigate to="/crew" replace />} />
             <Route path="/dashboard"      element={<Navigate to="/pulse" replace />} />
-            <Route path="*"              element={<Navigate to="/" replace />} />
+            <Route path="*"               element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>
@@ -240,66 +279,72 @@ function CrewShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<Login />} />
+      <ErrorBoundary
+        title="Omni hit a snag"
+        message="An unexpected error stopped the app from rendering. Click below to retry — your data is safe."
+        onReset={() => window.location.reload()}
+      >
+        <ToastProvider>
+          <AuthProvider>
+            <Routes>
+              {/* Public */}
+              <Route path="/login" element={<Login />} />
 
-          {/* Crew routes — lightweight shell, no heavy admin contexts */}
-          <Route
-            path="/crew/*"
-            element={
-              <ProtectedRoute>
-                <MaintenanceProvider>
-                  <RepairProcedureProvider>
-                    <CrewShell />
-                  </RepairProcedureProvider>
-                </MaintenanceProvider>
-              </ProtectedRoute>
-            }
-          />
-          {/* Legacy /technician/* redirect */}
-          <Route path="/technician/*" element={<Navigate to="/crew" replace />} />
+              {/* Crew routes — lightweight shell, no heavy admin contexts */}
+              <Route
+                path="/crew/*"
+                element={
+                  <ProtectedRoute>
+                    <MaintenanceProvider>
+                      <RepairProcedureProvider>
+                        <ErrorBoundary>
+                          <CrewShell />
+                        </ErrorBoundary>
+                      </RepairProcedureProvider>
+                    </MaintenanceProvider>
+                  </ProtectedRoute>
+                }
+              />
+              {/* Legacy /technician/* redirect */}
+              <Route path="/technician/*" element={<Navigate to="/crew" replace />} />
 
-          {/* Admin routes — full provider stack */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <CostProvider>
-                  <RevenueProvider>
-                    <SprProvider>
-                      <MaintenanceProvider>
-                        <RepairProcedureProvider>
-                          <RepairSessionProvider>
-                            <TelemetryProvider>
-                              <ScooterConfigProvider>
-                                <TripProvider>
-                                  <ProjectProvider>
-                                    <IssueProvider>
-                                      <InboxProvider>
-                                        <NotificationProvider>
-                                          <DiaryProvider>
-                                            <AppShell />
-                                          </DiaryProvider>
-                                        </NotificationProvider>
-                                      </InboxProvider>
-                                    </IssueProvider>
-                                  </ProjectProvider>
-                                </TripProvider>
-                              </ScooterConfigProvider>
-                            </TelemetryProvider>
-                          </RepairSessionProvider>
-                        </RepairProcedureProvider>
-                      </MaintenanceProvider>
-                    </SprProvider>
-                  </RevenueProvider>
-                </CostProvider>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </AuthProvider>
+              {/* Admin routes — always-on providers at root.
+                  Phase 1.6a: Telemetry / Trip / ScooterConfig / Spr moved into route-scoped
+                  wrappers inside AppShell (see ScooterScopedRoutes, SprScopedRoutes). */}
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <CostProvider>
+                      <RevenueProvider>
+                        <MaintenanceProvider>
+                          <RepairProcedureProvider>
+                            <RepairSessionProvider>
+                              <ProjectProvider>
+                                <IssueProvider>
+                                  <InboxProvider>
+                                    <NotificationProvider>
+                                      <DiaryProvider>
+                                        <ErrorBoundary>
+                                          <AppShell />
+                                        </ErrorBoundary>
+                                      </DiaryProvider>
+                                    </NotificationProvider>
+                                  </InboxProvider>
+                                </IssueProvider>
+                              </ProjectProvider>
+                            </RepairSessionProvider>
+                          </RepairProcedureProvider>
+                        </MaintenanceProvider>
+                      </RevenueProvider>
+                    </CostProvider>
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </AuthProvider>
+        </ToastProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

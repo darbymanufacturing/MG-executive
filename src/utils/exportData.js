@@ -7,7 +7,7 @@ export function exportToJSON(costs, config) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `xslide-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `omni-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -61,7 +61,7 @@ export function exportCostsCSV(costs) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `xslide-costs-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `omni-costs-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -81,7 +81,7 @@ export function downloadCostTemplate() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = 'xslide-cost-template.csv';
+  a.download = 'omni-cost-template.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -90,7 +90,7 @@ export function downloadCostTemplate() {
  * PDF export utility — captures the #dashboard-export element via html2canvas,
  * then writes it to a jsPDF document in landscape A4.
  */
-export async function exportDashboardToPDF(filename = 'xslide-dashboard.pdf') {
+export async function exportDashboardToPDF(filename = 'omni-dashboard.pdf') {
   try {
     const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
       import('jspdf'),

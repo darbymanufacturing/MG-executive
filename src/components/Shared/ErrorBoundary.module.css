@@ -1,0 +1,100 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: var(--space-8);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-6);
+  max-width: 480px;
+  width: 100%;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--status-red-bg);
+  color: var(--status-red);
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--fg-strong);
+  letter-spacing: -0.01em;
+}
+
+.message {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--fg-secondary);
+  line-height: 1.55;
+}
+
+.details {
+  width: 100%;
+  margin-top: var(--space-2);
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.details summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+  user-select: none;
+  padding: var(--space-1) 0;
+}
+
+.details code {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-section);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--fg-primary);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: var(--accent);
+  color: var(--fg-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.button:hover { background: var(--accent-hover); }
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

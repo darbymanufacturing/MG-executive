@@ -260,7 +260,7 @@ export default function Dashboard() {
     setExportingPDF(true);
     // Replace em-dashes, en-dashes and spaces with hyphens (em dash from period range label)
     const safeLabel = periodLabel.replace(/[–—\s/]/g, '-').replace(/-+/g, '-').toLowerCase();
-    await exportDashboardToPDF(`xslide-dashboard-${safeLabel}.pdf`);
+    await exportDashboardToPDF(`omni-dashboard-${safeLabel}.pdf`);
     setExportingPDF(false);
   }
 

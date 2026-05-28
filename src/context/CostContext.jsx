@@ -5,6 +5,7 @@ import {
   addDoc, updateDoc, deleteDoc, setDoc, writeBatch, getDocs,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 import { DEFAULT_CONFIG } from '../utils/constants.js';
 import { SAMPLE_COSTS, SAMPLE_CONFIG } from '../utils/sampleData.js';
 
@@ -42,8 +43,8 @@ export function CostProvider({ children }) {
       if (snap.exists()) {
         setConfig(snap.data());
       } else {
-        // First time — write defaults
-        setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
+        // First time — write defaults (silent bootstrap)
+        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
       }
       setConfigLoaded(true);
     });
@@ -56,7 +57,10 @@ export function CostProvider({ children }) {
   const addCost = useCallback(async (costData) => {
     const now = new Date().toISOString();
     const newCost = { ...costData, id: uuidv4(), createdAt: now, updatedAt: now };
-    await addDoc(collection(db, COSTS_COL), newCost);
+    await safeWrite(
+      () => addDoc(collection(db, COSTS_COL), newCost),
+      { rethrow: true, errorMessage: 'Failed to save cost' },
+    );
     return newCost;
   }, []);
 
@@ -64,17 +68,23 @@ export function CostProvider({ children }) {
     // Find the Firestore document by the app-level id field
     const cost = costs.find((c) => c.id === id);
     if (!cost?._docId) return;
-    await updateDoc(doc(db, COSTS_COL, cost._docId), {
-      ...costData,
-      id,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, COSTS_COL, cost._docId), {
+        ...costData,
+        id,
+        updatedAt: new Date().toISOString(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to update cost' },
+    );
   }, [costs]);
 
   const deleteCost = useCallback(async (id) => {
     const cost = costs.find((c) => c.id === id);
     if (!cost?._docId) return;
-    await deleteDoc(doc(db, COSTS_COL, cost._docId));
+    await safeWrite(
+      () => deleteDoc(doc(db, COSTS_COL, cost._docId)),
+      { rethrow: true, errorMessage: 'Failed to delete cost' },
+    );
   }, [costs]);
 
   const getCostById = useCallback((id) => costs.find((c) => c.id === id), [costs]);
@@ -82,9 +92,17 @@ export function CostProvider({ children }) {
   // ── Config ────────────────────────────────────────────────────────────────
 
   const updateConfig = useCallback(async (updates) => {
+    const previousConfig = config;
     const next = { ...config, ...updates };
     setConfig(next); // optimistic local update
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to save config — change reverted',
+        optimisticRollback: () => setConfig(previousConfig),
+      },
+    );
   }, [config]);
 
   // ── Sample data ───────────────────────────────────────────────────────────
@@ -95,7 +113,7 @@ export function CostProvider({ children }) {
     for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while clearing old costs' });
     }
 
     // Add sample costs in chunks
@@ -105,10 +123,13 @@ export function CostProvider({ children }) {
         const ref = doc(collection(db, COSTS_COL));
         batch.set(ref, cost);
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while seeding costs' });
     }
 
-    await setDoc(doc(db, CONFIG_DOC), SAMPLE_CONFIG);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), SAMPLE_CONFIG),
+      { rethrow: true, errorMessage: 'Sample data load failed while writing config' },
+    );
   }, []);
 
   const clearAllData = useCallback(async () => {
@@ -116,9 +137,12 @@ export function CostProvider({ children }) {
     for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Failed to clear costs' });
     }
-    await setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG),
+      { rethrow: true, errorMessage: 'Failed to reset config to defaults' },
+    );
   }, []);
 
   // ── Import ────────────────────────────────────────────────────────────────
@@ -144,10 +168,16 @@ export function CostProvider({ children }) {
       batch.set(ref, { ...cost, id: cost.id || uuidv4() });
     });
 
-    await batch.commit();
+    await safeWrite(
+      () => batch.commit(),
+      { rethrow: true, errorMessage: 'Cost import failed mid-batch' },
+    );
 
     if (data.config && mode === 'replace') {
-      await setDoc(doc(db, CONFIG_DOC), data.config);
+      await safeWrite(
+        () => setDoc(doc(db, CONFIG_DOC), data.config),
+        { rethrow: true, errorMessage: 'Failed to write imported config' },
+      );
     }
   }, [costs]);
 

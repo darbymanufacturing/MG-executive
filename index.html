@@ -2,19 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Omni – fleet operations, issues, and financial intelligence for micromobility" />
+
+    <!-- Branding -->
     <title>Omni</title>
+    <meta name="description" content="Omni — fleet operations, issues, and financial intelligence for micromobility operators." />
+    <meta name="theme-color" content="#A0521D" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0A0E14" media="(prefers-color-scheme: dark)" />
+
+    <!-- Icons (Asterism mark — see docs/BRANDING.md) -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/asterism.svg" />
+    <link rel="mask-icon" href="/asterism-mono.svg" color="#A0521D" />
+
+    <!-- Open Graph + Twitter (for link previews) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Omni — fleet operations for micromobility" />
+    <meta property="og:description" content="One inbox for fleet ops, tickets, costs, revenue, and predictive maintenance." />
+    <meta property="og:image" content="/logo.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Omni — fleet operations for micromobility" />
+    <meta name="twitter:description" content="One inbox for fleet ops, tickets, costs, revenue, and predictive maintenance." />
+    <meta name="twitter:image" content="/logo.svg" />
+
     <!-- Mapbox CDN preconnect — establishes TCP before War Room loads -->
     <link rel="preconnect" href="https://api.mapbox.com" />
     <link rel="preconnect" href="https://events.mapbox.com" />
     <link rel="dns-prefetch" href="https://a.tiles.mapbox.com" />
     <link rel="dns-prefetch" href="https://b.tiles.mapbox.com" />
-    <!-- Google Fonts: Poppins (headings) + Inter (body) -->
+
+    <!-- Google Fonts: Poppins (display, includes 800 ExtraBold for "omni" wordmark) + Inter (body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

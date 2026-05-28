@@ -4,6 +4,7 @@ import {
   doc, serverTimestamp, where, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 import { useAuth } from './AuthContext.jsx';
 
 const IssueContext = createContext(null);
@@ -27,32 +28,40 @@ export function IssueProvider({ children }) {
 
   async function createIssue(fields) {
     if (!user) throw new Error('Not authenticated');
-    return addDoc(collection(db, COLLECTION), {
-      title: '',
-      description: '',
-      type: 'other',
-      status: 'new',
-      urgency: 'medium',
-      owner: user.uid,
-      createdBy: user.uid,
-      visibility: 'admin',
-      attachments: [],
-      notes: [],
-      nextAction: '',
-      relatedEntity: null,
-      dueDate: null,
-      snoozeUntil: null,
-      ...fields,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const result = await safeWrite(
+      () => addDoc(collection(db, COLLECTION), {
+        title: '',
+        description: '',
+        type: 'other',
+        status: 'new',
+        urgency: 'medium',
+        owner: user.uid,
+        createdBy: user.uid,
+        visibility: 'admin',
+        attachments: [],
+        notes: [],
+        nextAction: '',
+        relatedEntity: null,
+        dueDate: null,
+        snoozeUntil: null,
+        ...fields,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to create issue' },
+    );
+    return result.data;
   }
 
   async function updateIssue(id, fields) {
-    return updateDoc(doc(db, COLLECTION, id), {
-      ...fields,
-      updatedAt: serverTimestamp(),
-    });
+    const result = await safeWrite(
+      () => updateDoc(doc(db, COLLECTION, id), {
+        ...fields,
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to update issue' },
+    );
+    return result.data;
   }
 
   async function snoozeIssue(id, until) {
@@ -65,10 +74,14 @@ export function IssueProvider({ children }) {
 
   async function addNote(id, text) {
     if (!user) throw new Error('Not authenticated');
-    return updateDoc(doc(db, COLLECTION, id), {
-      notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
-      updatedAt: serverTimestamp(),
-    });
+    const result = await safeWrite(
+      () => updateDoc(doc(db, COLLECTION, id), {
+        notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to add note' },
+    );
+    return result.data;
   }
 
   /* Active (non-done, non-snoozed) issues for inbox */

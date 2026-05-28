@@ -4,6 +4,7 @@ import {
   onSnapshot, orderBy, query, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 // --- peer contexts (lazy to avoid circular import issues)
 import { useCosts } from './CostContext.jsx';
@@ -35,17 +36,20 @@ export function DiaryProvider({ children }) {
 
   /* ── Save raw entry (before applying) ── */
   const saveDraftEntry = useCallback(async ({ rawText, summary, actions, unresolved }) => {
-    const ref = await addDoc(collection(db, 'diary'), {
-      rawText,
-      summary,
-      actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
-      unresolved: unresolved || [],
-      status: 'pending',
-      history: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return ref.id;
+    const result = await safeWrite(
+      () => addDoc(collection(db, 'diary'), {
+        rawText,
+        summary,
+        actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
+        unresolved: unresolved || [],
+        status: 'pending',
+        history: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to save diary draft' },
+    );
+    return result.data.id;
   }, []);
 
   /* ── Apply actions for a saved entry ── */
@@ -118,20 +122,26 @@ export function DiaryProvider({ children }) {
     }
 
     const status = anyFailed ? 'partial' : 'applied';
-    await updateDoc(doc(db, 'diary', docId), {
-      actions: updatedActions,
-      status,
-      updatedAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, 'diary', docId), {
+        actions: updatedActions,
+        status,
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to save diary apply result' },
+    );
   }, [entries, addCost, importRevenueDays, addTicket, addPart, addScooter,
       addProject, addMilestone, addBlocker, addUpdate, addGate, activeProjects]);
 
   /* ── Reject / discard entry ── */
   const rejectEntry = useCallback(async (docId) => {
-    await updateDoc(doc(db, 'diary', docId), {
-      status: 'rejected',
-      updatedAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, 'diary', docId), {
+        status: 'rejected',
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to reject diary entry' },
+    );
   }, []);
 
   /* ── Edit raw text (re-parse done in DiaryBubble, then call this) ── */
@@ -143,20 +153,26 @@ export function DiaryProvider({ children }) {
       previousRaw: entry.rawText,
       previousSummary: entry.summary,
     };
-    await updateDoc(doc(db, 'diary', docId), {
-      rawText,
-      summary,
-      actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
-      unresolved: unresolved || [],
-      status: 'pending',
-      history: [...(entry.history || []), histEntry],
-      updatedAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, 'diary', docId), {
+        rawText,
+        summary,
+        actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
+        unresolved: unresolved || [],
+        status: 'pending',
+        history: [...(entry.history || []), histEntry],
+        updatedAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to update diary entry' },
+    );
   }, [entries]);
 
   /* ── Delete ── */
   const deleteEntry = useCallback(async (docId) => {
-    await deleteDoc(doc(db, 'diary', docId));
+    await safeWrite(
+      () => deleteDoc(doc(db, 'diary', docId)),
+      { rethrow: true, errorMessage: 'Failed to delete diary entry' },
+    );
   }, []);
 
   return (

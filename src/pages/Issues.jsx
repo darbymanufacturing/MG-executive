@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Flag, ArrowRight, Check, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useIssues } from '../context/IssueContext.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
+import Skeleton from '../components/Shared/Skeleton.jsx';
 import styles from './Issues.module.css';
 
 const TYPE_LABELS = {
@@ -163,12 +165,17 @@ export default function Issues() {
 
       {/* Issues list */}
       <div className={`card ${styles.list}`}>
-        {loading && <div className={styles.loading}>Loading issues…</div>}
-        {!loading && filtered.length === 0 && (
-          <div className={styles.empty}>
-            <Check size={24} style={{ color: 'var(--status-green)' }} />
-            <span>No {filter === 'open' ? 'open ' : ''}issues.</span>
+        {loading && (
+          <div style={{ padding: 'var(--space-4)' }}>
+            <Skeleton variant="text" lines={3} height="40px" />
           </div>
+        )}
+        {!loading && filtered.length === 0 && (
+          <EmptyState
+            icon={Check}
+            title={filter === 'open' ? 'No open issues' : 'No issues match this filter'}
+            description="All clear — nothing needs attention here."
+          />
         )}
         {filtered.map(issue => {
           const s = STATUS_MAP[issue.status] || STATUS_MAP.new;

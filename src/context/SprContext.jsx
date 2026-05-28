@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   collection, doc, onSnapshot,
-  writeBatch, setDoc, getDocs,
+  writeBatch, setDoc, getDocs, query, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 import {
   NAFPLIO_ZONES,
   NAFPLIO_WEATHER,
@@ -15,6 +16,9 @@ const EVENTS_COL   = 'sprEvents';
 const WEATHER_COL  = 'sprWeather';
 const CONFIG_DOC   = 'config/spr';
 const BATCH_SIZE   = 450;
+// Hard caps on snapshot reads — Phase 1 free-tier defense.
+const MAX_EVENTS   = 15000;
+const MAX_WEATHER  = 2000;
 
 const DEFAULT_CONFIG = {
   zones:        [],
@@ -33,22 +37,28 @@ export function SprProvider({ children }) {
   // ── Real-time listeners ───────────────────────────────────────────────────
 
   useEffect(() => {
-    const unsubEvents = onSnapshot(collection(db, EVENTS_COL), (snap) => {
-      const items = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-      setEvents(items);
-      setLoading(false);
-    });
+    const unsubEvents = onSnapshot(
+      query(collection(db, EVENTS_COL), limit(MAX_EVENTS)),
+      (snap) => {
+        const items = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+        setEvents(items);
+        setLoading(false);
+      },
+    );
 
-    const unsubWeather = onSnapshot(collection(db, WEATHER_COL), (snap) => {
-      const items = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-      setWeather(items);
-    });
+    const unsubWeather = onSnapshot(
+      query(collection(db, WEATHER_COL), limit(MAX_WEATHER)),
+      (snap) => {
+        const items = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+        setWeather(items);
+      },
+    );
 
     const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
       if (snap.exists()) {
         setSprConfig({ ...DEFAULT_CONFIG, ...snap.data() });
       } else {
-        setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG);
+        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
       }
     });
 
@@ -58,41 +68,81 @@ export function SprProvider({ children }) {
   // ── Config (zones + city centers) ────────────────────────────────────────
 
   const updateSprConfig = useCallback(async (updates) => {
+    const prev = sprConfig;
     const next = { ...sprConfig, ...updates };
     setSprConfig(next); // optimistic
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to save SPR config — change reverted',
+        optimisticRollback: () => setSprConfig(prev),
+      },
+    );
   }, [sprConfig]);
 
   // Zone helpers
   const addZone = useCallback(async (zone) => {
+    const prev = sprConfig;
     const id   = `zone_${Date.now()}`;
     const next = { ...sprConfig, zones: [...(sprConfig.zones || []), { ...zone, id }] };
     setSprConfig(next);
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to add zone — change reverted',
+        optimisticRollback: () => setSprConfig(prev),
+      },
+    );
   }, [sprConfig]);
 
   const updateZone = useCallback(async (id, updates) => {
+    const prev = sprConfig;
     const next = {
       ...sprConfig,
       zones: (sprConfig.zones || []).map((z) => z.id === id ? { ...z, ...updates } : z),
     };
     setSprConfig(next);
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to update zone — change reverted',
+        optimisticRollback: () => setSprConfig(prev),
+      },
+    );
   }, [sprConfig]);
 
   const deleteZone = useCallback(async (id) => {
+    const prev = sprConfig;
     const next = { ...sprConfig, zones: (sprConfig.zones || []).filter((z) => z.id !== id) };
     setSprConfig(next);
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to delete zone — change reverted',
+        optimisticRollback: () => setSprConfig(prev),
+      },
+    );
   }, [sprConfig]);
 
   const setCityCenter = useCallback(async (city, lat, lon) => {
+    const prev = sprConfig;
     const next = {
       ...sprConfig,
       cityCenters: { ...(sprConfig.cityCenters || {}), [city]: { lat, lon } },
     };
     setSprConfig(next);
-    await setDoc(doc(db, CONFIG_DOC), next);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), next),
+      {
+        rethrow: true,
+        errorMessage: 'Failed to save city center — change reverted',
+        optimisticRollback: () => setSprConfig(prev),
+      },
+    );
   }, [sprConfig]);
 
   // ── Event import (chunked batch, upsert by scooterId+datetime docId) ─────
@@ -106,7 +156,7 @@ export function SprProvider({ children }) {
         const ref   = doc(db, EVENTS_COL, docId);
         batch.set(ref, { ...row, city: city || row.city || null });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);
 
@@ -119,7 +169,7 @@ export function SprProvider({ children }) {
     for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       toDelete.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);
 
@@ -134,7 +184,7 @@ export function SprProvider({ children }) {
         const ref   = doc(db, WEATHER_COL, docId);
         batch.set(ref, { ...day, city });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);
 
@@ -148,7 +198,10 @@ export function SprProvider({ children }) {
       cityCenters: { Nafplio: NAFPLIO_CITY_CENTER },
       morningHour: 10,
     };
-    await setDoc(doc(db, CONFIG_DOC), configNext);
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), configNext),
+      { rethrow: true, errorMessage: 'Nafplio seed: config write failed' },
+    );
 
     // 2. Import weather
     for (let i = 0; i < NAFPLIO_WEATHER.length; i += BATCH_SIZE) {
@@ -158,7 +211,7 @@ export function SprProvider({ children }) {
         const docId = `${day.date}_Nafplio`;
         batch.set(doc(db, WEATHER_COL, docId), { ...day, city: 'Nafplio' });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Nafplio seed: weather batch failed' });
     }
 
     // 3. Import events
@@ -169,7 +222,7 @@ export function SprProvider({ children }) {
         const docId = `${row.scooterId}_${row.datetime.replace(/[^0-9]/g, '')}`;
         batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio' });
       });
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);
 
@@ -182,7 +235,7 @@ export function SprProvider({ children }) {
     for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       toDelete.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);
 

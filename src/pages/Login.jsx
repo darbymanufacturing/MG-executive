@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import AsterismMark from '../components/Shared/AsterismMark.jsx';
 import styles from './Login.module.css';
 
 export default function Login() {
@@ -42,9 +43,10 @@ export default function Login() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        {/* Logo */}
+        {/* Omni Asterism mark + wordmark — inline lockup, see docs/BRANDING.md */}
         <div className={styles.logoWrap}>
-          <img src="/logo.svg" alt="Omni" className={styles.logo} />
+          <AsterismMark size={48} />
+          <span className={styles.wordmark}>omni</span>
         </div>
 
         {/* Heading */}
@@ -121,8 +123,8 @@ export default function Login() {
         </p>
       </div>
 
-      {/* Branded footer */}
-      <p className={styles.footer}>Omni · Secure access</p>
+      {/* Branded footer — lowercase "omni" per brand */}
+      <p className={styles.footer}>omni · Secure access</p>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Plus, Eye, EyeOff, ChevronUp, ChevronDown, Calendar, List, Columns } from 'lucide-react';
+import { Plus, Eye, EyeOff, ChevronUp, ChevronDown, Calendar, List, Columns, Zap, ClipboardList } from 'lucide-react';
 import { PowProvider, usePow } from '../context/PowContext.jsx';
 import PowBoard from '../components/Pow/PowBoard.jsx';
 import TodoTaskCard from '../components/Pow/TodoTaskCard.jsx';
 import TaskCard from '../components/Pow/TaskCard.jsx';
 import TaskModal from '../components/Pow/TaskModal.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import styles from './Pow.module.css';
 
 const ASSIGNEES = ['Panos', 'Kostas'];
@@ -128,9 +129,11 @@ function PowInner() {
         </div>
 
         {weekTasks.length === 0 ? (
-          <div className={styles.emptyBox}>
-            Δεν υπάρχουν tasks αυτή την εβδομάδα.
-          </div>
+          <EmptyState
+            icon={Zap}
+            title="Δεν υπάρχουν tasks αυτή την εβδομάδα"
+            description="Πρόσθεσε tasks στο To Do και κάνε τα assign για να εμφανιστούν εδώ."
+          />
         ) : (
           <div className={styles.taskGrid}>
             {weekTasks.map(t => (
@@ -165,12 +168,16 @@ function PowInner() {
         </div>
 
         {filteredTodoTasks.length === 0 ? (
-          <div className={styles.emptyBox}>
-            <span>Δεν υπάρχουν tasks.</span>
-            <button className={styles.addBtnSmall} onClick={() => setAddingTask(true)}>
-              <Plus size={13}/> Πρόσθεσε task
-            </button>
-          </div>
+          <EmptyState
+            icon={ClipboardList}
+            title="Δεν υπάρχουν tasks"
+            description="Δημιούργησε ένα νέο task για να ξεκινήσεις."
+            action={
+              <button className={styles.addBtnSmall} onClick={() => setAddingTask(true)}>
+                <Plus size={13}/> Πρόσθεσε task
+              </button>
+            }
+          />
         ) : (
           <div className={styles.taskGrid}>
             {filteredTodoTasks.map(t => <TodoTaskCard key={t.id} task={t} />)}

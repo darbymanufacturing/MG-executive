@@ -1,43 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 88" fill="none">
-  <defs>
-    <clipPath id="xl">
-      <rect x="-2" y="-2" width="46" height="92"/>
-    </clipPath>
-    <clipPath id="xr">
-      <rect x="40" y="-2" width="48" height="92"/>
-    </clipPath>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 64" width="200" height="64" role="img" aria-label="Omni" fill="none">
+  <title>Omni</title>
 
-  <!-- White left arms of X -->
-  <g clip-path="url(#xl)" fill="white">
-    <polygon points="2,4  24,4  86,84  64,84"/>
-    <polygon points="2,84  24,84  86,4  64,4"/>
+  <!-- Asterism mark: 32x32 scaled to 56x56, centered vertically (y offset = (64-56)/2 = 4) -->
+  <g transform="translate(0, 4) scale(1.75)">
+    <g stroke-linecap="round" fill="none">
+      <line x1="16.00" y1="13.00" x2="16.00" y2="0.00"  stroke="#A0521D" stroke-width="2.5"/>
+      <line x1="18.12" y1="13.88" x2="23.07" y2="8.93"  stroke="#0F172A" stroke-width="2.0"/>
+      <line x1="19.00" y1="16.00" x2="30.00" y2="16.00" stroke="#0F172A" stroke-width="2.5"/>
+      <line x1="18.12" y1="18.12" x2="22.72" y2="22.72" stroke="#0F172A" stroke-width="2.0"/>
+      <line x1="16.00" y1="19.00" x2="16.00" y2="31.00" stroke="#0F172A" stroke-width="2.5"/>
+      <line x1="13.88" y1="18.12" x2="8.93"  y2="23.07" stroke="#0F172A" stroke-width="2.0"/>
+      <line x1="13.00" y1="16.00" x2="1.50"  y2="16.00" stroke="#0F172A" stroke-width="2.5"/>
+      <line x1="13.88" y1="13.88" x2="9.28"  y2="9.28"  stroke="#0F172A" stroke-width="2.0"/>
+    </g>
+    <circle cx="16" cy="16" r="2.2" fill="#0F172A"/>
   </g>
 
-  <!-- Copper right ">" arms of X -->
-  <g clip-path="url(#xr)" fill="#A35820">
-    <polygon points="2,4  24,4  86,84  64,84"/>
-    <polygon points="2,84  24,84  86,4  64,4"/>
-  </g>
-
-  <!-- SL in white -->
-  <text x="96" y="74"
-        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
-        font-size="72"
-        fill="white">SL</text>
-
-  <!-- i in white (stem; dot will be copper-overridden) -->
-  <text x="218" y="74"
-        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
-        font-size="72"
-        fill="white">i</text>
-
-  <!-- Copper square overrides the white i-dot -->
-  <rect x="219" y="5" width="17" height="17" rx="2" fill="#A35820"/>
-
-  <!-- DE in white -->
-  <text x="245" y="74"
-        font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
-        font-size="72"
-        fill="white">DE</text>
+  <!-- "omni" wordmark: Poppins ExtraBold 800, lowercase, -0.04em letter-spacing.
+       Mark diameter 56 → cap height ≈ 40 → font-size ≈ 56. Gap = 40 × 0.45 ≈ 18. Start x = 56 + 18 = 74. -->
+  <text
+    x="74"
+    y="45"
+    font-family="Poppins, system-ui, sans-serif"
+    font-weight="800"
+    font-size="44"
+    letter-spacing="-1.8"
+    fill="#0F172A"
+  >omni</text>
 </svg>

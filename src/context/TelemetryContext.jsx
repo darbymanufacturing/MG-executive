@@ -12,12 +12,17 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer,
+  query, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const EVENTS_COL = 'telemetryEvents';
 const BATCH_SIZE = 450; // safely below Firestore 500-op limit
+// Hard cap on events loaded in one snapshot — protects free-tier quota against runaway
+// fan-out. Phase 2 (useOrgCollection) will replace this with org-scoped pagination.
+const MAX_EVENTS = 20000;
 
 const TelemetryContext = createContext(null);
 
@@ -31,7 +36,7 @@ export function TelemetryProvider({ children }) {
   // history (~50k rows) this is fine on modern hardware.
   useEffect(() => {
     const unsub = onSnapshot(
-      collection(db, EVENTS_COL),
+      query(collection(db, EVENTS_COL), limit(MAX_EVENTS)),
       (snap) => {
         // Re-classify on load so data ingested under older classifier rules
         // picks up the latest logic (e.g. overturn-vs-trip_end ordering fix)
@@ -82,7 +87,10 @@ export function TelemetryProvider({ children }) {
         const ref = doc(db, EVENTS_COL, _docId);
         batch.set(ref, { ...data, createdAt: serverTimestamp() });
       });
-      await batch.commit();
+      await safeWrite(
+        () => batch.commit(),
+        { rethrow: true, errorMessage: 'Telemetry import failed mid-batch' },
+      );
       written += chunk.length;
       if (onProgress) onProgress(Math.round((written / total) * 100));
     }
@@ -98,7 +106,10 @@ export function TelemetryProvider({ children }) {
     events.forEach((ev) => {
       batch.delete(doc(db, EVENTS_COL, ev._docId));
     });
-    await batch.commit();
+    await safeWrite(
+      () => batch.commit(),
+      { rethrow: true, errorMessage: 'Failed to clear telemetry events' },
+    );
   }, [events]);
 
   return (

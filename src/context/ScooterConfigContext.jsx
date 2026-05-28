@@ -9,6 +9,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const CONFIG_DOC = 'config/scooters';
 
@@ -43,8 +44,8 @@ export function ScooterConfigProvider({ children }) {
         merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
         setTabs(merged);
       } else {
-        // First load — write defaults
-        setDoc(ref, { tabs: DEFAULT_TABS }).catch(console.error);
+        // First load — write defaults (silent fire-and-forget; not actionable to user)
+        safeWrite(() => setDoc(ref, { tabs: DEFAULT_TABS }), { silent: true });
         setTabs(DEFAULT_TABS);
       }
       setLoading(false);
@@ -54,7 +55,10 @@ export function ScooterConfigProvider({ children }) {
 
   const saveTabs = useCallback(async (newTabs) => {
     const ref = doc(db, CONFIG_DOC);
-    await setDoc(ref, { tabs: newTabs }, { merge: true });
+    await safeWrite(
+      () => setDoc(ref, { tabs: newTabs }, { merge: true }),
+      { rethrow: true, errorMessage: 'Failed to save scooter tab settings' },
+    );
   }, []);
 
   /** Returns only enabled tabs, sorted by order */

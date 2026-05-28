@@ -4,6 +4,7 @@ import {
   updateDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const PowContext = createContext(null);
 
@@ -81,7 +82,10 @@ export function PowProvider({ children }) {
 
   // ── Config ───────────────────────────────────────────────────────────────
   const saveConfig = useCallback(async (patch) => {
-    await setDoc(doc(db, CONFIG_DOC), patch, { merge: true });
+    await safeWrite(
+      () => setDoc(doc(db, CONFIG_DOC), patch, { merge: true }),
+      { rethrow: true, errorMessage: 'Failed to save POW config' },
+    );
   }, []);
 
   const setCurrentWeek = useCallback((week) => {
@@ -107,20 +111,26 @@ export function PowProvider({ children }) {
 
   const addTask = useCallback(async ({ title, description, steps, categoryId }) => {
     const id = `task-${Date.now()}`;
-    await setDoc(doc(db, TASKS_COL, id), {
-      title, description, steps, categoryId,
-      assignees: [],
-      checkedSteps: [],
-      powSteps: {},
-      status: 'backlog',
-      createdWeek: currentWeek,
-      doneWeek: null,
-      createdAt: serverTimestamp(),
-    });
+    await safeWrite(
+      () => setDoc(doc(db, TASKS_COL, id), {
+        title, description, steps, categoryId,
+        assignees: [],
+        checkedSteps: [],
+        powSteps: {},
+        status: 'backlog',
+        createdWeek: currentWeek,
+        doneWeek: null,
+        createdAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Failed to create POW task' },
+    );
   }, [currentWeek]);
 
   const updateTask = useCallback(async (id, patch) => {
-    await updateDoc(doc(db, TASKS_COL, id), patch);
+    await safeWrite(
+      () => updateDoc(doc(db, TASKS_COL, id), patch),
+      { rethrow: true, errorMessage: 'Failed to update POW task' },
+    );
   }, []);
 
   /** Assign a person with specific step indices for POW. Pass stepIndices=null to remove. */
@@ -145,12 +155,15 @@ export function PowProvider({ children }) {
       powWeeks[person] = currentWeek;
     }
 
-    await updateDoc(doc(db, TASKS_COL, id), {
-      assignees,
-      powSteps,
-      powWeeks,
-      status: assignees.length > 0 ? 'pow' : 'backlog',
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, TASKS_COL, id), {
+        assignees,
+        powSteps,
+        powWeeks,
+        status: assignees.length > 0 ? 'pow' : 'backlog',
+      }),
+      { rethrow: true, errorMessage: 'Failed to update POW assignees' },
+    );
   }, [tasks, currentWeek]);
 
   /** Toggle a step checkbox by its index */
@@ -161,26 +174,38 @@ export function PowProvider({ children }) {
     const checkedSteps = checked.includes(stepIndex)
       ? checked.filter(i => i !== stepIndex)
       : [...checked, stepIndex];
-    await updateDoc(doc(db, TASKS_COL, id), { checkedSteps });
+    await safeWrite(
+      () => updateDoc(doc(db, TASKS_COL, id), { checkedSteps }),
+      { rethrow: true, errorMessage: 'Failed to update POW step' },
+    );
   }, [tasks]);
 
   const markDone = useCallback(async (id) => {
-    await updateDoc(doc(db, TASKS_COL, id), {
-      status: 'done',
-      doneWeek: currentWeek,
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, TASKS_COL, id), {
+        status: 'done',
+        doneWeek: currentWeek,
+      }),
+      { rethrow: true, errorMessage: 'Failed to mark POW task done' },
+    );
   }, [currentWeek]);
 
   const markBacklog = useCallback(async (id) => {
-    await updateDoc(doc(db, TASKS_COL, id), {
-      status: 'backlog',
-      assignees: [],
-      doneWeek: null,
-    });
+    await safeWrite(
+      () => updateDoc(doc(db, TASKS_COL, id), {
+        status: 'backlog',
+        assignees: [],
+        doneWeek: null,
+      }),
+      { rethrow: true, errorMessage: 'Failed to move POW task back to backlog' },
+    );
   }, []);
 
   const deleteTask = useCallback(async (id) => {
-    await deleteDoc(doc(db, TASKS_COL, id));
+    await safeWrite(
+      () => deleteDoc(doc(db, TASKS_COL, id)),
+      { rethrow: true, errorMessage: 'Failed to delete POW task' },
+    );
   }, []);
 
   // ── Derived ───────────────────────────────────────────────────────────────

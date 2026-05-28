@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
+import AsterismMark from '../Shared/AsterismMark.jsx';
 import styles from './Sidebar.module.css';
 
 /* ─── Nav structure ─── */
@@ -123,16 +124,14 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
       >
         {/* Brand + collapse toggle */}
         <div className={`${styles.brand} ${collapsed ? styles.brandCollapsed : ''}`}>
-          {/* Omni mark */}
+          {/* Omni Asterism mark — see docs/BRANDING.md.
+              Sidebar background is dark (--bg-sidebar = #0F172A), so ink rays flip to white.
+              The rust ray (north) stays rust per spec. */}
           <div className={styles.omniMark}>
-            <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-              <rect width="26" height="26" rx="7" fill="var(--accent)" />
-              <path d="M7 13C7 9.69 9.69 7 13 7s6 2.69 6 6-2.69 6-6 6-6-2.69-6-6z" stroke="#fff" strokeWidth="2.2" fill="none"/>
-              <circle cx="13" cy="13" r="2.2" fill="#fff"/>
-            </svg>
+            <AsterismMark size={26} fg="#FFFFFF" />
           </div>
           {!collapsed && (
-            <span className={`omni-sidebar-brandtext ${styles.brandText}`}>Omni</span>
+            <span className={`omni-sidebar-brandtext ${styles.brandText}`}>omni</span>
           )}
           <button
             className={styles.collapseBtn}
