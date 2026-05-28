@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
+import { useIssues } from '../../context/IssueContext.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import styles from './Sidebar.module.css';
 
 /* ─── Nav structure ─── */
@@ -94,6 +96,9 @@ function SidebarSection({ label, children, collapsed }) {
 export default function Sidebar({ open, onClose, collapsed = false, onCollapse }) {
   const { user, signOut, userRole } = useAuth();
   const { badgeCount } = useNotifications();
+  const { issues } = useIssues();
+  const { activeCount } = useMaintenance();
+  const openIssueCount = issues.filter(i => i.status !== 'done').length;
   const navigate = useNavigate();
 
   const handleSignOut = useCallback(async () => {
@@ -149,8 +154,8 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
 
         {/* Operations section */}
         <SidebarSection label="Operations" collapsed={collapsed}>
-          <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={8} collapsed={collapsed} />
-          <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={23} collapsed={collapsed} />
+          <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={openIssueCount > 0 ? openIssueCount : undefined} collapsed={collapsed} />
+          <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={activeCount > 0 ? activeCount : undefined} collapsed={collapsed} />
           <NavItem to="/projects"    icon={ClipboardList} label="Projects"  collapsed={collapsed} />
           <NavItem to="/crew"        icon={Users}         label="Crew"      collapsed={collapsed} />
           <NavItem to="/war-room"    icon={Crosshair}     label="War Room"  collapsed={collapsed} />
