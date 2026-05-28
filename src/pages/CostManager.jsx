@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
-import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin, Receipt, Check, X } from 'lucide-react';
 import CostIntroOverlay from '../components/Costs/CostIntroOverlay.jsx';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
@@ -27,6 +27,84 @@ const FILTER_TABS = [
 ];
 
 const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };
+
+/* ─── Pending invoice captures from localStorage ─── */
+function PendingInvoiceBanner({ onConfirm }) {
+  const [pending, setPending] = useState([]);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const load = () => {
+      try {
+        const raw = localStorage.getItem('omni_pending_costs');
+        setPending(raw ? JSON.parse(raw) : []);
+      } catch { setPending([]); }
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  }, []);
+
+  const save = (updated) => {
+    setPending(updated);
+    localStorage.setItem('omni_pending_costs', JSON.stringify(updated));
+  };
+
+  const confirm = (item, index) => {
+    onConfirm({
+      name: item.name,
+      amount: item.amount,
+      category: item.category || 'variable',
+      frequency: 'once',
+      startDate: item.startDate,
+      notes: item.notes || '',
+    });
+    save(pending.filter((_, i) => i !== index));
+  };
+
+  const discard = (index) => {
+    save(pending.filter((_, i) => i !== index));
+  };
+
+  if (!pending.length) return null;
+
+  return (
+    <div className={styles.pendingBanner}>
+      <div className={styles.pendingBannerHeader} onClick={() => setExpanded(v => !v)}>
+        <Receipt size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+        <span className={styles.pendingBannerTitle}>
+          {pending.length} invoice capture{pending.length !== 1 ? 's' : ''} pending review
+        </span>
+        <span className={styles.pendingBannerSub}>from Omni Capture</span>
+        <span className={styles.pendingChevron}>{expanded ? '▲' : '▼'}</span>
+      </div>
+      {expanded && (
+        <div className={styles.pendingList}>
+          {pending.map((item, i) => (
+            <div key={i} className={styles.pendingRow}>
+              <div className={styles.pendingInfo}>
+                <span className={styles.pendingName}>{item.name}</span>
+                <span className={styles.pendingMeta}>
+                  {item.amount ? `€${Number(item.amount).toLocaleString('el-GR', { minimumFractionDigits: 2 })}` : '—'}
+                  {item.startDate ? ` · ${item.startDate}` : ''}
+                  {item.notes ? ` · ${item.notes}` : ''}
+                </span>
+              </div>
+              <div className={styles.pendingActions}>
+                <button className="btn btn-ghost btn-xs" onClick={() => discard(i)} title="Discard">
+                  <X size={13} />
+                </button>
+                <button className="btn btn-primary btn-xs" onClick={() => confirm(item, i)}>
+                  <Check size={13} />Add to costs
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CostManager() {
   const { costs, config, addCost, updateCost, deleteCost, importData } = useCosts();
@@ -136,6 +214,9 @@ export default function CostManager() {
       />
 
       <div className={styles.content}>
+        {/* Pending invoice captures */}
+        <PendingInvoiceBanner onConfirm={addCost} />
+
         {/* CSV feedback banner */}
         {csvMsg && (
           <div className={`${styles.csvMsg} ${csvMsg.type === 'error' ? styles.csvError : styles.csvSuccess}`}>

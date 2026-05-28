@@ -12,6 +12,68 @@
 .csvSuccess { background: rgba(76,175,80,0.1); color: var(--color-success); border: 1px solid rgba(76,175,80,0.3); }
 .csvError   { background: rgba(244,67,54,0.1); color: var(--color-danger);  border: 1px solid rgba(244,67,54,0.3); }
 
+/* Pending invoice banner */
+.pendingBanner {
+  background: color-mix(in oklab, var(--accent) 7%, var(--bg-section));
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--border));
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+.pendingBannerHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.pendingBannerTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+.pendingBannerSub {
+  font-size: 12px;
+  color: var(--fg-muted);
+  flex: 1;
+}
+.pendingChevron {
+  font-size: 10px;
+  color: var(--fg-muted);
+}
+.pendingList {
+  border-top: 1px solid color-mix(in oklab, var(--accent) 20%, var(--divider));
+}
+.pendingRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+.pendingRow:last-child { border-bottom: none; }
+.pendingInfo { flex: 1; min-width: 0; }
+.pendingName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pendingMeta {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.pendingActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Status badges */
 .statusBadge {
   display: inline-flex;
