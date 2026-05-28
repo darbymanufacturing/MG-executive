@@ -29,12 +29,14 @@ const EMPTY = {
 export default function CostFormModal({ isOpen, onClose, onSave, initialData, locations }) {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const isEdit = !!initialData;
 
   useEffect(() => {
     if (isOpen) {
       setForm(initialData ? { ...EMPTY, ...initialData, endDate: initialData.endDate || '' } : EMPTY);
       setErrors({});
+      setSaving(false);
     }
   }, [isOpen, initialData]);
 
@@ -43,32 +45,43 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = 'Name is required';
-    if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) e.amount = 'Enter a valid positive amount';
+    const amt = Number(form.amount);
+    if (!form.amount || isNaN(amt) || amt <= 0) e.amount = 'Enter a valid positive amount';
+    if (amt > 999999999) e.amount = 'Amount exceeds maximum allowed value';
     if (!form.category) e.category = 'Category is required';
     if (!form.frequency) e.frequency = 'Frequency is required';
+    if (form.endDate && form.startDate && form.endDate < form.startDate) {
+      e.endDate = 'End date must be after start date';
+    }
     return e;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    onSave({
-      ...form,
-      amount:         parseFloat(form.amount),
-      endDate:        form.endDate        || null,
-      location:       form.location       || null,
-      // Loan fields
-      lenderName:     form.lenderName     || null,
-      principalAmount:form.principalAmount ? parseFloat(form.principalAmount) : null,
-      interestRate:   form.interestRate   ? parseFloat(form.interestRate)     : null,
-      loanTermMonths: form.loanTermMonths ? parseInt(form.loanTermMonths, 10) : null,
-      // Credit card fields
-      cardName:       form.cardName       || null,
-      creditLimit:    form.creditLimit    ? parseFloat(form.creditLimit)      : null,
-      minimumPayment: form.minimumPayment ? parseFloat(form.minimumPayment)   : null,
-    });
-    onClose();
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        amount:         parseFloat(form.amount),
+        endDate:        form.endDate        || null,
+        location:       form.location       || null,
+        // Loan fields
+        lenderName:     form.lenderName     || null,
+        principalAmount:form.principalAmount ? parseFloat(form.principalAmount) : null,
+        interestRate:   form.interestRate   ? parseFloat(form.interestRate)     : null,
+        loanTermMonths: form.loanTermMonths ? parseInt(form.loanTermMonths, 10) : null,
+        // Credit card fields
+        cardName:       form.cardName       || null,
+        creditLimit:    form.creditLimit    ? parseFloat(form.creditLimit)      : null,
+        minimumPayment: form.minimumPayment ? parseFloat(form.minimumPayment)   : null,
+      });
+      onClose();
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, _submit: err.message }));
+      setSaving(false);
+    }
   };
 
   const preview = form.amount && !isNaN(Number(form.amount))
@@ -77,7 +90,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? 'Edit Cost' : 'Add Cost'} width={560}>
-      <form onSubmit={handleSubmit} className={styles.form} noValidate>
+      <form onSubmit={handleSubmit} className={styles.form}>
 
         {/* Name */}
         <div className={styles.field}>
@@ -145,6 +158,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               placeholder="0.00"
               step="0.01"
               min="0"
+              max="999999999"
             />
           </div>
           {preview !== null && (
@@ -163,7 +177,8 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
           </div>
           <div className={styles.field}>
             <label className={styles.label}>End Date <span className={styles.optional}>(optional)</span></label>
-            <input type="date" className={styles.input} value={form.endDate} onChange={set('endDate')} />
+            <input type="date" className={`${styles.input} ${errors.endDate ? styles.inputError : ''}`} value={form.endDate} onChange={set('endDate')} />
+            {errors.endDate && <span className={styles.error}>{errors.endDate}</span>}
           </div>
         </div>
 
@@ -233,10 +248,13 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
           </>
         )}
 
+        {/* Submit error */}
+        {errors._submit && <span className={styles.error}>{errors._submit}</span>}
+
         {/* Actions */}
         <div className={styles.actions}>
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary">{isEdit ? 'Save Changes' : 'Add Cost'}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Cost'}</Button>
         </div>
       </form>
     </Modal>

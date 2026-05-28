@@ -15,10 +15,18 @@ const DEFAULT_DURATIONS = {
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const idRef = useRef(0);
+  const timers = useRef({});
 
   const dismiss = useCallback((id) => {
+    if (timers.current[id]) {
+      clearTimeout(timers.current[id]);
+      delete timers.current[id];
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Clear all timers on unmount
+  useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
   const toast = useCallback((variant, message, opts = {}) => {
     if (!message) return null;
@@ -26,7 +34,7 @@ export function ToastProvider({ children }) {
     const duration = opts.duration ?? DEFAULT_DURATIONS[variant] ?? 4000;
     setToasts((prev) => [...prev, { id, variant, message, action: opts.action }]);
     if (duration > 0) {
-      setTimeout(() => dismiss(id), duration);
+      timers.current[id] = setTimeout(() => { dismiss(id); delete timers.current[id]; }, duration);
     }
     return id;
   }, [dismiss]);

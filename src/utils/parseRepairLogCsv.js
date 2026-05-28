@@ -124,15 +124,17 @@ export function parseRepairLogCsv(csvText, defaultScooterId = null) {
     const fixedBy        = colFixedBy !== -1 ? (cols[colFixedBy] || '').trim() : '';
 
     // Map to maintenanceTickets shape
-    // Fingerprint: scooterId + dateEntered (same as existing importer)
-    const docId = `${scooterId}_${dateEntered}_repair`;
+    // #124 — add issueDescription hash to avoid docId collision when multiple repairs on same day
+    const issueDescription = [issueType, realIssue, comment].filter(Boolean).join(' — ');
+    const descHash = issueDescription.trim().slice(0, 8).replace(/\s+/g, '');
+    const docId = `${scooterId}_${dateEntered}_repair_${descHash}`;
 
     tickets.push({
       _docId:          docId,
       scooterId,
       dateEntered,
       dateCompleted,
-      issueDescription: [issueType, realIssue, comment].filter(Boolean).join(' — '),
+      issueDescription,
       category:        'M',         // Mechanical — best default for repair log imports
       status:          dateCompleted ? 'Completed' : 'Active',
       primaryTag:      issueType   || 'Platform Import',

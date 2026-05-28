@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Flag, ArrowRight, Check, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useIssues } from '../context/IssueContext.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import Skeleton from '../components/Shared/Skeleton.jsx';
 import styles from './Issues.module.css';
+
+// #108: Named constant for snooze duration — future UI can expose a dropdown
+const SNOOZE_DEFAULT_MS = 24 * 60 * 60 * 1000;
 
 const TYPE_LABELS = {
   municipality: 'Municipality',
@@ -46,12 +49,21 @@ function NewIssueModal({ onClose, onCreate }) {
   const [urgency, setUrgency] = useState('medium');
   const [nextAction, setNextAction] = useState('');
   const [saving, setSaving] = useState(false);
+  // #148: local error state so failures don't close the modal
+  const [saveError, setSaveError] = useState(null);
 
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
-    await onCreate({ title, type, urgency, nextAction });
-    onClose();
+    setSaveError(null);
+    try {
+      await onCreate({ title, type, urgency, nextAction });
+      onClose(); // only close on success
+    } catch (err) {
+      setSaveError(err.message || 'Failed to create issue. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -101,6 +113,11 @@ function NewIssueModal({ onClose, onCreate }) {
           />
         </div>
 
+        {saveError && (
+          <div className={styles.modalError} style={{ padding: '0 var(--space-4) var(--space-2)', color: 'var(--status-red)', fontSize: 13 }}>
+            {saveError}
+          </div>
+        )}
         <div className={styles.modalFooter}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
           <button
@@ -122,11 +139,30 @@ export default function Issues() {
   const [showNew, setShowNew] = useState(false);
   const [filter, setFilter] = useState('open'); /* open | all | done */
 
+  // #105: snoozed issues with a past snoozeUntil should appear in Open tab
+  const now = new Date().toISOString();
+  const isEffectivelyOpen = (i) => {
+    if (i.status === 'done') return false;
+    // A snoozed issue whose snooze has expired is treated as open
+    if (i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil <= now) return true;
+    // A snoozed issue still within snooze window is NOT open
+    if (i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil > now) return false;
+    return true;
+  };
+
   const filtered = issues.filter(i => {
-    if (filter === 'open') return i.status !== 'done';
+    if (filter === 'open') return isEffectivelyOpen(i);
     if (filter === 'done') return i.status === 'done';
     return true;
   });
+
+  // #107: wrap tab counts in useMemo to avoid recomputing on every render
+  const tabCounts = useMemo(() => ({
+    open: issues.filter(i => isEffectivelyOpen(i)).length,
+    all:  issues.length,
+    done: issues.filter(i => i.status === 'done').length,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [issues]);
 
   const handleCreate = async (fields) => {
     await createIssue(fields);
@@ -148,9 +184,9 @@ export default function Issues() {
       {/* Filter tabs */}
       <div className={styles.tabs}>
         {[
-          { key: 'open', label: 'Open', count: issues.filter(i => i.status !== 'done').length },
-          { key: 'all',  label: 'All',  count: issues.length },
-          { key: 'done', label: 'Done', count: issues.filter(i => i.status === 'done').length },
+          { key: 'open', label: 'Open', count: tabCounts.open },
+          { key: 'all',  label: 'All',  count: tabCounts.all },
+          { key: 'done', label: 'Done', count: tabCounts.done },
         ].map(tab => (
           <button
             key={tab.key}
@@ -211,7 +247,7 @@ export default function Issues() {
                     <button
                       className="btn btn-ghost btn-xs"
                       title="Snooze"
-                      onClick={() => snoozeIssue(issue.id, new Date(Date.now() + 86400_000).toISOString())}
+                      onClick={() => snoozeIssue(issue.id, new Date(Date.now() + SNOOZE_DEFAULT_MS).toISOString())}
                     >
                       <Clock size={12} />
                     </button>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wrench, LogOut, WifiOff, ChevronRight, Clock, MapPin, Tag, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -79,6 +79,19 @@ export default function TechnicianDashboard() {
   const { tickets, assignTicket, loading } = useMaintenance();
   const uid = user?.uid ?? null;
 
+  // #164: wire offline banner to actual network status
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const handleOnline  = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online',  handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online',  handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Admin sees all open tickets; technician sees only their own + unassigned
   const myTickets = useMemo(() =>
     tickets.filter((t) => {
@@ -111,7 +124,7 @@ export default function TechnicianDashboard() {
         </div>
       </header>
 
-      <div className={styles.offlineBanner} id="offline-banner" style={{ display: 'none' }}>
+      <div className={styles.offlineBanner} id="offline-banner" style={{ display: isOffline ? 'flex' : 'none' }}>
         <WifiOff size={14} />
         <span>Working offline — changes will sync when reconnected</span>
       </div>

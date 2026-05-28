@@ -44,8 +44,8 @@ export function forecastTrend(data, monthsAhead = 3) {
   // Build forecast points — include last actual as anchor (no gap in dashed line)
   const anchor = {
     ...data[data.length - 1],
-    forecastRevenue: Math.max(0, revReg.intercept + revReg.slope * (window.length - 1)),
-    forecastCost:    Math.max(0, costReg.intercept + costReg.slope * (window.length - 1)),
+    forecastRevenue: revReg.intercept + revReg.slope * (window.length - 1),
+    forecastCost:    costReg.intercept + costReg.slope * (window.length - 1),
     isForecasted: false,
   };
 
@@ -56,8 +56,8 @@ export function forecastTrend(data, monthsAhead = 3) {
       total: null,
       revenue: null,
       profit: null,
-      forecastRevenue: Math.max(0, parseFloat((revReg.intercept + revReg.slope * x).toFixed(2))),
-      forecastCost:    Math.max(0, parseFloat((costReg.intercept + costReg.slope * x).toFixed(2))),
+      forecastRevenue: parseFloat((revReg.intercept + revReg.slope * x).toFixed(2)),
+      forecastCost:    parseFloat((costReg.intercept + costReg.slope * x).toFixed(2)),
       isForecasted: true,
     };
   });
@@ -88,6 +88,7 @@ function generateNextMonths(lastLabel, count) {
     month = parseInt(ymMatch[2], 10) - 1;
   } else if (abbMatch) {
     month = MONTH_ABBRS.findIndex((a) => a === abbMatch[1]);
+    if (month === -1) return [];
     year  = parseInt(abbMatch[2], 10);
   } else {
     return [];

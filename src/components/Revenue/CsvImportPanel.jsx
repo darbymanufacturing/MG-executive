@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import { parseRevenueCSV } from '../../utils/csvParser.js';
@@ -175,7 +176,7 @@ export default function CsvImportPanel({ locations }) {
               </select>
             ) : (
               <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                No cities configured — add them in <a href="/settings" style={{ color: 'var(--color-primary-light)' }}>Settings</a>.
+                No cities configured — add them in <Link to="/settings" style={{ color: 'var(--color-primary-light)' }}>Settings</Link>.
               </span>
             )}
           </div>

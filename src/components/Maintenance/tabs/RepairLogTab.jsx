@@ -25,7 +25,8 @@ export default function RepairLogTab({ filteredTickets }) {
   const [technicians,   setTechnicians]   = useState([]);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+    // #165: include 'crew' role — crew members can be assigned to tickets
+    const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'crew']));
     return onSnapshot(q, (snap) => {
       setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
     });

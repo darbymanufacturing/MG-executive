@@ -6,7 +6,7 @@ import {
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 
-// --- peer contexts (lazy to avoid circular import issues)
+// --- peer contexts (DiaryProvider must be mounted inside these providers in App.jsx)
 import { useCosts } from './CostContext.jsx';
 import { useRevenue } from './RevenueContext.jsx';
 import { useMaintenance } from './MaintenanceContext.jsx';

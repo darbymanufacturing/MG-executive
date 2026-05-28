@@ -8,6 +8,7 @@ import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { DEFAULT_CONFIG } from '../utils/constants.js';
 import { SAMPLE_COSTS, SAMPLE_CONFIG } from '../utils/sampleData.js';
+import { useAuth } from './AuthContext.jsx';
 
 // Firestore paths
 const COSTS_COL = 'costs';
@@ -16,7 +17,11 @@ const BATCH_SIZE = 450; // safely below Firestore's 500-op batch limit
 
 const CostContext = createContext(null);
 
+// Module-level flag: prevents StrictMode double-invoke from writing bootstrap defaults twice
+let configBootstrapped = false;
+
 export function CostProvider({ children }) {
+  const { user } = useAuth();
   const [costs, setCosts] = useState([]);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
@@ -31,6 +36,13 @@ export function CostProvider({ children }) {
   // ── Real-time listeners ───────────────────────────────────────────────────
 
   useEffect(() => {
+    // Reset state when user changes (e.g. sign out or different user signs in)
+    setCosts([]);
+    setConfig(DEFAULT_CONFIG);
+    setLoading(true);
+    setCostsLoaded(false);
+    setConfigLoaded(false);
+
     // Listen to costs collection
     const unsubCosts = onSnapshot(collection(db, COSTS_COL), (snap) => {
       const items = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
@@ -43,14 +55,17 @@ export function CostProvider({ children }) {
       if (snap.exists()) {
         setConfig(snap.data());
       } else {
-        // First time — write defaults (silent bootstrap)
-        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        // First time — write defaults (silent bootstrap, guarded against StrictMode double-fire)
+        if (!configBootstrapped) {
+          configBootstrapped = true;
+          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        }
       }
       setConfigLoaded(true);
     });
 
     return () => { unsubCosts(); unsubConfig(); };
-  }, []);
+  }, [user]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 

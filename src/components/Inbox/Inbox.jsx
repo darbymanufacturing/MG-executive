@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Clock, Check, ArrowRight, Filter, Plus, ChevronRight,
+  Clock, Check, ArrowRight, ChevronRight,
   Flag, Wrench, Folder, Receipt, Landmark, AlertTriangle,
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
@@ -93,17 +93,19 @@ function InboxRowItem({ item, onSnooze, onDone }) {
         )}
       </div>
 
-      {/* Quick actions */}
-      <div className={styles.quickActions} onClick={e => e.stopPropagation()}>
-        <button className="btn btn-ghost btn-xs" onClick={() => onSnooze?.(item)} title="Snooze">
-          <Clock size={13} />
-          <span>Snooze</span>
-        </button>
-        <button className="btn btn-ghost btn-xs" onClick={() => onDone?.(item)} title="Mark done">
-          <Check size={13} />
-          <span>Done</span>
-        </button>
-      </div>
+      {/* Quick actions — only shown for issue items (#162: non-issue kinds have no action handler) */}
+      {item.kind === 'issue' && (
+        <div className={styles.quickActions} onClick={e => e.stopPropagation()}>
+          <button className="btn btn-ghost btn-xs" onClick={() => onSnooze?.(item)} title="Snooze">
+            <Clock size={13} />
+            <span>Snooze</span>
+          </button>
+          <button className="btn btn-ghost btn-xs" onClick={() => onDone?.(item)} title="Mark done">
+            <Check size={13} />
+            <span>Done</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -178,7 +180,7 @@ export default function Inbox({ items = [], grouping = 'urgency', showHeader = t
 
   const visibleItems = showAll ? items : items.slice(0, DEFAULT_LIMIT);
   const groups = groupItems(visibleItems, grouping);
-  const hiddenCount = items.length - DEFAULT_LIMIT;
+  const hiddenCount = Math.max(0, items.length - DEFAULT_LIMIT);
 
   const handleDone = async (item) => {
     if (item.kind === 'issue') {
@@ -195,8 +197,7 @@ export default function Inbox({ items = [], grouping = 'urgency', showHeader = t
             <span className="pill pill-accent">{items.length} open</span>
           )}
           <div style={{ flex: 1 }} />
-          <button className="btn btn-ghost btn-sm"><Filter size={13} />Filter</button>
-          <button className="btn btn-primary btn-sm"><Plus size={13} />New</button>
+          {/* #163: Filter and New buttons removed — no onClick wired; dead UI. Reinstate when implemented. */}
         </div>
       )}
 

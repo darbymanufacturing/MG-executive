@@ -19,7 +19,7 @@ export default function Revenue() {
   const locations = config.locations || [];
   const [clearConfirm, setClearConfirm] = useState(false);
   const [locationFilter, setLocationFilter] = useState('all');
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(!localStorage.getItem('omni_revenue_intro_seen'));
 
   const filteredRevenue = useMemo(
     () => filterRevenueByLocation(revenueData, locationFilter),
@@ -34,7 +34,7 @@ export default function Revenue() {
 
   return (
     <div className={styles.page}>
-      {showIntro && <RevenueIntroOverlay onDone={() => setShowIntro(false)} />}
+      {showIntro && <RevenueIntroOverlay onDone={() => { localStorage.setItem('omni_revenue_intro_seen', '1'); setShowIntro(false); }} />}
       <Header
         title="Revenue"
         subtitle="Import and browse daily revenue data from your platform CSV exports"
@@ -56,7 +56,7 @@ export default function Revenue() {
           <div className={styles.statsRow}>
             <div className={styles.statCard}>
               <span className={styles.statLabel}>Total Revenue (all time)</span>
-              <span className={styles.statValue} style={{ color: '#4CAF50' }}>{formatEUR(allRev)}</span>
+              <span className={styles.statValue} style={{ color: 'var(--color-success)' }}>{formatEUR(allRev)}</span>
             </div>
             <div className={styles.statCard}>
               <span className={styles.statLabel}>Total Trips</span>

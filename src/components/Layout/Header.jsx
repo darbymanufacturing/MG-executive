@@ -3,7 +3,7 @@ import { Bike } from 'lucide-react';
 import styles from './Header.module.css';
 
 export default function Header({ title, subtitle, actions }) {
-  const { config } = useCosts();
+  const { config, loading } = useCosts();
 
   return (
     <header className={styles.header}>
@@ -15,7 +15,7 @@ export default function Header({ title, subtitle, actions }) {
         {actions}
         <div className={styles.fleet}>
           <Bike size={16} className={styles.fleetIcon} />
-          <span className={styles.fleetCount}>{config.fleetSize}</span>
+          <span className={styles.fleetCount}>{loading ? '—' : config.fleetSize}</span>
           <span className={styles.fleetLabel}>scooters</span>
         </div>
       </div>

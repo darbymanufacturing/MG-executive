@@ -152,6 +152,7 @@ export function applyFinancialAdjustments(trendArray, financial) {
 
 /** Profit/loss: revenue minus costs for matching period */
 export function profitLoss(revenueData, costs) {
+  if (!revenueData.length) return 0;
   const rev = totalRevenue(revenueData);
   // Use the same monthly normalization as the cost side
   const monthlyCost = totalMonthlyCost(costs);
@@ -177,11 +178,11 @@ export function revenuePerTrip(revenueData) {
   return totalRevenue(revenueData) / trips;
 }
 
-/** Vehicle utilization: avg unique vehicles / fleet size × 100 (capped at 100%) */
+/** Vehicle utilization: avg unique vehicles / fleet size × 100 (uncapped — >100% is valid data) */
 export function vehicleUtilization(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return 0;
   const avgVehicles = revenueData.reduce((s, r) => s + (r.uniqueVehiclesCount || 0), 0) / revenueData.length;
-  return Math.min(100, (avgVehicles / fleetSize) * 100);
+  return (avgVehicles / fleetSize) * 100;
 }
 
 /** Total trip distance across all rows (km) */
@@ -303,8 +304,9 @@ export function revenuePerCityBreakdown(periodRevenue, scooters, cities) {
   if (!cities || cities.length === 0) return [];
 
   return cities.map((city) => {
+    const cityLower = city.toLowerCase();
     const cityRevenue = periodRevenue.filter(
-      (r) => (r.location || '').toLowerCase() === city.toLowerCase(),
+      (r) => (r.location || '').toLowerCase() === cityLower,
     );
     const revenue = cityRevenue.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
     const trips   = cityRevenue.reduce((s, r) => s + (r.totalTrips || 0), 0);

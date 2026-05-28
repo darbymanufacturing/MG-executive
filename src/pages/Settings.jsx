@@ -15,12 +15,47 @@ import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
+import { ScooterConfigProvider } from '../context/ScooterConfigContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
 import { projectedCostPerScooterSimple } from '../utils/calculations.js';
 import { formatEUR } from '../utils/formatters.js';
 import styles from './Settings.module.css';
+
+// #221, #223: Proper component so useState is valid (field() helper can't call hooks directly)
+function FieldInput({ configKey, label, type, configValue, onCommit, extra, styles: s }) {
+  const [localVal, setLocalVal] = useState(configValue);
+
+  // Sync when config value changes externally (e.g. on initial load)
+  useEffect(() => {
+    setLocalVal(configValue);
+  }, [configValue]);
+
+  return (
+    <div className={s.field}>
+      <label className={s.label}>{label}</label>
+      <input
+        type={type}
+        className={s.input}
+        value={localVal}
+        onChange={(e) => setLocalVal(e.target.value)}
+        onBlur={(e) => {
+          if (type === 'number') {
+            const parsed = parseFloat(e.target.value);
+            // #223: guard against NaN — fall back to existing config value
+            const v = Number.isFinite(parsed) ? parsed : configValue ?? null;
+            setLocalVal(v ?? '');
+            onCommit(v);
+          } else {
+            onCommit(e.target.value);
+          }
+        }}
+        {...extra}
+      />
+    </div>
+  );
+}
 
 export default function Settings() {
   const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
@@ -30,6 +65,16 @@ export default function Settings() {
   const [projFleet, setProjFleet] = useState(config.fleetSize);
   const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
+  // #206, #270: track timers in refs to clear them on unmount
+  const inviteTimerRef = useRef(null);
+  const importTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (inviteTimerRef.current) clearTimeout(inviteTimerRef.current);
+      if (importTimerRef.current) clearTimeout(importTimerRef.current);
+    };
+  }, []);
 
   // Team management state
   const [technicians, setTechnicians] = useState([]);
@@ -40,16 +85,23 @@ export default function Settings() {
   const [inviteStatus, setInviteStatus] = useState(null); // { type: 'success'|'error', text }
   const [inviteLoading, setInviteLoading] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
-  // Accountant email config
-  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || 'nsoukoulis@outlook.com');
+  // Accountant email config — #88: no hardcoded email fallback
+  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || '');
   const [accountantSaved, setAccountantSaved] = useState(false);
 
   // Load crew accounts in real time (crew + technician roles)
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'crew', 'staff']));
-    const unsub = onSnapshot(q, (snap) => {
-      setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
-    });
+    // #210: add onError callback so listener failures surface rather than silently dying
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+      },
+      (err) => {
+        console.error('Team listener error:', err);
+      },
+    );
     return unsub;
   }, []);
 
@@ -75,7 +127,8 @@ export default function Settings() {
       setInviteStatus({ type: 'error', text: err.message });
     } finally {
       setInviteLoading(false);
-      setTimeout(() => setInviteStatus(null), 6000);
+      // #206: store timer ref so it can be cleared on unmount
+      inviteTimerRef.current = setTimeout(() => setInviteStatus(null), 6000);
     }
   };
 
@@ -97,20 +150,18 @@ export default function Settings() {
     updateConfig({ locations: locations.filter((l) => l !== loc) });
   };
 
+  // field() returns a FieldInput element — a proper component so useState is valid (#221, #223)
   const field = (key, label, type = 'text', extra = {}) => (
-    <div className={styles.field}>
-      <label className={styles.label}>{label}</label>
-      <input
-        type={type}
-        className={styles.input}
-        value={config[key] ?? ''}
-        onChange={(e) => {
-          const v = type === 'number' ? (e.target.value === '' ? null : parseFloat(e.target.value)) : e.target.value;
-          updateConfig({ [key]: v });
-        }}
-        {...extra}
-      />
-    </div>
+    <FieldInput
+      key={key}
+      configKey={key}
+      label={label}
+      type={type}
+      configValue={config[key] ?? ''}
+      onCommit={(v) => updateConfig({ [key]: v })}
+      extra={extra}
+      styles={styles}
+    />
   );
 
   const handleImport = async (e) => {
@@ -118,13 +169,16 @@ export default function Settings() {
     if (!file) return;
     try {
       const data = await importFromJSON(file);
-      importData(data, 'replace');
+      // #222: await importData so failures are caught; previously fire-and-forget
+      await importData(data, 'replace');
       setImportMsg({ type: 'success', text: `Imported ${data.costs.length} cost items successfully.` });
     } catch (err) {
       setImportMsg({ type: 'error', text: err.message });
     }
     e.target.value = '';
-    setTimeout(() => setImportMsg(null), 5000);
+    // #270: store timer in ref to clear on unmount
+    if (importTimerRef.current) clearTimeout(importTimerRef.current);
+    importTimerRef.current = setTimeout(() => setImportMsg(null), 5000);
   };
 
   const projectedCPS = projectedCostPerScooterSimple(costs, config.fleetSize, projFleet);
@@ -503,7 +557,10 @@ export default function Settings() {
           <p className={styles.sectionDesc}>
             Configure the tabs shown on each scooter's detail page. Drag to reorder, toggle to show/hide.
           </p>
-          <ScooterTabsConfig />
+          {/* #290 — ScooterTabsConfig needs ScooterConfigProvider; /settings is outside ScooterScopedRoutes */}
+          <ScooterConfigProvider>
+            <ScooterTabsConfig />
+          </ScooterConfigProvider>
         </section>
 
         {/* Accountant / Integrations */}
@@ -539,6 +596,11 @@ export default function Settings() {
                 {accountantSaved ? <><CheckCircle size={14} /> Saved</> : 'Save'}
               </Button>
             </div>
+            {!accountantEmail.trim() && (
+              <p style={{ marginTop: 6, fontSize: 12, color: 'var(--status-amber)' }}>
+                Set accountant email before forwarding invoices.
+              </p>
+            )}
             <p className={styles.dataCardDesc} style={{ marginTop: 8, fontSize: 12 }}>
               This is stored locally. Set <code>ACCOUNTANT_EMAIL</code> env var in Vercel for the API.
             </p>
@@ -667,7 +729,7 @@ git checkout main`}
             <a
               href="https://github.com/darbymanufacturing/MG-executive/releases/tag/v1-backup"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="btn btn-outline btn-sm"
             >
               View V1 on GitHub

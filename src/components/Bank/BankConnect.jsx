@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link2, RefreshCw, Unlink, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { mapTransactionToCost } from '../../utils/bankTransactionMapper.js';
 import Button from '../Shared/Button.jsx';
@@ -14,20 +14,18 @@ const BATCH_SIZE   = 450;
 
 async function writeTransactions(rawTxs) {
   // Only import debits (negative amount from Salt Edge)
-  const debits = rawTxs.filter((tx) => (tx.amount ?? 0) < 0);
+  const debits = rawTxs.filter((tx) => (tx.amount ?? 0) < 0 && tx.id);
   if (debits.length === 0) return 0;
 
-  const existingSnap = await getDocs(collection(db, BANK_TX_COL));
-  const existingIds  = new Set(existingSnap.docs.map((d) => d.id));
-
-  const newTxs = debits.filter((tx) => tx.id && !existingIds.has(tx.id));
-  if (newTxs.length === 0) return 0;
-
-  for (let i = 0; i < newTxs.length; i += BATCH_SIZE) {
+  // #166: Salt Edge returns deterministic transaction IDs and batch.set is idempotent —
+  // no need to fetch existing IDs for dedup. setDoc with same data is a no-op.
+  for (let i = 0; i < debits.length; i += BATCH_SIZE) {
     const batch = writeBatch(db);
-    newTxs.slice(i, i + BATCH_SIZE).forEach((tx) => {
+    debits.slice(i, i + BATCH_SIZE).forEach((tx) => {
+      // #211: sanitize Salt Edge tx.id to remove Firestore-invalid path characters
+      const safeId = String(tx.id).replace(/[/.#$[\]]/g, '_');
       const mapped = mapTransactionToCost(tx);
-      batch.set(doc(db, BANK_TX_COL, tx.id), {
+      batch.set(doc(db, BANK_TX_COL, safeId), {
         ...tx,
         ...mapped,
         status:   'pending',
@@ -36,7 +34,7 @@ async function writeTransactions(rawTxs) {
     });
     await batch.commit();
   }
-  return newTxs.length;
+  return debits.length;
 }
 
 async function pollForConnection(customerId, maxAttempts = 6, intervalMs = 3000) {
@@ -58,6 +56,13 @@ export default function BankConnect({ onNewTransactions }) {
   const [connectionId, setConnectionId] = useState(() => localStorage.getItem('se_connection_id') || '');
   const [customerId,   setCustomerId]   = useState(() => localStorage.getItem('se_customer_id')   || '');
 
+  // #167: prevent state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // ── Detect return from Salt Edge (sessionStorage flag set before redirect) ───
   useEffect(() => {
     if (!sessionStorage.getItem('se_connecting')) return;
@@ -69,6 +74,7 @@ export default function BankConnect({ onNewTransactions }) {
     setMessage('Waiting for bank connection to activate…');
 
     pollForConnection(storedCustomerId).then(async (connId) => {
+      if (!mountedRef.current) return; // #167: guard against unmount
       if (!connId) {
         setStatus('error');
         setMessage('Connection not found. Please try connecting again.');
@@ -79,6 +85,7 @@ export default function BankConnect({ onNewTransactions }) {
       await setDoc(doc(db, BANK_CFG_DOC), {
         connectionId: connId, customerId: storedCustomerId, connectedAt: new Date().toISOString(),
       });
+      if (!mountedRef.current) return; // #167: guard after async setDoc
       await fetchTransactions(connId);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps

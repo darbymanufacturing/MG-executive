@@ -37,7 +37,7 @@ import {
   getHealthColor,
 } from '../utils/financialHealth.js';
 import { useProjects } from '../context/ProjectContext.jsx';
-import { isPowDay, daysSince, relativeLabel } from '../utils/powHelpers.js';
+import { isPowDay, daysSince, relativeLabel, currentWeekStart } from '../utils/powHelpers.js';
 import { formatEUR, formatEURCompact, formatPercent, formatTrips } from '../utils/formatters.js';
 import styles from './Dashboard.module.css';
 
@@ -119,7 +119,7 @@ export default function Dashboard() {
     if (viewMode === 'range') {
       return filteredRevenue.filter((r) => {
         const d = r.date;
-        return (!rangeFrom || d >= rangeFrom + '-01') && (!rangeTo || d <= rangeTo + '-31');
+        return (!rangeFrom || d >= rangeFrom + '-01') && (!rangeTo || d <= rangeTo + '-99');
       });
     }
     return filteredRevenue;
@@ -174,7 +174,7 @@ export default function Dashboard() {
     }
     if (viewMode === 'range' && rangeFrom && rangeTo) {
       return filteredCosts
-        .filter((c) => c.frequency === 'one-time' && c.startDate >= rangeFrom + '-01' && c.startDate <= rangeTo + '-31')
+        .filter((c) => c.frequency === 'one-time' && c.startDate >= rangeFrom + '-01' && c.startDate <= rangeTo + '-99')
         .reduce((s, c) => s + (c.amount || 0), 0);
     }
     return filteredCosts
@@ -256,6 +256,13 @@ export default function Dashboard() {
 
   const isEmpty = costs.length === 0;
 
+  // ── Period label for card titles ─────────────────────────────────────────
+  const periodLabel = viewMode === 'month'
+    ? fmtMonth(selectedMonth)
+    : viewMode === 'range' && rangeFrom && rangeTo
+      ? `${fmtMonth(rangeFrom)} – ${fmtMonth(rangeTo)}`
+      : 'All Time';
+
   async function handleExportPDF() {
     setExportingPDF(true);
     // Replace em-dashes, en-dashes and spaces with hyphens (em dash from period range label)
@@ -263,13 +270,6 @@ export default function Dashboard() {
     await exportDashboardToPDF(`omni-dashboard-${safeLabel}.pdf`);
     setExportingPDF(false);
   }
-
-  // ── Period label for card titles ─────────────────────────────────────────
-  const periodLabel = viewMode === 'month'
-    ? fmtMonth(selectedMonth)
-    : viewMode === 'range' && rangeFrom && rangeTo
-      ? `${fmtMonth(rangeFrom)} – ${fmtMonth(rangeTo)}`
-      : 'All Time';
 
   return (
     <div className={styles.page} id="dashboard-export">
@@ -506,7 +506,7 @@ export default function Dashboard() {
         )}
 
         {/* ── Revenue by City (C2) ── */}
-        {cityBreakdown.length > 1 && (
+        {cityBreakdown.length >= 1 && (
           <div className={styles.chartCard}>
             <div className={styles.chartHeader}>
               <h2 className={styles.chartTitle}>Revenue by City · {periodLabel}</h2>
@@ -545,10 +545,7 @@ export default function Dashboard() {
           const needsAttentionTotal = blockedCount + attentionCount;
 
           // POW entries this week (ISO week matching)
-          const now        = new Date();
-          const weekStart  = new Date(now);
-          weekStart.setDate(now.getDate() - now.getDay() + 1); // Mon
-          const weekKey    = weekStart.toISOString().slice(0, 10);
+          const weekKey    = currentWeekStart();
           const powThisWeek = activeProjects.reduce((n, p) =>
             n + (p.powEntries || []).filter((e) => e.weekOf >= weekKey).length, 0);
 
@@ -766,7 +763,7 @@ export default function Dashboard() {
                             className={styles.budgetBarFill}
                             style={{
                               width: `${pct}%`,
-                              background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e',
+                              background: over ? 'var(--color-danger)' : pct > 80 ? 'var(--color-warning)' : 'var(--color-success)',
                             }}
                           />
                         </div>

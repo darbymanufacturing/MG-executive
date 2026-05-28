@@ -46,7 +46,10 @@ export function ProjectProvider({ children }) {
 
     const unsubProjects = onSnapshot(collection(db, PROJECTS_COL), (snap) => {
       const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-      setProjects(raw.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
+      const sorted = raw.sort((a, b) =>
+        (b.createdAt || '') > (a.createdAt || '') ? 1 : -1
+      );
+      setProjects(sorted.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
       projectsDone = true;
       checkDone();
     });

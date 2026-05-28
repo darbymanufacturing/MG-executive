@@ -13,13 +13,14 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, deleteDoc,
+  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, deleteDoc, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 
 const TRIPS_COL  = 'scooterTrips';
 const BATCH_SIZE = 450;
+const MAX_TRIPS  = 10000;
 
 const TripContext = createContext(null);
 
@@ -31,7 +32,7 @@ export function TripProvider({ children }) {
   // Real-time listener
   useEffect(() => {
     const unsub = onSnapshot(
-      collection(db, TRIPS_COL),
+      query(collection(db, TRIPS_COL), limit(MAX_TRIPS)),
       (snap) => {
         setTrips(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
         setCount(snap.size);

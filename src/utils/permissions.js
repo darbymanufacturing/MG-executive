@@ -139,8 +139,9 @@ export const REVENUE_FIELD_RULES = {
 export function filterIssuesByVisibility(issues = [], user) {
   const userLevel = level(user);
   return issues.filter(issue => {
-    const vis = issue.visibility || 'admin';
-    const required = ROLE_LEVEL[vis] ?? ROLE_LEVEL.admin;
+    // #129 — default to 'staff' not 'admin'; matches default set at issue creation time
+    const vis = issue.visibility || 'staff';
+    const required = ROLE_LEVEL[vis] ?? ROLE_LEVEL.staff;
     return userLevel >= required;
   });
 }

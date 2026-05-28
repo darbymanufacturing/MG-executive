@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import GreeceMap    from '../components/WarRoom/GreeceMap.jsx';
@@ -19,6 +19,7 @@ function todayLabel() {
 export default function WarRoom() {
   const navigate = useNavigate();
   const [exiting, setExiting] = useState(false);
+  const exitTimer = useRef(null);
 
   const { config }      = useCosts();
   const { revenueData } = useRevenue();
@@ -54,16 +55,21 @@ export default function WarRoom() {
   const totalScooters    = scooters.filter((s) => s.status === 'Active').length;
   const activeCityCount  = allCityData.filter((d) => d.activeScooters > 0).length;
 
-  function handleBack() {
+  const handleBack = useCallback(() => {
+    if (exitTimer.current) return;
     setExiting(true);
-    setTimeout(() => navigate(-1), 400);
-  }
+    exitTimer.current = setTimeout(() => navigate(-1), 400);
+  }, [navigate]);
+
+  useEffect(() => {
+    return () => { if (exitTimer.current) clearTimeout(exitTimer.current); };
+  }, []);
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') handleBack(); }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [handleBack]);
 
   return (
     <div className={`${styles.overlay} ${exiting ? styles.exiting : ''}`}>

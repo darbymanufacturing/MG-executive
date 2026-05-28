@@ -22,7 +22,9 @@ export default async function handler(req, res) {
   }
 
   let { customer_id, redirect_url } = req.body || {};
-  const redirectTo = redirect_url || `https://${req.headers.host}/settings`;
+  // #89 — use env var instead of req.headers.host to prevent host header injection
+  const origin = process.env.APP_ORIGIN || 'https://omni.mgexecutive.app';
+  const redirectTo = redirect_url || `${origin}/settings`;
 
   try {
     // 1. Create customer if this is the first connect

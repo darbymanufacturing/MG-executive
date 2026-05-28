@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
+import { useAuth } from './AuthContext.jsx';
 
 const REVENUE_COL = 'revenue';
 const BATCH_SIZE  = 450; // Firestore batch limit is 500; stay safe
@@ -14,12 +15,17 @@ const MAX_REVENUE_ROWS = 2000;
 const RevenueContext = createContext(null);
 
 export function RevenueProvider({ children }) {
+  const { user } = useAuth();
   const [revenueData, setRevenueData]     = useState([]);
   const [revenueLoading, setRevenueLoading] = useState(true);
 
   // ── Real-time listener ────────────────────────────────────────────────────
 
   useEffect(() => {
+    // Reset state when user changes (e.g. different user signs in)
+    setRevenueData([]);
+    setRevenueLoading(true);
+
     // orderBy 'date' desc + limit — Firestore enforces the cap server-side so big collections
     // don't blow the free-tier read quota. Client still sorts to handle any same-date rows.
     const q = query(
@@ -35,7 +41,7 @@ export function RevenueProvider({ children }) {
       setRevenueLoading(false);
     });
     return unsub;
-  }, []);
+  }, [user]);
 
   // ── Import (batch, chunked, date-as-doc-ID for dedup) ────────────────────
 
@@ -45,7 +51,8 @@ export function RevenueProvider({ children }) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        const docId = `${day.date}_${day.location || 'global'}`;
+        const rawId = `${day.date}_${day.location || 'global'}`;
+        const docId = rawId.replace(/[\/\.#$[\]]/g, '_');
         const ref = doc(db, REVENUE_COL, docId);
         batch.set(ref, day); // setDoc via batch → overwrites existing doc
       });

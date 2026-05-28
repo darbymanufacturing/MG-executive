@@ -124,11 +124,15 @@ export function computeDaysOpen(ticket) {
   const end = ticket.status === 'Completed' && ticket.dateCompleted
     ? new Date(ticket.dateCompleted)
     : new Date();
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
 const MaintenanceContext = createContext(null);
+
+// Module-level flag: prevents StrictMode double-invoke from writing bootstrap defaults twice
+let maintenanceConfigBootstrapped = false;
 
 export function MaintenanceProvider({ children }) {
   const [tickets,  setTickets]  = useState([]);
@@ -168,7 +172,11 @@ export function MaintenanceProvider({ children }) {
       if (snap.exists()) {
         setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
       } else {
-        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        // Bootstrap defaults once — guarded against StrictMode double-fire
+        if (!maintenanceConfigBootstrapped) {
+          maintenanceConfigBootstrapped = true;
+          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        }
       }
       markLoaded('config');
     });
@@ -203,6 +211,7 @@ export function MaintenanceProvider({ children }) {
 
   // ── Ticket CRUD ───────────────────────────────────────────────────────────
   const addTicket = useCallback(async (data) => {
+    if (!data.scooterId) throw new Error('scooterId is required');
     const dateStr = data.dateEntered || new Date().toISOString().slice(0, 10);
     const scooterId = String(data.scooterId || '').trim();
     const baseId  = `${scooterId}_${dateStr}`;
@@ -255,6 +264,7 @@ export function MaintenanceProvider({ children }) {
 
   // ── Parts CRUD ────────────────────────────────────────────────────────────
   const addPart = useCallback(async (data) => {
+    if (!data.sku) throw new Error('sku is required');
     const docId = String(data.sku).trim();
     const now   = new Date().toISOString();
     await safeWrite(
@@ -323,6 +333,7 @@ export function MaintenanceProvider({ children }) {
 
   // ── Scooter CRUD ─────────────────────────────────────────────────────────────
   const addScooter = useCallback(async (data) => {
+    if (!data.scooterId) throw new Error('scooterId is required');
     const docId = String(data.scooterId).trim();
     const now   = new Date().toISOString();
     await safeWrite(

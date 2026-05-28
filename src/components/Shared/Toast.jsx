@@ -11,7 +11,11 @@ const ICONS = {
 export default function Toast({ variant = 'info', message, onDismiss, action }) {
   const Icon = ICONS[variant] || Info;
   return (
-    <div className={`${styles.toast} ${styles[variant]}`} role="status">
+    <div
+      className={`${styles.toast} ${styles[variant]}`}
+      role={variant === 'error' ? 'alert' : 'status'}
+      aria-atomic={variant === 'error' ? 'true' : undefined}
+    >
       <Icon size={16} className={styles.icon} aria-hidden="true" />
       <span className={styles.message}>{message}</span>
       {action && (

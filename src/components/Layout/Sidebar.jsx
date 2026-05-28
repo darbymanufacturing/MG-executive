@@ -38,7 +38,10 @@ const NAV_FINANCE = [
 ];
 
 function Avatar({ name = 'U', size = 28 }) {
-  const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (() => {
+    if (!name?.trim()) return 'U';
+    return name.trim().split(' ').map(s => Array.from(s)[0] || '').slice(0, 2).join('').toUpperCase();
+  })();
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',

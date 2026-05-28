@@ -68,7 +68,7 @@ const EXPECTED_HEADERS = [
  * Returns { rows: [...], errors: [...], total: n }
  */
 export function parseRevenueCSV(csvText) {
-  const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) {
     return { rows: [], errors: ['File appears to be empty or has no data rows.'], total: 0 };
   }
@@ -93,6 +93,10 @@ export function parseRevenueCSV(csvText) {
 
   for (let i = 1; i < lines.length; i++) {
     const cols = parseRow(lines[i]);
+    // #76 — warn when a row has more columns than expected (silently truncated data)
+    if (cols.length > EXPECTED_HEADERS.length) {
+      errors.push(`Row ${i + 1}: has ${cols.length} columns but expected ${EXPECTED_HEADERS.length} — check CSV format for extra commas.`);
+    }
     const date = parseDate(cols[idx['Date']] || '');
     if (!date) {
       errors.push(`Row ${i + 1}: Could not parse date "${cols[idx['Date']]}"`);

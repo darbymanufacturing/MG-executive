@@ -79,15 +79,26 @@ export function parseCostsCSV(csvText) {
 
     const amountStr = (cols[idx['Amount (EUR)']] || '').replace(/,/g, '');
     const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount < 0) {
-      errors.push(`Row ${rowNum}: Invalid amount "${cols[idx['Amount (EUR)']]}".`);
+    // #152 — reject zero amounts (was only rejecting negative)
+    if (isNaN(amount) || amount <= 0) {
+      errors.push(`Row ${rowNum}: Invalid amount "${cols[idx['Amount (EUR)']]}". Amount must be greater than 0.`);
       continue;
     }
 
     const startDateRaw = (cols[idx['Start Date']] || '').trim();
+    // #151 — validate date format: must be YYYY-MM-DD or parseable
+    const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    if (startDateRaw && !ISO_DATE_RE.test(startDateRaw) && isNaN(Date.parse(startDateRaw))) {
+      errors.push(`Row ${rowNum}: Invalid start date "${startDateRaw}". Use YYYY-MM-DD format.`);
+      continue;
+    }
     const startDate = startDateRaw || todayISO();
 
     const endDateRaw = (cols[idx['End Date']] || '').trim();
+    if (endDateRaw && !ISO_DATE_RE.test(endDateRaw) && isNaN(Date.parse(endDateRaw))) {
+      errors.push(`Row ${rowNum}: Invalid end date "${endDateRaw}". Use YYYY-MM-DD format.`);
+      continue;
+    }
     const endDate = endDateRaw || null;
 
     const notes = (cols[idx['Notes']] || '').trim() || null;

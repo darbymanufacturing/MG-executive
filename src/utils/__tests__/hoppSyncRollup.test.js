@@ -9,7 +9,9 @@ const SCOOTERS = new Map([
 
 describe('rollupTripsToRevenue', () => {
   test('returns empty for no trips', () => {
-    expect(rollupTripsToRevenue([], SCOOTERS, '2026-05-27T00:00:00Z', '2026-05-28T23:59:59Z')).toEqual([]);
+    const { rows, errors } = rollupTripsToRevenue([], SCOOTERS, '2026-05-27T00:00:00Z', '2026-05-28T23:59:59Z');
+    expect(rows).toEqual([]);
+    expect(errors).toEqual([]);
   });
 
   test('aggregates single-day single-city correctly', () => {
@@ -18,7 +20,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-27T14:00:00Z', cost: 3.50, distanceKm: 1.5 },
       { scooterId: '79760', startedAt: '2026-05-27T16:00:00Z', cost: 4.25, distanceKm: 2.5 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -39,7 +41,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-27T10:00:00Z', cost: 5, distanceKm: 2 },
       { scooterId: '11111', startedAt: '2026-05-27T10:00:00Z', cost: 8, distanceKm: 3 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -56,7 +58,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-26T10:00:00Z', cost: 5, distanceKm: 2 },
       { scooterId: '54135', startedAt: '2026-05-27T10:00:00Z', cost: 4, distanceKm: 1 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-25T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -72,7 +74,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-27T09:00:00Z', cost: 1, distanceKm: 1 },
       { scooterId: '79760', startedAt: '2026-05-27T10:00:00Z', cost: 1, distanceKm: 1 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -85,7 +87,7 @@ describe('rollupTripsToRevenue', () => {
     const trips = [
       { scooterId: '54135', startedAt: '2026-05-27T13:00:00Z', cost: 5, distanceKm: 2 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-27T12:00:00Z', '2026-05-27T14:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -99,7 +101,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-28T10:00:00Z', cost: 5, distanceKm: 2 },
     ];
     // since = start-of-today, until = now (12:00 UTC)
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-28T00:00:00Z', '2026-05-28T14:00:00Z',
       now,
@@ -115,7 +117,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', cost: 2 },                                 // no startedAt
       { scooterId: '54135', startedAt: 'not-a-date', cost: 1 },        // invalid date
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -124,22 +126,23 @@ describe('rollupTripsToRevenue', () => {
     expect(rows[0].data.totalTrips).toBe(1);
   });
 
-  test('treats missing scooter city as "Unknown"', () => {
+  // #172 — unknown scooter trips are now skipped and reported in errors (not rolled into 'Unknown' city)
+  test('skips trips for unknown scooters and reports in errors', () => {
     const trips = [{ scooterId: 'GHOST', startedAt: '2026-05-27T10:00:00Z', cost: 5, distanceKm: 2 }];
-    const rows = rollupTripsToRevenue(
+    const { rows, errors } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
     );
-    expect(rows[0].data.city).toBe('Unknown');
-    expect(rows[0].docId).toBe('2026-05-27_Unknown');
+    expect(rows).toHaveLength(0);
+    expect(errors).toContain('Unknown scooter: GHOST');
   });
 
   test('rounds revenue and distance to 2 decimal places', () => {
     const trips = [
       { scooterId: '54135', startedAt: '2026-05-27T10:00:00Z', cost: 1.234567, distanceKm: 0.987654 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -153,7 +156,7 @@ describe('rollupTripsToRevenue', () => {
       { scooterId: '54135', startedAt: '2026-05-27T10:00:00Z', cost: null, distanceKm: 2 },
       { scooterId: '54135', startedAt: '2026-05-27T11:00:00Z', distanceKm: 1 },
     ];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),
@@ -163,13 +166,15 @@ describe('rollupTripsToRevenue', () => {
   });
 
   test('returns empty for invalid window dates', () => {
-    expect(rollupTripsToRevenue([{}], SCOOTERS, 'bad', '2026-05-28T00:00:00Z')).toEqual([]);
-    expect(rollupTripsToRevenue([{}], SCOOTERS, '2026-05-28T00:00:00Z', 'bad')).toEqual([]);
+    const r1 = rollupTripsToRevenue([{}], SCOOTERS, 'bad', '2026-05-28T00:00:00Z');
+    const r2 = rollupTripsToRevenue([{}], SCOOTERS, '2026-05-28T00:00:00Z', 'bad');
+    expect(r1).toEqual({ rows: [], errors: [] });
+    expect(r2).toEqual({ rows: [], errors: [] });
   });
 
   test('doc ID format matches manual CSV import for collision-free overwrite', () => {
     const trips = [{ scooterId: '54135', startedAt: '2026-05-27T10:00:00Z', cost: 5, distanceKm: 2 }];
-    const rows = rollupTripsToRevenue(
+    const { rows } = rollupTripsToRevenue(
       trips, SCOOTERS,
       '2026-05-26T00:00:00Z', '2026-05-28T00:00:00Z',
       new Date('2026-05-28T12:00:00Z'),

@@ -15,7 +15,7 @@ const JUNK_PATTERNS = [
   /repair.*\btest\b/i,
   /dummy/i,
   /placeholder/i,
-  /n\/a/i,
+  /^\s*n\/a\s*$/i,
   /^\s*-+\s*$/, // rows that are just dashes
 ];
 

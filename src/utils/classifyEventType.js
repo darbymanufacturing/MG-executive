@@ -18,6 +18,9 @@ const CHARGING_STATES = new Set([
   'Charging', 'In Charging', 'Battery Swap',
 ]);
 
+// Lowercase variant for case-insensitive checks
+const CHARGING_LOWER = new Set([...CHARGING_STATES].map((s) => s.toLowerCase()));
+
 /**
  * @param {string} beforeState - raw "Before State" column value
  * @param {string} afterState  - raw "After State" column value
@@ -26,6 +29,12 @@ const CHARGING_STATES = new Set([
  */
 const TRIP_STATES   = new Set(['trip', 'on trip']);
 const PAUSED_STATES = new Set(['paused', 'trip paused', 'pause']);
+
+// Module-level constant shared by classifyEventType and isTrueOverturn.
+// "down" removed — too generic (matches "downtown", "countdown", status "down").
+const OVERTURN_TERMS = ['overturn', 'fallen', 'fall', 'tipped', 'toppl',
+                        'crashed', 'on side', 'on_side', 'onside',
+                        'lying', 'laying', 'ανατροπ', 'πτώσ', 'πεσ'];
 
 export function classifyEventType(beforeState, afterState, reason = '') {
   const after  = (afterState  || '').trim().toLowerCase();
@@ -38,9 +47,6 @@ export function classifyEventType(beforeState, afterState, reason = '') {
   //
   // Broad match: different platforms (Hopp, OTORide) export this under
   // different labels. We accept any English variant on afterState OR reason.
-  const OVERTURN_TERMS = ['overturn', 'fallen', 'fall', 'tipped', 'toppl',
-                          'crashed', 'on side', 'on_side', 'onside', 'down',
-                          'lying', 'laying', 'ανατροπ', 'πτώσ', 'πεσ'];
   const matchesOverturn = (s) => OVERTURN_TERMS.some((t) => s.includes(t));
 
   if (matchesOverturn(after) || matchesOverturn(rsn))              return 'overturned';
@@ -70,7 +76,7 @@ export function classifyEventType(beforeState, afterState, reason = '') {
   // Battery operations
   if (after.includes('battery swap') || rsn.includes('battery swap')) return 'battery_swap';
   if (after.includes('low battery') || after === 'low_battery')    return 'low_battery';
-  if (CHARGING_STATES.has(afterState?.trim()))                     return 'battery_swap';
+  if (CHARGING_LOWER.has(after))                                   return 'battery_swap';
 
   // Reservation
   if (after === 'reserved' || after === 'reservation')             return 'reserved';
@@ -94,10 +100,6 @@ export function classifyEventType(beforeState, afterState, reason = '') {
  * the platform may vary casing. Also falls back to checking afterState directly
  * in case the eventType wasn't classified correctly at ingest time.
  */
-const OVERTURN_TERMS = ['overturn', 'fallen', 'fall', 'tipped', 'toppl',
-                        'crashed', 'on side', 'on_side', 'onside', 'down',
-                        'lying', 'laying', 'ανατροπ', 'πτώσ', 'πεσ'];
-
 function matchesOverturn(s) {
   if (!s) return false;
   const lower = String(s).toLowerCase();

@@ -50,7 +50,8 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
       }
       const data = await res.json();
       const url  = data.secure_url;
-      onChange([...urlsRef.current, url]);
+      // #103: use functional update to avoid stale appends; deduplicate in case of double-fire
+      onChange((prev) => prev.includes(url) ? prev : [...prev, url]);
       // Remount the input only after a successful upload (not at the start).
       // On iOS WebKit, replacing the input element while a camera handoff is
       // still in progress fires another spurious onChange — doing it here,

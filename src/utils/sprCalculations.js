@@ -4,7 +4,7 @@
 
 /** Returns the zone name for a lat/lon point, or null if unmatched. */
 export function findZoneForPoint(lat, lon, zones) {
-  if (!lat || !lon || !zones?.length) return null;
+  if (lat == null || lon == null || !zones?.length) return null;
   const match = zones.find(
     (z) =>
       lat >= z.minLat && lat <= z.maxLat &&

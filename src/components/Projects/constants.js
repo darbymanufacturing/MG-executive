@@ -2,7 +2,7 @@
 
 export const OWNERS = ['Kostas', 'Panos'];
 
-export const CITIES = ['Nafplion', 'Corinth', 'Corfu', 'Athens', null];
+export const CITIES = ['Nafplion', 'Corinth', 'Corfu', 'Athens'];
 
 export const PROJECT_TYPES = [
   'Operations',
@@ -59,7 +59,7 @@ export const PHASE_STATUS = {
   done:        'Done',
 };
 
-export const ASSIGNEES = ['Kostas', 'Panos'];
+export const ASSIGNEES = OWNERS;
 
 export const CALENDAR_EVENT_TYPES = [
   { value: 'all',         label: 'All events' },

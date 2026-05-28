@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
@@ -97,6 +97,18 @@ function ProtectedRoute({ children }) {
 /* ─── Theme key in localStorage ─── */
 const THEME_KEY = 'omni_theme';
 
+/* ─── Location-aware ErrorBoundary (#305) ───
+ * Passes location.pathname as a resetKey so the boundary auto-resets when the
+ * user navigates away from the errored route, instead of persisting the fallback. */
+function RouteErrorBoundary({ children, ...props }) {
+  const location = useLocation();
+  return (
+    <ErrorBoundary {...props} resetKeys={[location.pathname]}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 /* ─── Route-scoped provider wrappers (Phase 1.6a) ───
  *
  * Each wrapper mounts the providers only while its inner routes are active.
@@ -139,12 +151,8 @@ function AppShell() {
   const rootRef = useRef(null);
 
   /* Theme — also propagate to <html> so body/globals.css can read it */
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem(THEME_KEY) || 'light';
-    document.documentElement.setAttribute('data-theme', saved);
-    return saved;
-  });
-  useEffect(() => {
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
   const toggleTheme = useCallback(() => {
@@ -162,7 +170,7 @@ function AppShell() {
   /* ⌘K global shortcut */
   useEffect(() => {
     const handler = e => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCaptureOpen(o => !o);
       }
@@ -180,6 +188,7 @@ function AppShell() {
   }, []);
 
   /* Redirect crew to /crew shell */
+  // #185 — 'staff' intentionally stays in the admin shell (full ops access); only technician/crew go to /crew
   if (userRole === 'technician' || userRole === 'crew') {
     return <Navigate to="/crew" replace />;
   }
@@ -216,21 +225,22 @@ function AppShell() {
         <main className={styles.main}>
           <Routes>
             {/* Always-on routes — providers at admin root cover everything here. */}
-            <Route path="/"               element={<ErrorBoundary><Home /></ErrorBoundary>} />
-            <Route path="/issues"         element={<ErrorBoundary><Issues /></ErrorBoundary>} />
-            <Route path="/issues/:id"     element={<ErrorBoundary><IssueDetail /></ErrorBoundary>} />
-            <Route path="/pulse"          element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/brief"          element={<ErrorBoundary><Home /></ErrorBoundary>} />
-            <Route path="/notifications"  element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
-            <Route path="/projects"       element={<ErrorBoundary><Projects /></ErrorBoundary>} />
-            <Route path="/projects/:id"   element={<ErrorBoundary><Projects /></ErrorBoundary>} />
-            <Route path="/war-room"       element={<ErrorBoundary><WarRoomPage /></ErrorBoundary>} />
-            <Route path="/investment"     element={<ErrorBoundary><Investment /></ErrorBoundary>} />
-            <Route path="/costs"          element={<ErrorBoundary><CostManager /></ErrorBoundary>} />
-            <Route path="/revenue"        element={<ErrorBoundary><Revenue /></ErrorBoundary>} />
-            <Route path="/maintenance"    element={<ErrorBoundary><Maintenance /></ErrorBoundary>} />
-            <Route path="/pow"            element={<ErrorBoundary><Pow /></ErrorBoundary>} />
-            <Route path="/settings"       element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+            {/* #305 — RouteErrorBoundary resets on navigation so fallback doesn't persist */}
+            <Route path="/"               element={<RouteErrorBoundary><Home /></RouteErrorBoundary>} />
+            <Route path="/issues"         element={<RouteErrorBoundary><Issues /></RouteErrorBoundary>} />
+            <Route path="/issues/:id"     element={<RouteErrorBoundary><IssueDetail /></RouteErrorBoundary>} />
+            <Route path="/pulse"          element={<RouteErrorBoundary><Dashboard /></RouteErrorBoundary>} />
+            <Route path="/brief"          element={<RouteErrorBoundary><Home /></RouteErrorBoundary>} />
+            <Route path="/notifications"  element={<RouteErrorBoundary><Notifications /></RouteErrorBoundary>} />
+            <Route path="/projects"       element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
+            <Route path="/projects/:id"   element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
+            <Route path="/war-room"       element={<RouteErrorBoundary><WarRoomPage /></RouteErrorBoundary>} />
+            <Route path="/investment"     element={<RouteErrorBoundary><Investment /></RouteErrorBoundary>} />
+            <Route path="/costs"          element={<RouteErrorBoundary><CostManager /></RouteErrorBoundary>} />
+            <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
+            <Route path="/maintenance"    element={<RouteErrorBoundary><Maintenance /></RouteErrorBoundary>} />
+            <Route path="/pow"            element={<RouteErrorBoundary><Pow /></RouteErrorBoundary>} />
+            <Route path="/settings"       element={<RouteErrorBoundary><Settings /></RouteErrorBoundary>} />
 
             {/* Scoped — heavy telemetry stack only mounts while user is on these routes */}
             <Route element={<ScooterScopedRoutes />}>

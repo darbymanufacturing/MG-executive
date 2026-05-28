@@ -9,7 +9,7 @@ export function exportToJSON(costs, config) {
   a.href     = url;
   a.download = `omni-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -57,13 +57,13 @@ export function exportCostsCSV(costs) {
     }).join(',')
   );
   const csv  = [headerRow, ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
   a.download = `omni-costs-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -83,7 +83,7 @@ export function downloadCostTemplate() {
   a.href     = url;
   a.download = 'omni-cost-template.csv';
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -123,11 +123,12 @@ export async function exportDashboardToPDF(filename = 'omni-dashboard.pdf') {
       if (yPos > 0) pdf.addPage();
       pdf.addImage(imgData, 'PNG', 0, -yPos, imgW, imgH);
       yPos += pageH;
+      if (yPos >= imgH) break;
     }
 
     pdf.save(filename);
   } catch (err) {
     console.error('PDF export failed:', err);
-    alert('PDF export failed. Check the browser console for details.');
+    throw err;
   }
 }

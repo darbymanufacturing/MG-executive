@@ -17,7 +17,11 @@ export function IssueProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIssues([]);
+      setLoading(true);
+      return;
+    }
     const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, snap => {
       setIssues(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -28,29 +32,32 @@ export function IssueProvider({ children }) {
 
   async function createIssue(fields) {
     if (!user) throw new Error('Not authenticated');
+    const issueData = {
+      title: '',
+      description: '',
+      type: 'other',
+      status: 'new',
+      urgency: 'medium',
+      owner: user.uid,
+      createdBy: user.uid,
+      visibility: 'admin',
+      attachments: [],
+      notes: [],
+      nextAction: '',
+      relatedEntity: null,
+      dueDate: null,
+      snoozeUntil: null,
+      ...fields,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    // #214: safeWrite wraps addDoc and returns { data: DocumentReference }.
+    // Return the constructed payload + the new doc id, not the raw DocumentReference.
     const result = await safeWrite(
-      () => addDoc(collection(db, COLLECTION), {
-        title: '',
-        description: '',
-        type: 'other',
-        status: 'new',
-        urgency: 'medium',
-        owner: user.uid,
-        createdBy: user.uid,
-        visibility: 'admin',
-        attachments: [],
-        notes: [],
-        nextAction: '',
-        relatedEntity: null,
-        dueDate: null,
-        snoozeUntil: null,
-        ...fields,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
+      () => addDoc(collection(db, COLLECTION), issueData),
       { rethrow: true, errorMessage: 'Failed to create issue' },
     );
-    return result.data;
+    return { ...issueData, id: result.data?.id };
   }
 
   async function updateIssue(id, fields) {
@@ -84,8 +91,11 @@ export function IssueProvider({ children }) {
     return result.data;
   }
 
-  /* Active (non-done, non-snoozed) issues for inbox */
-  const activeIssues = issues.filter(i => i.status !== 'done' && i.status !== 'snoozed');
+  /* Active issues: not done, and not snoozed (unless snoozeUntil has passed) */
+  const activeIssues = issues.filter(i =>
+    i.status !== 'done' &&
+    !(i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil > new Date().toISOString())
+  );
 
   return (
     <IssueContext.Provider value={{ issues, activeIssues, loading, createIssue, updateIssue, snoozeIssue, resolveIssue, addNote }}>

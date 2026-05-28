@@ -47,9 +47,15 @@ export function budgetFromCity(costs, revenueData, linkedCity) {
   })).sort((a, b) => (a.date < b.date ? 1 : -1));
 
   // ── Costs: fleet-wide (no city field exists) ──
-  // Monthly costs annualised to a daily rate would be complex; instead
-  // we show the raw cost entries with their frequency so the user understands scale.
-  const expenses = costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  // #123 — normalize by frequency so monthly/yearly/quarterly costs are comparable
+  const monthlyAmount = (c) => {
+    const amt = Number(c.amount) || 0;
+    if (c.frequency === 'monthly') return amt;
+    if (c.frequency === 'yearly' || c.frequency === 'annual') return amt / 12;
+    if (c.frequency === 'quarterly') return amt / 3;
+    return amt; // one-time / weekly / daily: count as full for budget display
+  };
+  const expenses = costs.reduce((sum, c) => sum + monthlyAmount(c), 0);
 
   const costTransactions = costs.map((c) => ({
     date:      c.startDate || c.date || '',

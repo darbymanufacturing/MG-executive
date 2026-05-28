@@ -1,7 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import Button from '../../Shared/Button.jsx';
 import styles from './SeasonalityEditor.module.css';
+
+// #225: normalize European decimal commas before parsing
+function safeParseFloat(value) {
+  return parseFloat(String(value).replace(',', '.'));
+}
 
 const MONTHS = [
   { key: 'jan', label: 'January' },
@@ -24,18 +29,24 @@ export default function SeasonalityEditor() {
   const [values, setValues] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // #224: track whether user has made in-flight edits; don't overwrite from effect
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     if (config.seasonalityIndex) {
-      const init = {};
-      MONTHS.forEach(({ key }) => {
-        init[key] = config.seasonalityIndex[key] ?? '';
-      });
-      setValues(init);
+      // #224: only sync from config when not currently dirty (user hasn't started editing)
+      if (!dirtyRef.current) {
+        const init = {};
+        MONTHS.forEach(({ key }) => {
+          init[key] = config.seasonalityIndex[key] ?? '';
+        });
+        setValues(init);
+      }
     }
   }, [config.seasonalityIndex]);
 
   function handleChange(key, val) {
+    dirtyRef.current = true; // #224: mark dirty so effect won't overwrite
     setValues((prev) => ({ ...prev, [key]: val }));
     setSaved(false);
   }
@@ -46,9 +57,11 @@ export default function SeasonalityEditor() {
     try {
       const seasonalityIndex = {};
       MONTHS.forEach(({ key }) => {
-        seasonalityIndex[key] = parseFloat(values[key]) || 0;
+        // #225: use safeParseFloat to handle European decimal commas
+        seasonalityIndex[key] = safeParseFloat(values[key]) || 0;
       });
       await updateConfig({ seasonalityIndex });
+      dirtyRef.current = false; // #224: reset dirty after successful save
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -56,10 +69,11 @@ export default function SeasonalityEditor() {
     }
   }
 
+  // #226: use epsilon comparison for floats instead of strict !==
   const isDirty = MONTHS.some(({ key }) => {
     const current = config.seasonalityIndex?.[key] ?? 0;
-    const local = parseFloat(values[key]);
-    return !isNaN(local) && local !== current;
+    const local = safeParseFloat(values[key]);
+    return !isNaN(local) && Math.abs(local - current) > 1e-6;
   });
 
   return (

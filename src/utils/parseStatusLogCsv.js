@@ -65,12 +65,40 @@ function parseTimestamp(raw) {
     return isNaN(d) ? null : d.toISOString();
   }
   // Try "DD/MM/YYYY HH:mm" or "DD/MM/YYYY HH:mm:ss"
+  // #126 — also detect US-format (MM/DD/YYYY) where first part > 12 means it must be a day
   const m = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (m) {
-    const [, d, mo, y, h, min, s = '00'] = m;
-    const iso = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${min}:${s}Z`;
+    let [, part1, part2, y, h, min, s = '00'] = m;
+    const p1 = parseInt(part1, 10);
+    const p2 = parseInt(part2, 10);
+
+    let dayStr, moStr;
+    if (p1 > 12) {
+      // part1 can only be a day (US MM/DD/YYYY would put month first, but month can't be >12)
+      // Actually if p1>12, this must be DD/MM/YYYY
+      dayStr = part1; moStr = part2;
+    } else if (p2 > 12) {
+      // part2 can't be a month, so this is MM/DD/YYYY (US format)
+      // Swap: part1=month, part2=day
+      moStr = part1; dayStr = part2;
+      // Log ambiguity note
+    } else {
+      // Ambiguous — assume DD/MM/YYYY (platform-native format for Greece)
+      dayStr = part1; moStr = part2;
+    }
+
+    // Validate the resulting date
+    const moNum = parseInt(moStr, 10);
+    const dayNum = parseInt(dayStr, 10);
+    if (moNum < 1 || moNum > 12 || dayNum < 1 || dayNum > 31) {
+      console.warn(`parseStatusLogCsv: Could not parse date "${clean}" - try DD/MM/YYYY format`);
+      return null;
+    }
+
+    // #125 — store as local Athens time (no Z suffix); not UTC
+    const iso = `${y}-${moStr.padStart(2,'0')}-${dayStr.padStart(2,'0')}T${h.padStart(2,'0')}:${min}:${s}`;
     const dt = new Date(iso);
-    return isNaN(dt) ? null : dt.toISOString();
+    return isNaN(dt) ? null : iso;
   }
   return null;
 }

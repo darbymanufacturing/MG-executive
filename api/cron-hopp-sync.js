@@ -150,10 +150,13 @@ export default async function handler(req, res) {
     written.events   = await writeBatch(db, COLLECTIONS.telemetryEvents,    aggregated.events,   { merge: false, stampField: 'createdAt' });
     written.tickets  = await writeBatch(db, COLLECTIONS.maintenanceTickets, aggregated.tickets,  { merge: true, stampField: 'updatedAt' });
 
-    // Revenue rollup
-    const revenueRows = rollupTripsToRevenue(
+    // Revenue rollup — #172: rollup now returns { rows, errors }
+    const { rows: revenueRows, errors: rollupErrors } = rollupTripsToRevenue(
       aggregated.trips, scooterCityMap, since.toISOString(), until.toISOString(), now,
     );
+    if (rollupErrors.length) {
+      console.warn('[cron-hopp-sync] rollup skipped trips:', rollupErrors);
+    }
     written.revenueDays = await writeBatch(
       db,
       COLLECTIONS.revenue,

@@ -36,7 +36,8 @@ export function annualizedRevenue(revenueData, financial) {
   };
 
   // Determine data span in months
-  const dates    = revenueData.map((r) => r.date).sort();
+  const dates    = revenueData.map((r) => r.date).filter(Boolean).sort();
+  if (!dates.length) return 0;
   const earliest = new Date(dates[0]   + 'T12:00:00Z');
   const latest   = new Date(dates[dates.length - 1] + 'T12:00:00Z');
   const spanMonths = (latest.getUTCFullYear() - earliest.getUTCFullYear()) * 12
@@ -156,10 +157,16 @@ export function calcCostRecoveryRate(costs, revenueData, financial) {
 export function calcRevGrowthMoM(revenueData) {
   const now = new Date();
   const year = now.getFullYear();
-  const summary = monthlyRevenueSummary(revenueData, year);
   const currentIdx = now.getMonth();
-  const curr = summary[currentIdx]?.revenue || 0;
-  const prev = currentIdx > 0 ? (summary[currentIdx - 1]?.revenue || 0) : 0;
+  const curr = monthlyRevenueSummary(revenueData, year)[currentIdx]?.revenue || 0;
+
+  let prev = 0;
+  if (currentIdx > 0) {
+    prev = monthlyRevenueSummary(revenueData, year)[currentIdx - 1]?.revenue || 0;
+  } else {
+    // January: look at December of the prior year
+    prev = monthlyRevenueSummary(revenueData, year - 1)[11]?.revenue || 0;
+  }
   if (!prev) return null;
   return ((curr - prev) / prev) * 100;
 }
@@ -176,7 +183,12 @@ const HEALTH_THRESHOLDS = {
 
 /** Returns 'green' | 'amber' | 'red' | 'muted' for a given metric value */
 export function getHealthColor(metric, value) {
-  if (value === null || value === undefined || !isFinite(value)) return 'muted';
+  if (value === null || value === undefined) return 'muted';
+  // Infinity on an inverted metric (e.g. payback period) means never-recovers → danger
+  if (!isFinite(value)) {
+    const t = HEALTH_THRESHOLDS[metric];
+    return (t?.inverted) ? 'red' : 'muted';
+  }
   const t = HEALTH_THRESHOLDS[metric];
   if (!t) return 'muted';
   if (t.inverted) {

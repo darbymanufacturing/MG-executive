@@ -14,7 +14,7 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     languageOptions: {
-      ecmaVersion: 2020,
+      // #259 — removed duplicate top-level ecmaVersion: 2020; only parserOptions.ecmaVersion: 'latest' is used
       globals: globals.browser,
       parserOptions: {
         ecmaVersion: 'latest',
@@ -23,7 +23,9 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // #258 — only ignore underscore-prefixed vars, not all uppercase (was '^[A-Z_]')
+      'no-unused-vars': ['error', { varsIgnorePattern: '^_' }],
+      // TODO: install and enable eslint-plugin-jsx-a11y for accessibility linting (#257)
     },
   },
 ])

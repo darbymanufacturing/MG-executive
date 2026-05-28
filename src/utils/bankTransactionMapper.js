@@ -36,7 +36,8 @@ export function mapTransactionToCost(tx) {
   return {
     name,
     amount,
-    startDate:  tx.made_on || new Date().toISOString().slice(0, 10),
+    // #212: use local-time date instead of UTC so the date matches the user's timezone
+    startDate:  tx.made_on || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
     frequency:  'one-time',
     category:   inferCategory(tx),
     notes:      tx.description || null,

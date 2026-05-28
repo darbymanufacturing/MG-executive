@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CheckSquare, Square, EyeOff, Download, Inbox } from 'lucide-react';
 import { db } from '../../lib/firebase.js';
 import { useCosts } from '../../context/CostContext.jsx';
@@ -17,13 +17,19 @@ export default function BankTransactionReview() {
   const [selected,  setSelected]  = useState(new Set());
   const [importing, setImporting] = useState(false);
   const [doneMsg,   setDoneMsg]   = useState('');
+  // #169: track doneMsg timer to clear on unmount
+  const doneMsgTimerRef = useRef(null);
+  useEffect(() => {
+    return () => { if (doneMsgTimerRef.current) clearTimeout(doneMsgTimerRef.current); };
+  }, []);
 
   // ── Real-time listener for pending bank transactions ──────────────────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, BANK_TX_COL), (snap) => {
+    // #168: add where('status','==','pending') to only fetch pending — avoids pulling every transaction
+    const q = query(collection(db, BANK_TX_COL), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, (snap) => {
       const rows = snap.docs
         .map((d) => ({ _docId: d.id, ...d.data() }))
-        .filter((r) => r.status === 'pending')
         .sort((a, b) => (b.bookingDate || '').localeCompare(a.bookingDate || ''));
       setPending(rows);
       // Auto-select all new rows
@@ -37,10 +43,22 @@ export default function BankTransactionReview() {
   }, []);
 
   // ── Category edit ────────────────────────────────────────────────────────
+  // #170: capture previous value for rollback on failure
   const handleCategoryChange = useCallback(async (docId, category) => {
-    setPending((prev) => prev.map((r) => r._docId === docId ? { ...r, category } : r));
-    await updateDoc(doc(db, BANK_TX_COL, docId), { category });
-  }, []);
+    // Capture previous category for rollback
+    const prev = pending.find((r) => r._docId === docId);
+    const previousCategory = prev?.category;
+    // Optimistic update
+    setPending((rows) => rows.map((r) => r._docId === docId ? { ...r, category } : r));
+    try {
+      await updateDoc(doc(db, BANK_TX_COL, docId), { category });
+    } catch (err) {
+      console.error('Failed to update category:', err);
+      // Rollback on failure
+      setPending((rows) => rows.map((r) => r._docId === docId ? { ...r, category: previousCategory } : r));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
 
   // ── Select / deselect ────────────────────────────────────────────────────
   const toggleAll = () => {
@@ -85,7 +103,9 @@ export default function BankTransactionReview() {
 
       setSelected(new Set());
       setDoneMsg(`${toImport.length} cost entr${toImport.length !== 1 ? 'ies' : 'y'} added to Cost Manager.`);
-      setTimeout(() => setDoneMsg(''), 5000);
+      // #169: track timer in ref to clear on unmount
+      if (doneMsgTimerRef.current) clearTimeout(doneMsgTimerRef.current);
+      doneMsgTimerRef.current = setTimeout(() => setDoneMsg(''), 5000);
     } finally {
       setImporting(false);
     }

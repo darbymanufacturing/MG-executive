@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Sparkles, Calendar, Folder, Lock,
-  Paperclip, Plus, Send, Check, Flag, ChevronDown,
+  Paperclip, Plus, Send, Check, Flag,
 } from 'lucide-react';
 import { useIssue, useIssues } from '../context/IssueContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -44,6 +44,7 @@ export default function IssueDetail() {
   const { user } = useAuth();
 
   const [newNote, setNewNote] = useState('');
+  const [noteError, setNoteError] = useState(null);
   const [editingNextAction, setEditingNextAction] = useState(false);
   const [nextActionVal, setNextActionVal] = useState('');
 
@@ -62,10 +63,17 @@ export default function IssueDetail() {
   const u = URGENCY_PILL[issue.urgency] || URGENCY_PILL.medium;
   const age = humanAge(issue.createdAt);
 
+  // #149 + #189: wrap in try/catch; only clear input on success
   const handleSendNote = async () => {
     if (!newNote.trim()) return;
-    await addNote(id, newNote.trim());
-    setNewNote('');
+    setNoteError(null);
+    try {
+      await addNote(id, newNote.trim());
+      setNewNote(''); // only clear on success
+    } catch (err) {
+      // Do NOT clear newNote — let user retry
+      setNoteError(err.message || 'Failed to send note. Please try again.');
+    }
   };
 
   const handleStatusChange = (status) => {
@@ -99,9 +107,9 @@ export default function IssueDetail() {
               {/* Status pill (clickable) */}
               <span
                 className="pill"
-                style={{ background: s.bg, color: s.color, cursor: 'pointer' }}
+                style={{ background: s.bg, color: s.color }}
               >
-                {s.label} <ChevronDown size={10} style={{ marginLeft: 2 }} />
+                {s.label}
               </span>
               {issue.dueDate && (
                 <span className={styles.metaItem}>
@@ -201,12 +209,17 @@ export default function IssueDetail() {
             {!issue.notes?.length && (
               <div className={styles.noNotes}>No notes yet. Add the first one.</div>
             )}
+            {noteError && (
+              <div style={{ color: 'var(--status-red)', fontSize: 13, marginBottom: 8 }}>
+                {noteError}
+              </div>
+            )}
             <div className={styles.noteComposer}>
               <input
                 className={styles.noteInput}
                 placeholder="Add a note…"
                 value={newNote}
-                onChange={e => setNewNote(e.target.value)}
+                onChange={e => { setNewNote(e.target.value); setNoteError(null); }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendNote(); } }}
               />
               <button className="btn btn-primary btn-sm" onClick={handleSendNote} disabled={!newNote.trim()}>

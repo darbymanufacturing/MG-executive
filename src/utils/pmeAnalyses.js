@@ -279,13 +279,16 @@ export function fleetRiskRanking(events, tickets, scooters) {
       (t) => t.scooterId === id && t.dateEntered >= cutoff30.slice(0, 10),
     ).length;
 
-    // Days since last service
+    // Days since last service — use purchaseDate as fallback; if neither, score 0 (neutral)
     const allRepairs = goodTickets.filter((t) => t.scooterId === id);
+    const fallback = sc.purchaseDate || null;
     const lastService = allRepairs.reduce((latest, t) => {
       const d = t.dateCompleted || t.dateEntered;
       return d > latest ? d : latest;
-    }, '2000-01-01');
-    const daysSinceService = daysBetween(lastService, now.slice(0, 10));
+    }, fallback || '');
+    const daysSinceService = lastService
+      ? daysBetween(lastService, now.slice(0, 10))
+      : 0; // neutral when no service history and no purchase date
 
     return {
       scooterId:      id,
@@ -299,10 +302,10 @@ export function fleetRiskRanking(events, tickets, scooters) {
     };
   });
 
-  // Normalise each dimension (0–1)
-  const maxOR  = Math.max(...scored.map((s) => s.overturnRatio), 1);
-  const maxRR  = Math.max(...scored.map((s) => s.recentRepairs), 1);
-  const maxDS  = Math.max(...scored.map((s) => s.daysSinceService), 1);
+  // Normalise each dimension (0–1) — use reduce to avoid spread blow-up at large fleet sizes
+  const maxOR  = scored.reduce((m, s) => Math.max(m, s.overturnRatio), 1);
+  const maxRR  = scored.reduce((m, s) => Math.max(m, s.recentRepairs), 1);
+  const maxDS  = scored.reduce((m, s) => Math.max(m, s.daysSinceService), 1);
 
   const ranked = scored.map((s) => {
     const normOR  = s.overturnRatio   / maxOR;

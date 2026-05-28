@@ -9,6 +9,7 @@ export default function LocationSelector({ locations, value, onChange, style }) 
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      aria-label="Filter by location"
       style={{
         background: 'var(--color-surface-2)',
         border: '1px solid var(--color-border)',

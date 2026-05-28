@@ -16,6 +16,14 @@ export default function FleetRiskTable({ onSelectScooter }) {
     [events, tickets, scooters],
   );
 
+  // #264 — memoize pill counts instead of recomputing .length four times per render
+  const counts = useMemo(() => ({
+    all:    ranked.length,
+    high:   ranked.filter((r) => r.risk === 'high').length,
+    medium: ranked.filter((r) => r.risk === 'medium').length,
+    low:    ranked.filter((r) => r.risk === 'low').length,
+  }), [ranked]);
+
   const filtered = filter === 'all' ? ranked : ranked.filter((r) => r.risk === filter);
   const visible  = showAll ? filtered : filtered.slice(0, 10);
 
@@ -38,7 +46,7 @@ export default function FleetRiskTable({ onSelectScooter }) {
               className={`${styles.pill} ${filter === f ? styles.pillActive : ''}`}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? `All (${ranked.length})` : `${f.charAt(0).toUpperCase() + f.slice(1)} (${ranked.filter((r) => r.risk === f).length})`}
+              {f === 'all' ? `All (${counts.all})` : `${f.charAt(0).toUpperCase() + f.slice(1)} (${counts[f]})`}
             </button>
           ))}
         </div>
@@ -70,10 +78,11 @@ export default function FleetRiskTable({ onSelectScooter }) {
               <td>{row.city || '—'}</td>
               <td><RiskBadge risk={row.risk} compact /></td>
               <td className={styles.score}>{(row.score * 100).toFixed(0)}</td>
-              <td style={{ color: row.overturnRatio > 2 ? '#E84545' : 'inherit' }}>
+              {/* #265 — use CSS tokens instead of hardcoded hex colors */}
+              <td style={{ color: row.overturnRatio > 2 ? 'var(--color-danger)' : 'inherit' }}>
                 {row.overturnRatio.toFixed(1)}×
               </td>
-              <td style={{ color: row.recentRepairs > 0 ? '#F5A623' : 'inherit' }}>
+              <td style={{ color: row.recentRepairs > 0 ? 'var(--color-warning)' : 'inherit' }}>
                 {row.recentRepairs}
               </td>
               <td>{Math.round(row.daysSinceService)}</td>

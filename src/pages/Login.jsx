@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext.jsx';
+import { auth } from '../lib/firebase.js';
 import AsterismMark from '../components/Shared/AsterismMark.jsx';
 import styles from './Login.module.css';
+
+const THEME_KEY = 'omni_theme';
 
 export default function Login() {
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const currentTheme = localStorage.getItem(THEME_KEY) || 'light';
 
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState('');
 
   const isSignUp = mode === 'signup';
 
@@ -38,10 +44,23 @@ export default function Login() {
   const toggleMode = () => {
     setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
     setError('');
+    setResetMsg('');
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setResetMsg('');
+    if (!email) { setError('Enter your email address first.'); return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetMsg('Password reset email sent. Check your inbox.');
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
-    <div className={styles.page}>
+    <div className={`omni-app ${styles.page}`} data-theme={currentTheme}>
       <div className={styles.card}>
         {/* Omni Asterism mark + wordmark — inline lockup, see docs/BRANDING.md */}
         <div className={styles.logoWrap}>
@@ -112,6 +131,20 @@ export default function Login() {
             }
           </button>
         </form>
+
+        {/* Forgot password — sign-in mode only */}
+        {!isSignUp && (
+          <p className={styles.toggle}>
+            <button type="button" className={styles.toggleBtn} onClick={handleForgotPassword}>
+              Forgot password?
+            </button>
+          </p>
+        )}
+        {resetMsg && (
+          <div className={styles.error} style={{ background: 'var(--color-success, #15803D)', borderColor: 'transparent' }}>
+            <span>{resetMsg}</span>
+          </div>
+        )}
 
         {/* Toggle */}
         <p className={styles.toggle}>

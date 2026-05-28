@@ -19,13 +19,11 @@ const SECONDARY_TAGS = [
 const CATEGORIES = { Q: 'Quick (<2hr)', M: 'Medium/Estimated', C: 'Complex', B: 'Blocked', F: 'Finished' };
 const STATUSES   = ['Active', 'Backlog', 'Investigation', 'Blocked', 'Donor', 'Completed'];
 
-const TODAY = new Date().toISOString().slice(0, 10);
-
 function blank() {
   return {
     scooterId:        '',
     city:             'Corinth',
-    dateEntered:      TODAY,
+    dateEntered:      new Date().toISOString().slice(0, 10),
     category:         'B',
     status:           'Backlog',
     primaryTag:       PRIMARY_TAGS[0],
@@ -79,9 +77,14 @@ export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtM
     if (payload.status !== 'Completed') delete payload.dateCompleted;
     if (!payload.secondaryTag) delete payload.secondaryTag;
     if (!payload.notes)        delete payload.notes;
-    await onSave(payload);
-    setSaving(false);
-    onClose();
+    try {
+      await onSave(payload);
+      onClose();
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, _submit: err.message }));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const originalStatus    = initialData?.status ?? '';
@@ -230,6 +233,9 @@ export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtM
             onChange={(e) => set('notes', e.target.value)}
           />
         </div>
+
+        {/* Submit error */}
+        {errors._submit && <p style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', margin: '4px 0 0' }}>{errors._submit}</p>}
 
         {/* Actions */}
         <div className={styles.actions}>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { PenLine, X, Download, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useDiary } from '../../context/DiaryContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
@@ -24,8 +24,14 @@ export default function DiaryBubble() {
   const [phase, setPhase] = useState('idle');  // 'idle' | 'parsing' | 'applying' | 'done' | 'error'
   const [errorMsg, setErrorMsg] = useState('');
   const textareaRef = useRef(null);
+  const abortController = useRef(new AbortController());
 
   const { entries, saveDraftEntry, applyEntry, rejectEntry, editEntry } = useDiary();
+
+  // Abort in-flight parse requests when panel is unmounted
+  useEffect(() => {
+    return () => { abortController.current.abort(); };
+  }, []);
   const { config } = useCosts();
   const { scooters } = useMaintenance();
   const { activeProjects } = useProjects();
@@ -42,6 +48,8 @@ export default function DiaryBubble() {
   async function handleParse() {
     const trimmed = text.trim();
     if (!trimmed) return;
+    abortController.current.abort();
+    abortController.current = new AbortController();
     setPhase('parsing');
     setErrorMsg('');
     try {
@@ -49,6 +57,7 @@ export default function DiaryBubble() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed, context: buildContext() }),
+        signal: abortController.current.signal,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -170,7 +179,7 @@ export default function DiaryBubble() {
                 {entries.length > 0 && <span className={styles.countBadge}>{entries.length}</span>}
               </button>
             </div>
-            <button className={styles.closeBtn} onClick={() => setOpen(false)} aria-label="Close">
+            <button className={styles.closeBtn} onClick={() => { abortController.current.abort(); abortController.current = new AbortController(); setOpen(false); }} aria-label="Close">
               <X size={14} />
             </button>
           </div>
@@ -229,6 +238,13 @@ export default function DiaryBubble() {
           {view === 'preview' && parsedResult && (
             <div className={styles.previewView}>
               <div className={styles.previewSummary}>{parsedResult.summary}</div>
+
+              {/* Action count label */}
+              {parsedResult.actions.length > 0 && (
+                <div className={styles.actionCountLabel}>
+                  {parsedResult.actions.length} {parsedResult.actions.length === 1 ? 'Pending Action' : 'Pending Actions'}
+                </div>
+              )}
 
               {/* Action chips */}
               <div className={styles.actionChips}>

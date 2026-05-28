@@ -35,8 +35,9 @@ export default function FleetRoiTab() {
     return annual / 12;
   }, [revenueData, financial]);
 
+  // #278 — skip costs with null/undefined category to avoid NaN in chart
   const baseMonthlyOpex = useMemo(() => totalMonthlyCost(
-    costs.filter((c) => c.category !== 'investment'),
+    costs.filter((c) => c.category && c.category !== 'investment'),
   ), [costs]);
 
   const baseInvestment = useMemo(() => annualInvestmentCost(costs), [costs]);
@@ -47,9 +48,13 @@ export default function FleetRoiTab() {
   const [revenueOverride, setRevenueOverride]       = useState('');
   const [opexOverride, setOpexOverride]             = useState('');
 
-  const investment    = investmentOverride !== '' ? Number(investmentOverride) : baseInvestment;
-  const monthlyRevenue = revenueOverride  !== '' ? Number(revenueOverride)    : baseMonthlyRevenue;
-  const monthlyOpex    = opexOverride     !== '' ? Number(opexOverride)        : baseMonthlyOpex;
+  // #263 — guard against NaN from inputs that Number() coerces (e.g. "", "abc")
+  const investment    = investmentOverride !== '' && Number.isFinite(Number(investmentOverride))
+    ? Number(investmentOverride) : baseInvestment;
+  const monthlyRevenue = revenueOverride !== '' && Number.isFinite(Number(revenueOverride))
+    ? Number(revenueOverride) : baseMonthlyRevenue;
+  const monthlyOpex    = opexOverride !== '' && Number.isFinite(Number(opexOverride))
+    ? Number(opexOverride) : baseMonthlyOpex;
 
   // ── Projection ───────────────────────────────────────────────────────────
   const pnlSeries = useMemo(() =>

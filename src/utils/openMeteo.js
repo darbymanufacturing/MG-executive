@@ -41,13 +41,21 @@ export async function fetchHistoricalWeather({ lat, lon, startDate, endDate }) {
     timezone: 'auto',
   });
 
-  const res = await fetch(`${BASE_URL}?${params}`);
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}?${params}`, { signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Open-Meteo error ${res.status}: ${text}`);
   }
 
   const data = await res.json();
+  if (!data?.daily?.time) throw new Error(data?.reason || 'Open-Meteo returned no daily data');
   const { time, precipitation_sum, weather_code, temperature_2m_mean } = data.daily;
 
   return time.map((date, i) => {

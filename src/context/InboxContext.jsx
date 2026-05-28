@@ -87,7 +87,7 @@ function normalizeTicket(ticket) {
 function normalizeProject(project) {
   const docId = project._docId || project.id || '';
   const ageHours = computeAgeHours(project.updatedAt || project.createdAt);
-  const hasBlockers = project.blockers?.some(b => b.status !== 'resolved') ?? false;
+  const hasBlockers = project.blockers?.some(b => !b.resolved) ?? false;
   const urgency = hasBlockers ? 'high' : ageHours > 168 ? 'medium' : 'low';
 
   return {
@@ -99,7 +99,7 @@ function normalizeProject(project) {
     age: humanAge(ageHours),
     urgency,
     nextAction: hasBlockers
-      ? `Resolve blocker: ${project.blockers?.find(b => b.status !== 'resolved')?.text?.slice(0, 60) || 'view project'}`
+      ? `Resolve blocker: ${project.blockers?.find(b => !b.resolved)?.text?.slice(0, 60) || 'view project'}`
       : 'Review project status',
     link: `/projects/${docId}`,
     sourceModule: 'Projects',
@@ -145,7 +145,7 @@ export function InboxProvider({ children }) {
       projectCtx.projects
         .filter(p => {
           const ageHours = computeAgeHours(p.updatedAt || p.createdAt);
-          const hasBlockers = p.blockers?.some(b => b.status !== 'resolved') ?? false;
+          const hasBlockers = p.blockers?.some(b => !b.resolved) ?? false;
           return hasBlockers || ageHours > 168; /* blockers or stale > 7d */
         })
         .slice(0, 3)

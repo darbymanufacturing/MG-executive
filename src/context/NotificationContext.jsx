@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { isPowDay } from '../utils/powHelpers.js';
 
 const NotificationContext = createContext(null);
@@ -61,8 +61,11 @@ export function NotificationProvider({ children }) {
     setNotifications((prev) => prev.map((n) => ({ ...n, dismissed: true })));
   }, []);
 
-  const activeNotifications = notifications.filter((n) => !n.dismissed);
-  const badgeCount = activeNotifications.length;
+  const activeNotifications = useMemo(
+    () => notifications.filter((n) => !n.dismissed),
+    [notifications],
+  );
+  const badgeCount = useMemo(() => activeNotifications.length, [activeNotifications]);
 
   return (
     <NotificationContext.Provider

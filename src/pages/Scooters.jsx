@@ -60,7 +60,7 @@ export default function Scooters() {
     return scooters.filter((s) => {
       if (cityF   !== 'All' && s.city   !== cityF)   return false;
       if (statusF !== 'All' && s.status !== statusF) return false;
-      if (search  && !String(s.scooterId).includes(search) &&
+      if (search  && !String(s.scooterId).toLowerCase().includes(search.toLowerCase()) &&
           !s.model?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });

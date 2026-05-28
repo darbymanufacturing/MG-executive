@@ -20,7 +20,12 @@ export async function completeRepairSession({
   completedAt,     // Date
   steps,           // [{ stepNumber, notes, partsUsed: [{partId, partName, quantity, unitCost}], photoUrls }]
 }) {
-  const labourMinutes = Math.round((completedAt - startedAt) / 60000);
+  // #184 — coerce to Date before subtraction; string inputs cause NaN
+  const startMs = new Date(startedAt).getTime();
+  const endMs   = new Date(completedAt).getTime();
+  const labourMinutes = Number.isFinite(startMs) && Number.isFinite(endMs)
+    ? Math.round((endMs - startMs) / 60000)
+    : 0;
 
   // Aggregate parts across all steps
   const partMap = {};

@@ -27,6 +27,11 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// #17a — escape HTML to prevent XSS in email template
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 function buildEmailHtml({ vendor, amount, date, attachmentName, senderName }) {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a202c;">
@@ -38,12 +43,12 @@ function buildEmailHtml({ vendor, amount, date, attachmentName, senderName }) {
       <div style="background: #fff; border: 1px solid #e2e8f0; border-top: none; padding: 28px 32px; border-radius: 0 0 8px 8px;">
         <p style="color: #4a5568; margin: 0 0 20px;">Hi,</p>
         <p style="color: #4a5568; margin: 0 0 20px;">
-          ${senderName} has forwarded an invoice for processing:
+          ${escapeHtml(senderName)} has forwarded an invoice for processing:
         </p>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
           <tr style="background: #f7fafc;">
             <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; width: 40%; border: 1px solid #e2e8f0;">Vendor</td>
-            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${vendor || '—'}</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${escapeHtml(vendor) || '—'}</td>
           </tr>
           <tr>
             <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">Amount</td>
@@ -51,11 +56,11 @@ function buildEmailHtml({ vendor, amount, date, attachmentName, senderName }) {
           </tr>
           <tr style="background: #f7fafc;">
             <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">Date</td>
-            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${date || '—'}</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${escapeHtml(date) || '—'}</td>
           </tr>
           <tr>
             <td style="padding: 10px 14px; font-weight: 600; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #e2e8f0;">File</td>
-            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${attachmentName || 'See attachment'}</td>
+            <td style="padding: 10px 14px; color: #1a202c; border: 1px solid #e2e8f0;">${escapeHtml(attachmentName) || 'See attachment'}</td>
           </tr>
         </table>
         <p style="color: #718096; font-size: 13px; margin: 0;">
@@ -98,6 +103,17 @@ export default async function handler(req, res) {
 
   if (!attachmentUrl) {
     return res.status(400).json({ error: 'attachmentUrl is required' });
+  }
+
+  // #17 — SSRF whitelist: only allow Firebase Storage URLs
+  const allowedHosts = ['firebasestorage.googleapis.com', 'storage.googleapis.com'];
+  try {
+    const parsedUrl = new URL(attachmentUrl);
+    if (!allowedHosts.includes(parsedUrl.hostname)) {
+      return res.status(400).json({ error: 'Attachment URL must be a Firebase Storage URL' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'Invalid attachment URL' });
   }
 
   try {

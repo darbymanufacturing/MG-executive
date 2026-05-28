@@ -44,11 +44,12 @@ export default function KpiCards({ filteredTickets }) {
       : cityStr || `${idleScooters.length} in repair`;
     const bleedVariant = bleedthroughPerDay > 30 ? 'danger' : bleedthroughPerDay > 10 ? 'warning' : 'default';
 
-    // 4. Avg days open
+    // 4. Avg days open — #173 filter to finite values only to prevent NaN from bad ticket data
     const openTickets = filteredTickets.filter((t) => t.status !== 'Completed');
-    const avgDaysOpen = openTickets.length > 0
-      ? (openTickets.reduce((s, t) => s + (t.daysOpen ?? 0), 0) / openTickets.length).toFixed(1)
-      : '0';
+    const validOpenTickets = openTickets.filter((t) => Number.isFinite(t.daysOpen));
+    const avgDaysOpen = validOpenTickets.length > 0
+      ? (validOpenTickets.reduce((s, t) => s + t.daysOpen, 0) / validOpenTickets.length).toFixed(1)
+      : openTickets.length > 0 ? '—' : '0';
 
     // 5. Parts low stock (global — not city-filtered)
     const lowStockCount = lowStockParts.length;

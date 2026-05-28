@@ -25,18 +25,20 @@
  * @param {string} sinceIso        — sync window start (ISO8601)
  * @param {string} untilIso        — sync window end (ISO8601)
  * @param {Date}   [now=new Date()] — for testability
- * @returns {object[]} rows ready for upsert: [{ docId, data }]
+ * @returns {{ rows: object[], errors: string[] }} rows ready for upsert and any skip errors
  */
 export function rollupTripsToRevenue(trips, scooterCityMap, sinceIso, untilIso, now = new Date()) {
-  if (!Array.isArray(trips) || trips.length === 0) return [];
+  if (!Array.isArray(trips) || trips.length === 0) return { rows: [], errors: [] };
 
   const since = new Date(sinceIso);
   const until = new Date(untilIso);
-  if (Number.isNaN(since.getTime()) || Number.isNaN(until.getTime())) return [];
+  if (Number.isNaN(since.getTime()) || Number.isNaN(until.getTime())) return { rows: [], errors: [] };
 
   // Group trips by (YYYY-MM-DD, city)
   // Map<string, Aggregate>
   const groups = new Map();
+  // #172 — collect unknown-scooter skip errors
+  const errors = [];
 
   for (const trip of trips) {
     if (!trip || !trip.startedAt || !trip.scooterId) continue;
@@ -44,7 +46,9 @@ export function rollupTripsToRevenue(trips, scooterCityMap, sinceIso, untilIso, 
     if (Number.isNaN(startedAt.getTime())) continue;
 
     const date = isoDate(startedAt);                 // "YYYY-MM-DD"
-    const city = scooterCityMap.get(String(trip.scooterId)) || 'Unknown';
+    // #172 — skip trips for unknown scooters instead of rolling into phantom 'Unknown' city
+    const city = scooterCityMap.get(String(trip.scooterId));
+    if (!city) { errors.push(`Unknown scooter: ${trip.scooterId}`); continue; }
     const key = `${date}::${city}`;
 
     let agg = groups.get(key);
@@ -85,7 +89,7 @@ export function rollupTripsToRevenue(trips, scooterCityMap, sinceIso, untilIso, 
       },
     });
   }
-  return rows;
+  return { rows, errors };
 }
 
 /**
@@ -106,7 +110,8 @@ export function isDayFullyCovered(dateStr, since, until, now = new Date()) {
   if (since.getTime() > startOfDay.getTime()) return false;
 
   // Today special case: until must extend to "now" at minimum
-  const todayStr = isoDate(now);
+  // #171 — use local-time date (not UTC) so midnight-local matches the user's timezone
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   if (dateStr === todayStr) {
     return until.getTime() >= now.getTime();
   }

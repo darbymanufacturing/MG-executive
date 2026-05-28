@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import Button from '../../Shared/Button.jsx';
 import styles from './ConfigEditor.module.css';
@@ -10,13 +10,26 @@ export default function ConfigEditor() {
   const [maxActive, setMaxActive] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  // #227: track dirty state so effect doesn't reset in-flight edits
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
-    setRate(config.revenueRatePerDay ?? '');
-    setMaxActive(config.maxActiveTickets ?? '');
-  }, [config]);
+    // #227: narrow to specific keys instead of whole config object, and skip if dirty
+    if (!dirtyRef.current) {
+      setRate(config.revenueRatePerDay ?? '');
+      setMaxActive(config.maxActiveTickets ?? '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.revenueRatePerDay, config.maxActiveTickets]);
 
   async function handleSave() {
+    // #228: guard against NaN before writing to Firestore
+    if (!Number.isFinite(parseFloat(rate)) || !Number.isFinite(parseFloat(maxActive))) {
+      setError('Please enter valid numbers');
+      return;
+    }
+    setError('');
     setSaving(true);
     setSaved(false);
     try {
@@ -24,6 +37,7 @@ export default function ConfigEditor() {
         revenueRatePerDay: parseFloat(rate),
         maxActiveTickets: parseInt(maxActive, 10),
       });
+      dirtyRef.current = false; // #227: reset after successful save
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -48,7 +62,7 @@ export default function ConfigEditor() {
               min="0"
               step="0.01"
               value={rate}
-              onChange={(e) => setRate(e.target.value)}
+              onChange={(e) => { dirtyRef.current = true; setRate(e.target.value); }}
             />
           </div>
           <span className={styles.hint}>
@@ -65,7 +79,7 @@ export default function ConfigEditor() {
             max="10"
             step="1"
             value={maxActive}
-            onChange={(e) => setMaxActive(e.target.value)}
+            onChange={(e) => { dirtyRef.current = true; setMaxActive(e.target.value); }}
           />
           <span className={styles.hint}>
             Current effective value: {config.maxActiveTickets} tickets
@@ -74,6 +88,7 @@ export default function ConfigEditor() {
       </div>
 
       <div className={styles.footer}>
+        {error && <span className={styles.errorMsg} style={{ color: 'var(--status-red)', fontSize: 13 }}>{error}</span>}
         {saved && <span className={styles.savedMsg}>Saved successfully</span>}
         <Button
           variant="primary"

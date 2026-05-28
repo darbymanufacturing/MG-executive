@@ -159,3 +159,12 @@ input, select, textarea {
 @keyframes omni-blink { 50% { opacity: 0; } }
 @keyframes omni-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes omni-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+/* #297/#308 — Respect reduced-motion preference (also unblocks screenshot tools) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -12,7 +12,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   collection, onSnapshot, writeBatch, doc, serverTimestamp, getCountFromServer,
-  query, limit,
+  query, limit, getDocs,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
@@ -100,17 +100,20 @@ export function TelemetryProvider({ children }) {
 
   /**
    * Clear all telemetry events (destructive — use only in dev/reset scenarios).
+   * Uses chunked batches to handle collections with >500 docs.
    */
   const clearAllEvents = useCallback(async () => {
-    const batch = writeBatch(db);
-    events.forEach((ev) => {
-      batch.delete(doc(db, EVENTS_COL, ev._docId));
-    });
-    await safeWrite(
-      () => batch.commit(),
-      { rethrow: true, errorMessage: 'Failed to clear telemetry events' },
-    );
-  }, [events]);
+    const allDocs = await getDocs(collection(db, EVENTS_COL));
+    for (let i = 0; i < allDocs.docs.length; i += BATCH_SIZE) {
+      const chunk = allDocs.docs.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((d) => batch.delete(d.ref));
+      await safeWrite(
+        () => batch.commit(),
+        { rethrow: true, errorMessage: 'Failed to clear telemetry events' },
+      );
+    }
+  }, []);
 
   return (
     <TelemetryContext.Provider value={{

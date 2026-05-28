@@ -33,7 +33,8 @@ export default function ScooterLedgerTab() {
   const { config: costConfig } = useCosts();
   const financial = costConfig?.financial ?? null;
   const labourRate = maintConfig?.labourRatePerHour ?? 0;
-  const defaultFleetSize = costConfig?.fleetSize || scooters.length || 1;
+  // #175 — use ?? not || so fleetSize=0 is not silently rejected
+  const defaultFleetSize = costConfig?.fleetSize ?? scooters.length ?? 1;
 
   const [sortKey, setSortKey] = useState('netPosition');
   const [sortDir, setSortDir] = useState('asc'); // ascending = worst first (most negative)
@@ -46,9 +47,11 @@ export default function ScooterLedgerTab() {
   // Sort
   const sorted = useMemo(() => {
     const fn = SORT_KEYS[sortKey] || ((r) => r[sortKey]);
+    // #174 — stable three-way compare (was missing the equal case)
     return [...rows].sort((a, b) => {
       const av = fn(a), bv = fn(b);
-      return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+      if (sortDir === 'asc') return av < bv ? -1 : av > bv ? 1 : 0;
+      return av > bv ? -1 : av < bv ? 1 : 0;
     });
   }, [rows, sortKey, sortDir]);
 

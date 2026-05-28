@@ -123,7 +123,7 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
 }
 
 // ── Summary screen ────────────────────────────────────────────────────────────
-function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing }) {
+function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing, completeErr }) {
   const allParts = {};
   stepData.forEach((s) => {
     (s.partsUsed ?? []).forEach(({ partId, partName, quantity, unitCost }) => {
@@ -165,6 +165,12 @@ function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing 
         )}
       </div>
 
+      {/* #99: show write failure so user can retry */}
+      {completeErr && (
+        <div style={{ color: 'var(--status-red)', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>
+          {completeErr}
+        </div>
+      )}
       <button
         className={styles.completeBtn}
         onClick={onComplete}
@@ -172,7 +178,7 @@ function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing 
       >
         {completing
           ? <><Loader2 size={18} className={styles.spin} /> Saving…</>
-          : 'Complete Repair'}
+          : completeErr ? 'Retry' : 'Complete Repair'}
       </button>
     </div>
   );
@@ -192,11 +198,13 @@ export default function RepairSession() {
     return procedures.find((p) => p.category === ticket.category) ?? FALLBACK_PROCEDURE;
   }, [ticket, procedures]);
 
-  const [sessionId]   = useState(() => sessionIdFor(ticketId));
-  const [startedAt]   = useState(() => new Date());
-  const [currentStep, setCurrentStep] = useState(0);
-  const [showSummary, setShowSummary] = useState(false);
-  const [completing,  setCompleting]  = useState(false);
+  const [sessionId]    = useState(() => sessionIdFor(ticketId));
+  const [startedAt]    = useState(() => new Date());
+  const [currentStep,  setCurrentStep]  = useState(0);
+  const [showSummary,  setShowSummary]  = useState(false);
+  const [completing,   setCompleting]   = useState(false);
+  const [completeErr,  setCompleteErr]  = useState(null);
+  const [stepError,    setStepError]    = useState(null);
 
   // Per-step state: { notes, partsUsed, photoUrls, completedAt }
   const [stepData, setStepData] = useState(() =>
@@ -223,6 +231,12 @@ export default function RepairSession() {
   }, [currentStep]);
 
   function handleMarkDone() {
+    // #101: enforce photo requirement before advancing
+    if (step.requiresPhoto && (!data.photoUrls || data.photoUrls.length === 0)) {
+      setStepError('Photo required for this step');
+      return;
+    }
+    setStepError(null);
     setStepData((prev) => prev.map((d, i) =>
       i === currentStep ? { ...d, completedAt: new Date().toISOString() } : d
     ));
@@ -250,6 +264,8 @@ export default function RepairSession() {
       navigate('/technician');
     } catch (err) {
       console.error('Failed to complete repair session:', err);
+      // #99: surface write failures visibly; keep form active for retry
+      setCompleteErr(err.message || 'Failed to save repair. Please try again.');
       setCompleting(false);
     }
   }
@@ -279,12 +295,13 @@ export default function RepairSession() {
           startedAt={startedAt}
           onComplete={handleComplete}
           completing={completing}
+          completeErr={completeErr}
         />
       </div>
     );
   }
 
-  const progress = ((currentStep) / steps.length) * 100;
+  const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (
     <div className={styles.shell}>
@@ -349,6 +366,12 @@ export default function RepairSession() {
       </main>
 
       {/* Footer CTA */}
+      {/* #101: show validation error when photo is required but missing */}
+      {stepError && (
+        <div style={{ color: 'var(--status-red)', fontSize: 13, padding: '4px 16px', textAlign: 'center' }}>
+          {stepError}
+        </div>
+      )}
       <div className={styles.footer}>
         <span className={styles.elapsedLabel}><Clock size={13} /> {elapsed(startedAt)}</span>
         <button

@@ -98,7 +98,7 @@ export function AuthProvider({ children }) {
   // Uses the Firebase Auth REST API so the current session is unaffected.
   // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
   const createTechnicianAccount = async (email, password, displayName, role = 'crew') => {
-    const apiKey = 'AIzaSyDo1mG2qucaWeD-rmtLhSgk2DddBz1yP4c';
+    const apiKey = import.meta.env.VITE_FIREBASE_WEB_API_KEY;
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
       {

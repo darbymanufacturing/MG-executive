@@ -17,6 +17,12 @@ const DEFAULT_CATEGORIES = [
 const CONFIG_DOC = 'pow/config';
 const TASKS_COL  = 'pow_tasks';
 
+// Week 1 = Nov 3, 2025 (Monday) — must match Pow.jsx
+const WEEK1_START_MS = new Date('2025-11-03T00:00:00').getTime();
+function computeCurrentWeek() {
+  return Math.max(1, Math.ceil((Date.now() - WEEK1_START_MS) / (7 * 24 * 60 * 60 * 1000)));
+}
+
 // statuses: 'backlog' | 'pow' | 'done'
 // assignees: string[]  (e.g. ['Panos', 'Kostas'])
 // checkedSteps: number[]  (indices of checked steps in summary)
@@ -24,7 +30,7 @@ const TASKS_COL  = 'pow_tasks';
 export function PowProvider({ children }) {
   const [categories, setCategories]        = useState(DEFAULT_CATEGORIES);
   const [tasks, setTasks]                  = useState([]);
-  const [currentWeek, setCurrentWeekState] = useState(25);
+  const [currentWeek, setCurrentWeekState] = useState(computeCurrentWeek);
   const [showDone, setShowDone]            = useState(false);
   const [loading, setLoading]              = useState(true);
 
@@ -94,7 +100,7 @@ export function PowProvider({ children }) {
 
   // ── Categories ───────────────────────────────────────────────────────────
   const addCategory = useCallback((name) => {
-    const newCat = { id: `cat-${Date.now()}`, name, order: categories.length };
+    const newCat = { id: `cat-${crypto.randomUUID()}`, name, order: categories.length };
     saveConfig({ categories: [...categories, newCat] });
   }, [categories, saveConfig]);
 
@@ -110,7 +116,7 @@ export function PowProvider({ children }) {
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
   const addTask = useCallback(async ({ title, description, steps, categoryId }) => {
-    const id = `task-${Date.now()}`;
+    const id = `task-${crypto.randomUUID()}`;
     await safeWrite(
       () => setDoc(doc(db, TASKS_COL, id), {
         title, description, steps, categoryId,
@@ -232,4 +238,8 @@ export function PowProvider({ children }) {
   );
 }
 
-export const usePow = () => useContext(PowContext);
+export const usePow = () => {
+  const ctx = useContext(PowContext);
+  if (!ctx) throw new Error('usePow must be used inside PowProvider');
+  return ctx;
+};

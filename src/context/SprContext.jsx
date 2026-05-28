@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   collection, doc, onSnapshot,
-  writeBatch, setDoc, getDocs, query, limit,
+  writeBatch, setDoc, getDocs, query, limit, where,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
 };
 
 const SprContext = createContext(null);
+
+// Module-level flag: prevents StrictMode double-invoke from writing bootstrap defaults twice
+let sprConfigBootstrapped = false;
 
 export function SprProvider({ children }) {
   const [events,      setEvents]      = useState([]);
@@ -58,7 +61,11 @@ export function SprProvider({ children }) {
       if (snap.exists()) {
         setSprConfig({ ...DEFAULT_CONFIG, ...snap.data() });
       } else {
-        safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        // Bootstrap defaults once — guarded against StrictMode double-fire
+        if (!sprConfigBootstrapped) {
+          sprConfigBootstrapped = true;
+          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+        }
       }
     });
 
@@ -81,67 +88,43 @@ export function SprProvider({ children }) {
     );
   }, [sprConfig]);
 
-  // Zone helpers
+  // Zone helpers — no optimistic local update; snapshot drives UI to avoid flicker (#45)
   const addZone = useCallback(async (zone) => {
-    const prev = sprConfig;
     const id   = `zone_${Date.now()}`;
     const next = { ...sprConfig, zones: [...(sprConfig.zones || []), { ...zone, id }] };
-    setSprConfig(next);
     await safeWrite(
       () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to add zone — change reverted',
-        optimisticRollback: () => setSprConfig(prev),
-      },
+      { rethrow: true, errorMessage: 'Failed to add zone' },
     );
   }, [sprConfig]);
 
   const updateZone = useCallback(async (id, updates) => {
-    const prev = sprConfig;
     const next = {
       ...sprConfig,
       zones: (sprConfig.zones || []).map((z) => z.id === id ? { ...z, ...updates } : z),
     };
-    setSprConfig(next);
     await safeWrite(
       () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to update zone — change reverted',
-        optimisticRollback: () => setSprConfig(prev),
-      },
+      { rethrow: true, errorMessage: 'Failed to update zone' },
     );
   }, [sprConfig]);
 
   const deleteZone = useCallback(async (id) => {
-    const prev = sprConfig;
     const next = { ...sprConfig, zones: (sprConfig.zones || []).filter((z) => z.id !== id) };
-    setSprConfig(next);
     await safeWrite(
       () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to delete zone — change reverted',
-        optimisticRollback: () => setSprConfig(prev),
-      },
+      { rethrow: true, errorMessage: 'Failed to delete zone' },
     );
   }, [sprConfig]);
 
   const setCityCenter = useCallback(async (city, lat, lon) => {
-    const prev = sprConfig;
     const next = {
       ...sprConfig,
       cityCenters: { ...(sprConfig.cityCenters || {}), [city]: { lat, lon } },
     };
-    setSprConfig(next);
     await safeWrite(
       () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to save city center — change reverted',
-        optimisticRollback: () => setSprConfig(prev),
-      },
+      { rethrow: true, errorMessage: 'Failed to save city center' },
     );
   }, [sprConfig]);
 
@@ -161,14 +144,14 @@ export function SprProvider({ children }) {
   }, []);
 
   const clearEvents = useCallback(async (city = null) => {
-    const snap = await getDocs(collection(db, EVENTS_COL));
-    const toDelete = city
-      ? snap.docs.filter((d) => d.data().city === city)
-      : snap.docs;
+    const q = city
+      ? query(collection(db, EVENTS_COL), where('city', '==', city))
+      : collection(db, EVENTS_COL);
+    const snap = await getDocs(q);
 
-    for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
-      toDelete.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
   }, []);

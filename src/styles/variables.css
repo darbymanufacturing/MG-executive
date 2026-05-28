@@ -2,12 +2,13 @@
    Omni — Design Tokens (replaces legacy XSlide variables.css)
    ==================================================================== */
 
+/* #142/#143 — Inter is loaded via <link> in index.html; removed duplicate @import to avoid double load.
+   @import must precede @font-face in CSS, so it was also causing an ordering warning. */
 @font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Regular.ttf") format("truetype");  font-weight: 400; font-display: swap; }
 @font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Medium.ttf") format("truetype");   font-weight: 500; font-display: swap; }
 @font-face { font-family: "Poppins"; src: url("./fonts/Poppins-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "Poppins"; src: url("./fonts/Poppins-Bold.ttf") format("truetype");     font-weight: 700; font-display: swap; }
 @font-face { font-family: "Poppins"; src: url("./fonts/Poppins-ExtraBold.ttf") format("truetype");font-weight: 800; font-display: swap; }
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
   /* --- Brand --- */
