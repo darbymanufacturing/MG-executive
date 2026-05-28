@@ -1,0 +1,117 @@
+/* OmniLoading — backdrop, stage, and wordmark layout.
+   All temporal animation values are driven by JS via inline style.
+   Per docs/BRANDING.md "Loading intro exception". */
+
+.container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Splash variant — full-bleed dark cinematic ────────────────────── */
+.splash {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+  z-index: 9999;
+  /* graceful 200ms fade-out on unmount can be added via a parent wrapper later */
+  animation: omni-loading-enter 80ms ease-out both;
+}
+
+@keyframes omni-loading-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Compact variant — transparent inline spinner ─────────────────── */
+.compact {
+  background: transparent;
+  padding: 8px;
+  min-width: 96px;
+  min-height: 96px;
+}
+
+/* ── Backdrop layers (splash only — JS sets the background) ───────── */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.75) 100%);
+  pointer-events: none;
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* ── Stage — SVG and wordmark container ───────────────────────────── */
+.stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Splash SVG — responsive, slightly above true center to leave room for wordmark */
+.svgSplash {
+  width: min(48vh, 48vw);
+  height: min(48vh, 48vw);
+}
+
+.compact .svgCompact {
+  width: 96px;
+  height: 96px;
+}
+
+/* ── Wordmark "OMNI" (splash only) ─────────────────────────────────── */
+.wordmark {
+  margin-top: 28px;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(28px, 4vw, 48px);
+  letter-spacing: 0.42em;
+  padding-left: 0.42em; /* optical center compensation for tracking */
+  color: #FFFFFF;
+  text-shadow: 0 0 18px rgba(160, 82, 29, 0.45);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── Reduced-motion fallback — static, simple fade-in ─────────────── */
+.reducedMotion {
+  animation: omni-loading-fade 200ms ease-out both;
+}
+
+.reducedMotion .stage {
+  /* Static AsterismMark renders at its default size; size prop overrides */
+}
+
+.reducedMotion .wordmark {
+  /* Keep wordmark visible immediately — no slide-up */
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+@keyframes omni-loading-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Honour OS reduced-motion globally as a safety net ────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop, .vignette, .flash { animation: none !important; transition: none !important; }
+  .stage { transform: none !important; }
+}

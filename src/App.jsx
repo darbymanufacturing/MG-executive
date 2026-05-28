@@ -21,7 +21,7 @@ import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import TopBar from './components/Layout/TopBar.jsx';
 import CaptureModal from './components/Capture/CaptureModal.jsx';
-import AsterismMark from './components/Shared/AsterismMark.jsx';
+import OmniLoading from './components/Shared/OmniLoading.jsx';
 
 /* Pages */
 import Home from './pages/Home.jsx';
@@ -77,18 +77,13 @@ function getTitle(pathname) {
   return ROUTE_TITLES[pathname] || 'Omni';
 }
 
-/* ─── Loading screen ─── */
+/* ─── Loading screen ───
+ * Plays the cinematic 2.0s Asterism-assembly intro from the design handoff,
+ * then transitions into a subtle 1.2s breath loop if the wait exceeds 2s.
+ * The "no animation in brand surfaces" rule (docs/BRANDING.md) has a carved-out
+ * exception specifically for OmniLoading. See docs/BRANDING.md "Loading intro exception". */
 function LoadingScreen() {
-  return (
-    <div className={styles.loadingScreen}>
-      {/* Asterism mark — theme-aware via `fg="var(--fg-strong)"`; rust accent stays rust on both themes */}
-      <div className={styles.loadingMark}>
-        <AsterismMark size={48} fg="var(--fg-strong)" />
-      </div>
-      <div className={styles.spinner} />
-      <p className={styles.loadingText}>Loading Omni…</p>
-    </div>
-  );
+  return <OmniLoading variant="splash" loop />;
 }
 
 /* ─── Protected route ─── */

@@ -26,49 +26,11 @@
   background: var(--bg-canvas);
 }
 
-/* ─── Loading screen ─── */
-.loadingScreen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: var(--bg-canvas);
-  gap: 20px;
-}
-
-.loadingMark {
-  /* Per docs/BRANDING.md: "no spinning, no pulsing" — only a subtle ≤200ms fade-in on app load. */
-  animation: omni-fade-in 180ms ease-out both;
-}
-
-@keyframes omni-fade-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loadingMark { animation: none; }
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 2.5px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: omni-spin 0.75s linear infinite;
-}
-
-@keyframes omni-spin {
-  to { transform: rotate(360deg); }
-}
-
-.loadingText {
-  font-size: 13px;
-  color: var(--fg-muted);
-  letter-spacing: 0.02em;
-}
+/* ─── Loading screen — replaced by <OmniLoading variant="splash"> ───
+ * The old .loadingScreen / .loadingMark / .spinner / .loadingText rules and the
+ * omni-fade-in / omni-spin keyframes were removed when LoadingScreen was migrated
+ * to OmniLoading (Phase 1.9). Styles for the cinematic intro live in
+ * src/components/Shared/OmniLoading.module.css. */
 
 /* ─── Mobile ─── */
 @media (max-width: 768px) {
