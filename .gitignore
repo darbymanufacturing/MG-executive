@@ -31,3 +31,10 @@ dist-ssr
 .env.*.local
 
 .vercel
+
+# Firebase Emulator persisted data + CLI cache
+emulator-data/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

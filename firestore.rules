@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Single-tenant rules (current). Phase 2.4 of the roadmap will replace this
+// with per-collection org isolation + role gating — see docs/SECURITY.md for
+// the target shape.
+//
+// These rules ship with the local Firebase Emulator (`npm run emulator`).
+// Production Firestore uses whatever was last set in the Firebase Console;
+// keep that in sync with this file or — better — deploy from here once Phase
+// 2.4 lands and the rule set is hardened.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Default: any signed-in user can read/write any doc (trusted single-tenant).
+    match /{document=**} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
