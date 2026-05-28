@@ -35,29 +35,41 @@ export default function Settings() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePassword, setInvitePassword] = useState('');
   const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState('crew'); // crew | staff | admin
   const [inviteStatus, setInviteStatus] = useState(null); // { type: 'success'|'error', text }
   const [inviteLoading, setInviteLoading] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
+  // Accountant email config
+  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || '');
+  const [accountantSaved, setAccountantSaved] = useState(false);
 
-  // Load technician accounts in real time
+  // Load crew accounts in real time (crew + technician roles)
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+    const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'crew', 'staff']));
     const unsub = onSnapshot(q, (snap) => {
       setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
     });
     return unsub;
   }, []);
 
+  const handleSaveAccountant = () => {
+    localStorage.setItem('omni_accountant_email', accountantEmail.trim());
+    setAccountantSaved(true);
+    setTimeout(() => setAccountantSaved(false), 2000);
+  };
+
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !invitePassword.trim()) return;
     setInviteLoading(true);
     setInviteStatus(null);
     try {
-      await createTechnicianAccount(inviteEmail.trim(), invitePassword, inviteName.trim());
-      setInviteStatus({ type: 'success', text: `Technician account created for ${inviteEmail.trim()}.` });
+      await createTechnicianAccount(inviteEmail.trim(), invitePassword, inviteName.trim(), inviteRole);
+      const roleLabel = inviteRole === 'crew' ? 'Crew' : inviteRole === 'staff' ? 'Staff' : 'Admin';
+      setInviteStatus({ type: 'success', text: `${roleLabel} account created for ${inviteEmail.trim()}.` });
       setInviteEmail('');
       setInvitePassword('');
       setInviteName('');
+      setInviteRole('crew');
     } catch (err) {
       setInviteStatus({ type: 'error', text: err.message });
     } finally {
@@ -408,7 +420,7 @@ export default function Settings() {
           <div className={styles.inviteForm}>
             <h3 className={styles.inviteTitle}>
               <UserPlus size={15} />
-              Add Technician
+              Add Team Member
             </h3>
             <div className={styles.grid}>
               <div className={styles.field}>
@@ -426,7 +438,7 @@ export default function Settings() {
                 <input
                   type="email"
                   className={styles.input}
-                  placeholder="technician@example.com"
+                  placeholder="member@example.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                 />
@@ -440,6 +452,19 @@ export default function Settings() {
                   value={invitePassword}
                   onChange={(e) => setInvitePassword(e.target.value)}
                 />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Role</label>
+                <select
+                  className={styles.input}
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <option value="crew">Crew — repairs, tickets, procedures only</option>
+                  <option value="staff">Staff — full ops, no financial details</option>
+                  <option value="admin">Admin — full access</option>
+                </select>
               </div>
             </div>
             <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -478,6 +503,45 @@ export default function Settings() {
             Configure the tabs shown on each scooter's detail page. Drag to reorder, toggle to show/hide.
           </p>
           <ScooterTabsConfig />
+        </section>
+
+        {/* Accountant / Integrations */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Link2 size={18} className={styles.sectionIcon} />
+            <h2 className={styles.sectionTitle}>Integrations</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            Configure external connections — accountant email forwarding, bank sync, etc.
+          </p>
+          <div className={styles.dataCard}>
+            <div className={styles.dataCardHeader}>
+              <Download size={16} />
+              <span>Accountant Email</span>
+            </div>
+            <p className={styles.dataCardDesc}>
+              Invoices captured via Omni Capture will be forwarded to this address when you click
+              &quot;Forward to Accountant&quot;.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="email"
+                className={styles.input}
+                style={{ maxWidth: 320 }}
+                placeholder="accountant@example.com"
+                value={accountantEmail}
+                onChange={e => { setAccountantEmail(e.target.value); setAccountantSaved(false); }}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveAccountant(); }}
+              />
+              <Button variant="secondary" size="sm" onClick={handleSaveAccountant}
+                disabled={!accountantEmail.trim()}>
+                {accountantSaved ? <><CheckCircle size={14} /> Saved</> : 'Save'}
+              </Button>
+            </div>
+            <p className={styles.dataCardDesc} style={{ marginTop: 8, fontSize: 12 }}>
+              This is stored locally. Set <code>ACCOUNTANT_EMAIL</code> env var in Vercel for the API.
+            </p>
+          </div>
         </section>
 
         {/* Data Management */}

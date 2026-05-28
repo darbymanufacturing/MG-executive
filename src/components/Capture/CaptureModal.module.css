@@ -171,7 +171,75 @@
   flex-shrink: 0;
 }
 
+/* Mode tabs */
+.modeTabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-section);
+  border-radius: 8px;
+  padding: 3px;
+}
+.modeTab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+.modeTab:hover { color: var(--fg-primary); }
+.modeTabActive {
+  background: var(--bg-elev);
+  color: var(--accent);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Invoice capture */
+.invoiceWrap {
+  padding: 16px 18px;
+}
+.dropZone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+  background: var(--bg-section);
+  overflow: hidden;
+}
+.dropZone:hover {
+  border-color: var(--accent-soft);
+  background: color-mix(in oklab, var(--accent) 5%, var(--bg-section));
+}
+.dropIcon { color: var(--fg-muted); }
+.dropText { font-size: 14px; font-weight: 500; color: var(--fg-secondary); }
+.dropSub  { font-size: 12px; color: var(--fg-muted); }
+.previewImg {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}
+.invoiceFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 @media (max-width: 768px) {
   .overlay { padding: 8vh 12px 12px; }
   .confirmedGrid { grid-template-columns: 1fr; }
+  .headerSub { display: none; }
 }

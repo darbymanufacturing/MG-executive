@@ -47,11 +47,11 @@
 .rowItem:last-child { border-bottom: none; }
 
 .urgencyStripe {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
   width: 3px;
+  border-radius: 0 2px 2px 0;
+  align-self: stretch;
+  /* bleed into row padding so stripe is flush-left and full-height */
+  margin: -14px 0 -14px -16px;
 }
 
 .dotCol {
