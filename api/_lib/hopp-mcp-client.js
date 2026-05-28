@@ -97,6 +97,16 @@ export async function callHoppTool(toolName, args, options = {}) {
     throw new Error(`Hopp MCP ${toolName} returned non-text content`);
   }
 
+  // MCP tool-level error (separate from the JSON-RPC envelope error above).
+  // Hopp returns { result: { content: [{ text: "..." }], isError: true } } when
+  // upstream auth fails (HOPP_REFRESH_TOKEN expired), upstream rate-limits, or
+  // the tool args fail validation. Without this guard the cron would treat the
+  // human-readable error string as if it were a tool result and silently log
+  // a "successful" sync with zero data. See BUGS.md #309.
+  if (rpc.result.isError) {
+    throw new Error(`Hopp MCP ${toolName} tool error: ${text.slice(0, 400)}`);
+  }
+
   // Tools return JSON-stringified payloads in content[0].text
   try {
     return JSON.parse(text);
