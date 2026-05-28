@@ -71,20 +71,30 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { RESEND_API_KEY, ACCOUNTANT_EMAIL, RESEND_FROM_EMAIL } = process.env;
-
+  const { RESEND_API_KEY } = process.env;
   if (!RESEND_API_KEY) {
     return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
-  }
-  if (!ACCOUNTANT_EMAIL) {
-    return res.status(500).json({ error: 'ACCOUNTANT_EMAIL not configured' });
   }
 
   const {
     costId, vendor, amount, date,
     attachmentUrl, attachmentName,
     senderEmail, senderName = 'Omni Team',
+    /* accountantEmail passed from frontend (stored in Settings localStorage) */
+    accountantEmail,
+    fromEmail,
   } = req.body || {};
+
+  /* Resolve recipient: body → env var → hardcoded default */
+  const ACCOUNTANT_EMAIL =
+    accountantEmail ||
+    process.env.ACCOUNTANT_EMAIL ||
+    'nsoukoulis@outlook.com';
+
+  const RESEND_FROM_EMAIL =
+    fromEmail ||
+    process.env.RESEND_FROM_EMAIL ||
+    'Omni <noreply@mgexecutive.app>';
 
   if (!attachmentUrl) {
     return res.status(400).json({ error: 'attachmentUrl is required' });

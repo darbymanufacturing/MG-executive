@@ -40,7 +40,7 @@ export default function Settings() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
   // Accountant email config
-  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || '');
+  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || 'nsoukoulis@outlook.com');
   const [accountantSaved, setAccountantSaved] = useState(false);
 
   // Load crew accounts in real time (crew + technician roles)
