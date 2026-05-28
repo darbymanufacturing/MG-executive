@@ -17,9 +17,13 @@ export default function BlockersPanel({ project }) {
   async function handleAdd(e) {
     e.preventDefault();
     if (!form.text.trim()) return;
-    await addBlocker(project._docId, { ...form, text: form.text.trim() });
-    setForm({ text: '', type: 'internal', escalation: '' });
-    setShowForm(false);
+    try {
+      await addBlocker(project._docId, { ...form, text: form.text.trim() });
+      setForm({ text: '', type: 'internal', escalation: '' });
+      setShowForm(false);
+    } catch (err) {
+      console.error('Failed to add blocker:', err);
+    }
   }
 
   return (

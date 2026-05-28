@@ -102,7 +102,7 @@ function PartCombobox({ value, parts, onSelect }) {
   const [open, setOpen] = useState(false);
   const ref = useState(() => ({ current: null }))[0];
 
-  const selectedPart = parts.find((p) => p.id === value);
+  const selectedPart = parts.find((p) => p._docId === value || p.sku === value || p.id === value);
   const displayValue = open ? query : (selectedPart ? selectedPart.partName : '');
 
   const filtered = query.trim()

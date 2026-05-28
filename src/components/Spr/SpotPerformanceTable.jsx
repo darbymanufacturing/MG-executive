@@ -51,18 +51,20 @@ export default function SpotPerformanceTable({ city }) {
   }, [rows]);
 
   function exportCSV() {
-    const header = 'Date,Zone,Morning Stock,Rides,Returns,Flow,Pickup Rate\n';
+    const escapeCSV = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const header = ['Date', 'Zone', 'Morning Stock', 'Rides', 'Returns', 'Flow', 'Pickup Rate'].map(escapeCSV).join(',') + '\n';
     const body = rows.map((r) =>
       [
         r.date, r.zone, r.morningStock, r.rideVolume, r.returnVolume, r.zoneFlow,
-        r.pickupRate !== null ? (r.pickupRate * 100).toFixed(1) + '%' : '',
-      ].join(',')
+        Number.isFinite(r.pickupRate) ? (r.pickupRate * 100).toFixed(1) + '%' : '',
+      ].map(escapeCSV).join(',')
     ).join('\n');
     const blob = new Blob([header + body], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `spr_performance_${city}_${startDate}_${endDate}.csv`;
+    const safeCity = city.replace(/[\\/:*?"<>|,\s]/g, '_');
+    a.download = `spr_performance_${safeCity}_${startDate}_${endDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -158,7 +160,7 @@ export default function SpotPerformanceTable({ city }) {
                       {r.zoneFlow > 0 ? '+' : ''}{r.zoneFlow}
                     </td>
                     <td className={`${styles.td} ${styles.tdRight}`}>
-                      {rate !== null ? (
+                      {Number.isFinite(rate) ? (
                         <div className={styles.rateWrap}>
                           <span>{(rate * 100).toFixed(0)}%</span>
                           <div className={styles.rateBar}>

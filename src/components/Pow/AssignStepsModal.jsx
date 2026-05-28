@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { getSteps } from './StepsList.jsx';
 import styles from './AssignStepsModal.module.css';
@@ -6,7 +6,16 @@ import styles from './AssignStepsModal.module.css';
 export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
   const steps = getSteps(task);
   const existingSelected = task.powSteps?.[person] ?? steps.map((_, i) => i);
-  const [selected, setSelected] = useState(new Set(existingSelected));
+  // Use lazy initializer to avoid allocation churn (#277)
+  const [selected, setSelected] = useState(() => new Set(existingSelected));
+
+  // Move early-exit logic into useEffect to avoid calling callbacks during render (#233)
+  useEffect(() => {
+    if (steps.length === 0) {
+      onConfirm([]);
+      onClose();
+    }
+  }, []); // run once on mount
 
   const toggle = (idx) => {
     setSelected(prev => {
@@ -16,12 +25,8 @@ export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
     });
   };
 
-  // No steps — assign directly without modal
-  if (steps.length === 0) {
-    onConfirm([]);
-    onClose();
-    return null;
-  }
+  // No steps — render nothing (effect above handles the callback)
+  if (steps.length === 0) return null;
 
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>

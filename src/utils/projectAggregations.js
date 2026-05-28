@@ -132,14 +132,15 @@ export function collectCalendarEvents(projects) {
   return events;
 }
 
-/** Group events by date string (YYYY-MM-DD). */
+/** Group events by date string (YYYY-MM-DD). Handles Firestore Timestamps. */
 export function groupEventsByDate(events) {
   const map = {};
   for (const ev of events) {
     if (!ev.date) continue;
-    const key = ev.date.slice(0, 10);
-    if (!map[key]) map[key] = [];
-    map[key].push(ev);
+    const d = ev.date?.toDate ? ev.date.toDate().toISOString().slice(0, 10) : String(ev.date || '').slice(0, 10);
+    if (!d) continue;
+    if (!map[d]) map[d] = [];
+    map[d].push(ev);
   }
   return map;
 }
@@ -169,7 +170,9 @@ export function upcomingDeadlines(projects, days = 14) {
       }
     }
   }
-  return deadlines.sort((a, b) => a.date.localeCompare(b.date));
+  // #267 — normalize dates before sort; Firestore Timestamps have .toDate() and crash localeCompare
+  const toStr = (d) => d?.toDate ? d.toDate().toISOString().slice(0, 10) : String(d || '');
+  return deadlines.sort((a, b) => toStr(a.date).localeCompare(toStr(b.date)));
 }
 
 /** Build weeks array for calendar month view. Each week = array of 7 day objects. */
@@ -195,9 +198,9 @@ export function buildMonthWeeks(year, month) {
   return weeks;
 }
 
-/** ISO date string from a Date object. */
+/** Local-time YYYY-MM-DD string from a Date object. */
 export function toDateStr(d) {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Color token per calendar event type. */

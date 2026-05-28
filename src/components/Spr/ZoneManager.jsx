@@ -17,6 +17,7 @@ export default function ZoneManager({ city }) {
   const [centerLat, setCenterLat]   = useState('');
   const [centerLon, setCenterLon]   = useState('');
   const [saving, setSaving]         = useState(false);
+  const [coordError, setCoordError] = useState('');
 
   const locations = config.locations || [];
   const zones = (sprConfig.zones || []).filter((z) => !city || z.city === city);
@@ -26,6 +27,7 @@ export default function ZoneManager({ city }) {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    setCoordError('');
   }
 
   function startEdit(zone) {
@@ -41,30 +43,43 @@ export default function ZoneManager({ city }) {
   }
 
   function parseCoord(val) {
-    const n = parseFloat(val);
+    // Normalize European decimal commas (#246)
+    const n = parseFloat(String(val).replace(',', '.'));
     return isNaN(n) ? null : n;
   }
 
   function isFormValid() {
+    const minLat = parseCoord(form.minLat);
+    const maxLat = parseCoord(form.maxLat);
+    const minLon = parseCoord(form.minLon);
+    const maxLon = parseCoord(form.maxLon);
     return (
       form.name.trim() &&
-      parseCoord(form.minLat) !== null &&
-      parseCoord(form.maxLat) !== null &&
-      parseCoord(form.minLon) !== null &&
-      parseCoord(form.maxLon) !== null
+      minLat !== null &&
+      maxLat !== null &&
+      minLon !== null &&
+      maxLon !== null
     );
   }
 
   async function handleSave() {
     if (!isFormValid() || !city) return;
+    const minLat = parseCoord(form.minLat);
+    const maxLat = parseCoord(form.maxLat);
+    const minLon = parseCoord(form.minLon);
+    const maxLon = parseCoord(form.maxLon);
+    // Validate coordinate ordering (#245)
+    if (minLat >= maxLat) { setCoordError('Min lat must be less than Max lat'); return; }
+    if (minLon >= maxLon) { setCoordError('Min lon must be less than Max lon'); return; }
+    setCoordError('');
     setSaving(true);
     const zoneData = {
       name:   form.name.trim(),
       city,
-      minLat: parseCoord(form.minLat),
-      maxLat: parseCoord(form.maxLat),
-      minLon: parseCoord(form.minLon),
-      maxLon: parseCoord(form.maxLon),
+      minLat,
+      maxLat,
+      minLon,
+      maxLon,
     };
     try {
       if (editingId) {
@@ -163,6 +178,7 @@ export default function ZoneManager({ city }) {
                 value={form.maxLon} onChange={(e) => setForm((f) => ({ ...f, maxLon: e.target.value }))} />
             </div>
           </div>
+          {coordError && <p style={{ color: 'var(--status-red)', fontSize: 12, margin: '4px 0' }}>{coordError}</p>}
           <div className={styles.formActions}>
             <Button variant="secondary" size="sm" onClick={resetForm}>
               <X size={13} /> Cancel

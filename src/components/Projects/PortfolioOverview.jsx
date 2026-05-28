@@ -35,7 +35,7 @@ export default function PortfolioOverview() {
       { name: 'Blocked',          value: counts.blocked,         color: STATUS_CONFIG.blocked.color },
       { name: 'Needs Attention',   value: counts.needsAttention,  color: STATUS_CONFIG.needsAttention.color },
       { name: 'On Track',          value: counts.onTrack,         color: STATUS_CONFIG.onTrack.color },
-      { name: 'Archived',          value: counts.archived,        color: '#555555' },
+      { name: 'Archived',          value: counts.archived,        color: 'var(--fg-muted)' },
     ].filter((d) => d.value > 0);
   }, [activeProjects, archivedProjects]);
 
@@ -78,7 +78,7 @@ export default function PortfolioOverview() {
   const staleProjects = useMemo(() => {
     return [...activeProjects]
       .filter((p) => p.nextAction?.text || p.updatedAt)
-      .sort((a, b) => daysSince(b.updatedAt) - daysSince(a.updatedAt))
+      .sort((a, b) => (daysSince(b.updatedAt) ?? Infinity) - (daysSince(a.updatedAt) ?? Infinity))
       .slice(0, 5);
   }, [activeProjects]);
 

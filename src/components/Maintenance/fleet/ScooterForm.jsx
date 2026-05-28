@@ -5,7 +5,9 @@ import { validate } from '../../../utils/validateForm.js';
 import { scooterSchema } from '../../../utils/schemas/scooterSchema.js';
 import styles from './ScooterForm.module.css';
 
-const MODELS   = ['ES400B 2022', 'ES400B 2023'];
+// TODO: source from config (currently hardcoded)
+const SCOOTER_MODELS = ['ES400B 2022', 'ES400B 2023'];
+const MODELS = SCOOTER_MODELS;
 const STATUSES = ['Active', 'In Repair', 'Retired', 'Donor'];
 
 const errorStyle = {
@@ -28,15 +30,17 @@ const EMPTY = {
 };
 
 export default function ScooterForm({ open, onClose, onSave, initial, cities = [] }) {
-  const [form, setForm]   = useState(EMPTY);
-  const [errors, setErrors] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [form, setForm]       = useState(EMPTY);
+  const [errors, setErrors]   = useState({});
+  const [saving, setSaving]   = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (open) {
       setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
       setErrors({});
       setSaving(false);
+      setFormError('');
     }
   }, [open, initial]);
 
@@ -55,13 +59,15 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
     const { isValid, errors: validationErrors } = validate(payload, scooterSchema);
     if (!isValid) { setErrors(validationErrors); return; }
     setSaving(true);
+    setFormError('');
     try {
       await onSave({
         ...form,
         purchasePrice: form.purchasePrice === '' ? null : Number(form.purchasePrice),
       });
       onClose();
-    } finally {
+    } catch (err) {
+      setFormError(err?.message || 'Failed to save scooter. Please try again.');
       setSaving(false);
     }
   }
@@ -159,6 +165,7 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
           />
         </div>
 
+        {formError && <p style={{ color: 'var(--status-red)', fontSize: 13, margin: '4px 0' }}>{formError}</p>}
         <div className={styles.actions}>
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={saving}>

@@ -19,18 +19,23 @@ const inputErrorStyle = {
 const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal', 'Needs Setup'];
 const OWNERS     = ['Kostas', 'Panos', 'Both'];
 const STATUSES   = [
-  { value: 'Green', label: '🟢 Green — On Track' },
-  { value: 'Amber', label: '🟡 Amber — At Risk' },
-  { value: 'Red',   label: '🔴 Red — Blocked' },
+  { value: 'onTrack',        label: '🟢 On Track' },
+  { value: 'needsAttention', label: '🟡 Needs Attention' },
+  { value: 'blocked',        label: '🔴 Blocked' },
 ];
+
+function todayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const EMPTY = {
   name:        '',
   description: '',
   owner:       'Kostas',
-  status:      'Green',
+  status:      'onTrack',
   category:    'Operations',
-  startDate:   new Date().toISOString().slice(0, 10),
+  startDate:   '',
   targetDate:  '',
 };
 
@@ -41,7 +46,8 @@ export default function ProjectForm({ open, onClose, onSave, initial }) {
 
   useEffect(() => {
     if (open) {
-      setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
+      const base = { ...EMPTY, startDate: todayLocal() };
+      setForm(initial ? { ...base, ...initial } : base);
       setErrors({});
       setSaving(false);
     }

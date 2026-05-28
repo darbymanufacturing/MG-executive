@@ -17,11 +17,18 @@ function InlineText({ value, onSave, placeholder, className, multiline = false, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(value || '');
   const ref = useRef(null);
+  const committedRef = useRef(false);
 
-  useEffect(() => { setDraft(value || ''); }, [value]);
+  // Only sync external value when not actively editing (#199)
+  useEffect(() => { if (!editing) setDraft(value || ''); }, [value, editing]);
   useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+  // Reset committed guard when editing ends (#200)
+  useEffect(() => { if (!editing) committedRef.current = false; }, [editing]);
 
   function commit() {
+    // Guard against double-commit on Enter + blur (#200)
+    if (committedRef.current) return;
+    committedRef.current = true;
     const trimmed = draft.trim();
     if (trimmed !== (value || '').trim()) onSave(trimmed);
     setEditing(false);

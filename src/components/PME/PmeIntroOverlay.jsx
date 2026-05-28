@@ -45,13 +45,6 @@ function RadarFace() {
     };
   });
 
-  // ── Diagonal tick clusters (4 per quadrant, like image) ──
-  // Small tight cluster of ticks around 45° marks
-  const clusterTicks = Array.from({ length: 36 * 3 }, (_, i) => {
-    // Not used — handled above
-    return null;
-  }).filter(Boolean);
-
   return (
     <svg
       className={styles.radarSvg}
@@ -62,9 +55,9 @@ function RadarFace() {
       <defs>
         {/* Radial gradient for outer ring glow */}
         <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%"   stopColor="#00ff77" stopOpacity="0.03" />
-          <stop offset="70%"  stopColor="#00ff77" stopOpacity="0.01" />
-          <stop offset="100%" stopColor="#00ff77" stopOpacity="0.08" />
+          <stop offset="0%"   stopColor="#A0521D" stopOpacity="0.03" />
+          <stop offset="70%"  stopColor="#A0521D" stopOpacity="0.01" />
+          <stop offset="100%" stopColor="#A0521D" stopOpacity="0.08" />
         </radialGradient>
         {/* Clip to outer circle */}
         <clipPath id="radarClip">
@@ -80,7 +73,7 @@ function RadarFace() {
         <line
           key={`rad-${i}`}
           x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-          stroke="rgba(0,255,120,0.18)"
+          stroke="rgba(160,82,29,0.18)"
           strokeWidth="0.8"
         />
       ))}

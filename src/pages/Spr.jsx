@@ -81,9 +81,14 @@ export default function Spr() {
               disabled={seedLoading}
               onClick={async () => {
                 setSeedLoading(true);
-                await loadNafplioData();
-                setSeedLoading(false);
-                setSeedDone(true);
+                try {
+                  await loadNafplioData();
+                  setSeedDone(true);
+                } catch (e) {
+                  console.error('Failed to load Nafplio data:', e);
+                } finally {
+                  setSeedLoading(false);
+                }
               }}
             >
               {seedLoading ? 'Loading…' : seedDone ? 'Loaded ✓' : 'Load Nafplio Data'}

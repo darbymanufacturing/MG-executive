@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { OWNERS } from './constants.js';
 import styles from './NextActionPanel.module.css';
@@ -14,6 +14,11 @@ export default function NextActionPanel({ project }) {
   // After completing, prompt for the next one
   const [promptNext, setPromptNext] = useState(false);
 
+  // When nextAction gets set externally, exit editing mode (#238)
+  useEffect(() => {
+    if (project.nextAction && editing) setEditing(false);
+  }, [project.nextAction]);
+
   async function handleSave(e) {
     e.preventDefault();
     if (!form.text.trim()) return;
@@ -23,10 +28,14 @@ export default function NextActionPanel({ project }) {
   }
 
   async function handleComplete() {
-    await completeNextAction(project._docId);
-    setForm({ text: '', dueDate: '', owner: project.owner || 'Kostas' });
-    setEditing(true);
-    setPromptNext(true);
+    try {
+      await completeNextAction(project._docId);
+      setForm({ text: '', dueDate: '', owner: project.owner || 'Kostas' });
+      setEditing(true);
+      setPromptNext(true);
+    } catch (err) {
+      console.error('Failed to complete next action:', err);
+    }
   }
 
   return (

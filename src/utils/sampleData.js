@@ -3,10 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 /** Realistic sample data for a Greek micromobility operator with ~20 scooters */
 export const SAMPLE_CONFIG = {
   fleetSize: 20,
-  companyName: 'XSlide',
+  companyName: 'Omni',
   currency: 'EUR',
   targetCostPerScooter: 120,
-  revenuePerScooter: 180,
 };
 
 export const SAMPLE_COSTS = [

@@ -16,7 +16,8 @@ const CATEGORIES = { Q: 'Quick', M: 'Medium/Est.', C: 'Complex', B: 'Blocked', F
 
 function truncate(str, max = 40) {
   if (!str) return '—';
-  return str.length > max ? str.slice(0, max) + '…' : str;
+  const chars = Array.from(str);
+  return chars.length > max ? chars.slice(0, max).join('') + '…' : str;
 }
 
 function StatusBadge({ status }) {

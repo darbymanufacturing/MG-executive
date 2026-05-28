@@ -40,7 +40,15 @@ function CategoryColumn({ cat }) {
             </span>
             <div className={styles.colActions}>
               <span className={styles.taskCount}>{colTasks.length}</span>
-              <button className={styles.iconBtn} onClick={() => removeCategory(cat.id)} title="Διαγραφή κατηγορίας">
+              <button
+                className={styles.iconBtn}
+                onClick={() => {
+                  if (window.confirm('Remove this category? Tasks in this category will become uncategorized.')) {
+                    removeCategory(cat.id);
+                  }
+                }}
+                title="Remove category"
+              >
                 <Trash2 size={12}/>
               </button>
             </div>

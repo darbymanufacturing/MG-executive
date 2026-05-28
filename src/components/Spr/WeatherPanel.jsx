@@ -24,6 +24,10 @@ export default function WeatherPanel({ city }) {
 
   async function handleFetch() {
     if (!center || !startDate || !endDate) return;
+    if (startDate > endDate) {
+      setStatus({ type: 'error', text: 'Start date must be before end date' });
+      return;
+    }
     setFetching(true);
     setStatus(null);
     try {
@@ -99,7 +103,7 @@ export default function WeatherPanel({ city }) {
             variant="outline"
             size="sm"
             onClick={handleFetch}
-            disabled={!startDate || !endDate || fetching}
+            disabled={!startDate || !endDate || fetching || (startDate >= endDate)}
           >
             {fetching
               ? <><RefreshCw size={13} className={styles.spin} /> Fetching…</>

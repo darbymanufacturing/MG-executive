@@ -42,7 +42,7 @@ export default function ChecklistTab() {
       if (statusFilter === 'done' && !t.done) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (!t.text.toLowerCase().includes(q) && !t.projectName.toLowerCase().includes(q)) return false;
+        if (!(t.text ?? '').toLowerCase().includes(q) && !t.projectName.toLowerCase().includes(q)) return false;
       }
       return true;
     });

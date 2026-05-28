@@ -8,18 +8,18 @@ import { db } from '../lib/firebase.js';
 
 const SEED_PROJECTS = [
   {
-    name: 'XSlide Nafplion',
-    tagline: 'Full-season scooter operations in Nafplion',
+    name: 'Omni Nafplio Pilot',
+    tagline: 'Full-season scooter operations in Nafplio',
     owner: 'Kostas',
     status: 'onTrack',
     projectType: 'Operations',
     linkedCity: 'Nafplion',
-    tags: ['xslide', 'nafplion'],
+    tags: ['omni', 'nafplio'],
     startDate: '2026-01-01',
     targetDate: '2026-10-31',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-nafplio-1',
         number: 1,
         name: 'Fleet Deployment',
         doneCriteria: ['76 scooters operational', 'Hub location confirmed'],
@@ -30,10 +30,10 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-nafplio-2',
         number: 2,
         name: 'Season Launch',
-        doneCriteria: ['App live in Nafplion zone', 'First 100 rides logged'],
+        doneCriteria: ['App live in Nafplio zone', 'First 100 rides logged'],
         status: 'inProgress',
         targetDate: '2026-04-30',
         actualDate: null,
@@ -41,7 +41,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-nafplio-3',
         number: 3,
         name: 'Full Season Operations',
         doneCriteria: ['Revenue target hit', 'Maintenance cadence stable'],
@@ -68,18 +68,18 @@ const SEED_PROJECTS = [
     archived: false,
   },
   {
-    name: 'XSlide Corinth',
+    name: 'Omni Corinth',
     tagline: 'Scooter operations in Corinth',
     owner: 'Panos',
     status: 'onTrack',
     projectType: 'Operations',
     linkedCity: 'Corinth',
-    tags: ['xslide', 'corinth'],
+    tags: ['omni', 'corinth'],
     startDate: '2026-01-01',
     targetDate: '2026-10-31',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-corinth-1',
         number: 1,
         name: 'Fleet Deployment',
         doneCriteria: ['40 scooters operational', 'Hub confirmed'],
@@ -90,7 +90,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-corinth-2',
         number: 2,
         name: 'Season Launch',
         doneCriteria: ['App live', 'Revenue generating'],
@@ -128,7 +128,7 @@ const SEED_PROJECTS = [
     targetDate: '2026-06-30',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-otoride-1',
         number: 1,
         name: 'AADE Integration',
         doneCriteria: ['Tax integration live', 'Test rides passing'],
@@ -139,7 +139,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-otoride-2',
         number: 2,
         name: 'Full Cutover',
         doneCriteria: ['All cities on OTORide', 'Old system decommissioned'],
@@ -158,7 +158,7 @@ const SEED_PROJECTS = [
     },
     blockers: [
       {
-        id: crypto.randomUUID(),
+        id: 'blocker-otoride-1',
         text: 'AADE tax integration — waiting on OTORide team',
         type: 'external',
         resolved: false,
@@ -187,7 +187,7 @@ const SEED_PROJECTS = [
     targetDate: '2026-05-31',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-pow-1',
         number: 1,
         name: 'Build & Launch',
         doneCriteria: ['Weekly review dashboard live', 'POW logging working'],
@@ -215,7 +215,7 @@ const SEED_PROJECTS = [
   },
   {
     name: 'Franchise System',
-    tagline: 'Develop a replicable franchise model for XSlide',
+    tagline: 'Develop a replicable franchise model for Omni',
     owner: 'Kostas',
     status: 'onTrack',
     projectType: 'Growth',
@@ -225,7 +225,7 @@ const SEED_PROJECTS = [
     targetDate: '2026-12-31',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-franchise-1',
         number: 1,
         name: 'Model Design',
         doneCriteria: ['Franchise terms defined', 'Pilot city identified'],
@@ -236,7 +236,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-franchise-2',
         number: 2,
         name: 'Pilot Launch',
         doneCriteria: ['First franchisee signed', 'Operations running'],
@@ -274,7 +274,7 @@ const SEED_PROJECTS = [
     targetDate: '2026-06-30',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-tepix-1',
         number: 1,
         name: 'Application Submission',
         doneCriteria: ['All docs gathered', 'Application submitted to bank'],
@@ -285,7 +285,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-tepix-2',
         number: 2,
         name: 'Approval & Drawdown',
         doneCriteria: ['Loan approved', 'Funds in account'],
@@ -323,7 +323,7 @@ const SEED_PROJECTS = [
     targetDate: '2026-05-15',
     phases: [
       {
-        id: crypto.randomUUID(),
+        id: 'phase-hire-1',
         number: 1,
         name: 'Recruitment',
         doneCriteria: ['Job post published', 'Candidates interviewed', 'Offer sent'],
@@ -334,7 +334,7 @@ const SEED_PROJECTS = [
         parallel: false,
       },
       {
-        id: crypto.randomUUID(),
+        id: 'phase-hire-2',
         number: 2,
         name: 'Onboarding',
         doneCriteria: ['Contract signed', 'Employee trained on scooter ops'],
@@ -353,7 +353,7 @@ const SEED_PROJECTS = [
     },
     blockers: [
       {
-        id: crypto.randomUUID(),
+        id: 'blocker-hire-1',
         text: 'Interview candidates not yet identified',
         type: 'internal',
         resolved: false,

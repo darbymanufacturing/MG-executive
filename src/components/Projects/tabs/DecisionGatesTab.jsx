@@ -27,9 +27,10 @@ function daysUntil(dateStr) {
 function GateForm({ open, onClose, onSave, initial }) {
   const [form, setForm] = useState(EMPTY_GATE);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
-    if (open) setForm(initial ? { ...EMPTY_GATE, ...initial } : EMPTY_GATE);
+    if (open) { setForm(initial ? { ...EMPTY_GATE, ...initial } : EMPTY_GATE); setFormError(''); }
   }, [open, initial]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -37,11 +38,22 @@ function GateForm({ open, onClose, onSave, initial }) {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const threshold    = Number(form.threshold);
+    const currentValue = Number(form.currentValue);
+    if (form.threshold !== '' && !Number.isFinite(threshold)) {
+      setFormError('Please enter a valid number for threshold');
+      return;
+    }
+    if (form.currentValue !== '' && !Number.isFinite(currentValue)) {
+      setFormError('Please enter a valid number for current value');
+      return;
+    }
+    setFormError('');
     setSaving(true);
     await onSave({
       ...form,
-      threshold:    Number(form.threshold)    || 0,
-      currentValue: Number(form.currentValue) || 0,
+      threshold:    Number.isFinite(threshold)    ? threshold    : 0,
+      currentValue: Number.isFinite(currentValue) ? currentValue : 0,
     });
     setSaving(false);
     onClose();
@@ -92,6 +104,7 @@ function GateForm({ open, onClose, onSave, initial }) {
           <label>Notes</label>
           <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2} placeholder="Context, assumptions, conditions…" />
         </div>
+        {formError && <p style={{ color: 'var(--status-red)', fontSize: 13, margin: '4px 0' }}>{formError}</p>}
         <div className={styles.formActions}>
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : initial ? 'Save Changes' : 'Create Gate'}</Button>

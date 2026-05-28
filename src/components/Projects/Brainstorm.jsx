@@ -19,23 +19,39 @@ export default function Brainstorm() {
     e.preventDefault();
     if (!text.trim()) return;
     setSaving(true);
-    await addBrainstormIdea({ text: text.trim(), tag });
-    setText('');
-    setTag('General');
-    setShowForm(false);
+    try {
+      await addBrainstormIdea({ text: text.trim(), tag });
+      setText('');
+      setTag('General');
+      setShowForm(false);
+    } catch (err) {
+      console.error('Failed to add idea:', err);
+    }
     setSaving(false);
   }
 
-  function toggleDone(idea) {
-    updateBrainstormIdea(idea._docId, { done: !idea.done });
+  async function toggleDone(idea) {
+    try {
+      await updateBrainstormIdea(idea._docId, { done: !idea.done });
+    } catch (err) {
+      console.error('Failed to update idea:', err);
+    }
   }
 
-  function archiveIdea(idea) {
-    updateBrainstormIdea(idea._docId, { archived: true, archivedAt: new Date().toISOString() });
+  async function archiveIdea(idea) {
+    try {
+      await updateBrainstormIdea(idea._docId, { archived: true, archivedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('Failed to archive idea:', err);
+    }
   }
 
-  function restoreIdea(idea) {
-    updateBrainstormIdea(idea._docId, { archived: false, archivedAt: null });
+  async function restoreIdea(idea) {
+    try {
+      await updateBrainstormIdea(idea._docId, { archived: false, archivedAt: null });
+    } catch (err) {
+      console.error('Failed to restore idea:', err);
+    }
   }
 
   const active   = brainstormIdeas.filter((i) => !i.archived);
@@ -129,7 +145,7 @@ export default function Brainstorm() {
           {sortedActive.map((idea) => (
             <li key={idea._docId} className={`${styles.entry} ${idea.done ? styles.entryDone : ''}`}>
               <div className={styles.entryMeta}>
-                <span className={styles.date}>{idea.createdAt?.slice(0, 10)}</span>
+                <span className={styles.date}>{(idea.createdAt?.toDate ? idea.createdAt.toDate().toISOString() : String(idea.createdAt || '')).slice(0, 10)}</span>
                 {idea.tag && idea.tag !== 'General' && (
                   <span className={styles.tagBadge}>{idea.tag}</span>
                 )}
@@ -158,7 +174,7 @@ export default function Brainstorm() {
                   )}
                   <button
                     className={styles.deleteBtn}
-                    onClick={() => deleteBrainstormIdea(idea._docId)}
+                    onClick={() => { if (window.confirm('Delete this idea? This cannot be undone.')) deleteBrainstormIdea(idea._docId); }}
                     title="Delete"
                   >
                     <X size={13} />
@@ -187,7 +203,7 @@ export default function Brainstorm() {
               {filteredArchived.map((idea) => (
                 <li key={idea._docId} className={`${styles.entry} ${styles.entryArchived}`}>
                   <div className={styles.entryMeta}>
-                    <span className={styles.date}>{idea.createdAt?.slice(0, 10)}</span>
+                    <span className={styles.date}>{(idea.createdAt?.toDate ? idea.createdAt.toDate().toISOString() : String(idea.createdAt || '')).slice(0, 10)}</span>
                     {idea.tag && idea.tag !== 'General' && (
                       <span className={styles.tagBadge}>{idea.tag}</span>
                     )}
@@ -207,7 +223,7 @@ export default function Brainstorm() {
                       </button>
                       <button
                         className={styles.deleteBtn}
-                        onClick={() => deleteBrainstormIdea(idea._docId)}
+                        onClick={() => { if (window.confirm('Delete this idea? This cannot be undone.')) deleteBrainstormIdea(idea._docId); }}
                         title="Delete permanently"
                       >
                         <X size={13} />

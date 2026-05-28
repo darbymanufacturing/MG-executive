@@ -29,20 +29,25 @@ export default function NewProjectModal({ onClose }) {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
-    await addProject({
-      ...form,
-      plannedBudget: form.plannedBudget ? Number(form.plannedBudget) : null,
-      linkedCity: form.linkedCity || null,
-      phases: [],
-      blockers: [],
-      updates: [],
-      decisions: [],
-      powEntries: [],
-      linkedProjectIds: [],
-      tags: [],
-      nextAction: null,
-    });
-    onClose();
+    try {
+      await addProject({
+        ...form,
+        plannedBudget: form.plannedBudget ? Number(form.plannedBudget) : null,
+        linkedCity: form.linkedCity || null,
+        phases: [],
+        blockers: [],
+        updates: [],
+        decisions: [],
+        powEntries: [],
+        linkedProjectIds: [],
+        tags: [],
+        nextAction: null,
+      });
+      onClose();
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      setSaving(false);
+    }
   }
 
   return (
@@ -56,7 +61,7 @@ export default function NewProjectModal({ onClose }) {
             className={styles.input}
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
-            placeholder="e.g. XSlide Santorini"
+            placeholder="e.g. Omni Santorini Pilot"
             autoFocus
             required
           />

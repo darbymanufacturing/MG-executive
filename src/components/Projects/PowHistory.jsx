@@ -24,15 +24,23 @@ export default function PowHistory({ project }) {
 
   // Detect if a POW entry already logged this week
   const weekStart = currentWeekStart();
-  const alreadyLoggedThisWeek = entries.some((e) => e.weekOf === weekStart);
+  // Normalize weekOf before comparing — handles Firestore Timestamps (#269)
+  const alreadyLoggedThisWeek = entries.some((e) => {
+    const storedWeekOf = e.weekOf?.toDate ? e.weekOf.toDate().toISOString().slice(0, 10) : String(e.weekOf || '');
+    return storedWeekOf === weekStart;
+  });
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.moved.trim()) return;
     setSaving(true);
-    await addPowEntry(project._docId, { ...form, weekOf: weekStart });
-    setForm({ moved: '', blocked: '', focusNext: '', status: project.effectiveStatus || 'onTrack', loggedBy: 'Kostas' });
-    setShowForm(false);
+    try {
+      await addPowEntry(project._docId, { ...form, weekOf: weekStart });
+      setForm({ moved: '', blocked: '', focusNext: '', status: project.effectiveStatus || 'onTrack', loggedBy: 'Kostas' });
+      setShowForm(false);
+    } catch (err) {
+      console.error('Failed to save POW entry:', err);
+    }
     setSaving(false);
   }
 

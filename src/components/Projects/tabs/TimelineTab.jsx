@@ -34,10 +34,10 @@ function buildTicks(minDate, maxDate, zoom) {
   const end = new Date(maxDate);
 
   let step;
-  if (zoom === '1M')      step = { months: 1, label: (d) => d.toLocaleString('default', { month: 'short', day: 'numeric' }) };
-  else if (zoom === '3M') step = { months: 1, label: (d) => d.toLocaleString('default', { month: 'short', year: '2-digit' }) };
-  else if (zoom === '6M') step = { months: 2, label: (d) => d.toLocaleString('default', { month: 'short', year: '2-digit' }) };
-  else                    step = { months: 3, label: (d) => d.toLocaleString('default', { month: 'short', year: 'numeric' }) };
+  if (zoom === '1M')      step = { months: 1, label: (d) => d.toLocaleString('en-GB', { month: 'short', day: 'numeric' }) };
+  else if (zoom === '3M') step = { months: 1, label: (d) => d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }) };
+  else if (zoom === '6M') step = { months: 2, label: (d) => d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }) };
+  else                    step = { months: 3, label: (d) => d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }) };
 
   while (d <= end) {
     ticks.push({ date: new Date(d), label: step.label(d) });
@@ -48,6 +48,7 @@ function buildTicks(minDate, maxDate, zoom) {
 
 /** Map a date to an X coordinate within the chart area. */
 function dateToX(date, minTime, totalMs, chartW) {
+  if (totalMs === 0) return 0;
   return ((date.getTime() - minTime) / totalMs) * chartW;
 }
 
