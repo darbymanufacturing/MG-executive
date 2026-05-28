@@ -19,6 +19,11 @@ body {
   min-height: 100vh;
 }
 
+html[data-theme="dark"] body {
+  background-color: #060810;
+  color: #E2E8F0;
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
   font-weight: 600;

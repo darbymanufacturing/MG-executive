@@ -113,8 +113,15 @@ function AppShell() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const rootRef = useRef(null);
 
-  /* Theme */
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  /* Theme — also propagate to <html> so body/globals.css can read it */
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+    return saved;
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
   const toggleTheme = useCallback(() => {
     if (rootRef.current) {
       rootRef.current.classList.add('theme-transitioning');
