@@ -1,8 +1,23 @@
-import { useRef, useState } from 'react';
-import { Sparkles, Paperclip, Mic, Sun, Moon, Bell, Menu, X } from 'lucide-react';
+import { useRef } from 'react';
+import { Sparkles, Paperclip, Mic, Sun, Moon, Bell, Menu, X, RefreshCw } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import useHoppSync from '../../hooks/useHoppSync.js';
 import styles from './TopBar.module.css';
+
+function formatRelative(ts) {
+  if (!ts) return null;
+  const date = ts?.toDate ? ts.toDate() : new Date(ts);
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = Date.now() - date.getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1)   return 'just now';
+  if (min < 60)  return `${min} min ago`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 function Avatar({ name = 'U', size = 30 }) {
   const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
@@ -20,8 +35,15 @@ function Avatar({ name = 'U', size = 30 }) {
 export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onOpenNotifications, onMenuToggle, sidebarOpen }) {
   const { unreadCount } = useNotifications();
   const { user } = useAuth();
+  const { refresh, syncing, lastSync } = useHoppSync();
   const inputRef = useRef(null);
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+
+  const refreshTitle = syncing
+    ? 'Syncing…'
+    : lastSync?.finishedAt
+      ? `Refresh — last synced ${formatRelative(lastSync.finishedAt)}`
+      : 'Refresh data from Hopp';
 
   const handleCaptureBarClick = () => {
     onOpenCapture?.();
@@ -57,6 +79,17 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
 
       {/* Actions */}
       <div className={styles.actions}>
+        {/* Refresh — manual Hopp sync trigger; mirrors the hourly cron, useful when
+            you want fresh data without waiting. See docs/runbooks/hopp-sync-troubleshooting.md. */}
+        <button
+          className={`btn btn-ghost btn-sm ${styles.refreshBtn} ${syncing ? styles.refreshing : ''}`}
+          onClick={refresh}
+          disabled={syncing}
+          title={refreshTitle}
+          aria-label="Refresh data from Hopp"
+        >
+          <RefreshCw size={16} />
+        </button>
         <button className="btn btn-ghost btn-sm" onClick={onToggleTheme} title="Toggle theme">
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
   DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart, ClipboardList,
-  Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal,
+  Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal, RefreshCw,
 } from 'lucide-react';
+import useHoppSync from '../hooks/useHoppSync.js';
 import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
@@ -674,6 +675,12 @@ git checkout main`}
           </div>
         </section>
 
+        {/* ─── Hopp Sync ─────────────────────────────────────────
+            Mirrors the hourly cron + Refresh button. Shows recent sync history
+            from the syncLogs collection so admins can confirm freshness +
+            spot per-scooter errors. See docs/runbooks/hopp-sync-troubleshooting.md. */}
+        <HoppSyncSection />
+
       </div>
 
       <ConfirmDialog
@@ -694,5 +701,102 @@ git checkout main`}
         confirmLabel="Remove Access"
       />
     </div>
+  );
+}
+
+/* ── Hopp Sync section (Phase 1.8) ──────────────────────────── */
+function HoppSyncSection() {
+  const { refresh, syncing, lastSync, recentSyncs } = useHoppSync();
+
+  const lastTs = lastSync?.finishedAt?.toDate?.() ?? null;
+  // ageMin is intentionally derived from Date.now() at render time so the
+  // "Last synced N min ago" label updates when the user navigates back to this
+  // page. The react-hooks/purity rule flags this as impure but it's the desired
+  // behaviour for a freshness indicator.
+  // eslint-disable-next-line react-hooks/purity
+  const ageMin = lastTs ? Math.floor((Date.now() - lastTs.getTime()) / 60000) : null;
+  const allOk = recentSyncs.length > 0 && recentSyncs.slice(0, 3).every((s) => s.ok);
+  const statusColor = !lastTs
+    ? 'var(--fg-muted)'
+    : !lastSync.ok ? 'var(--status-red)'
+    : ageMin > 120 ? 'var(--status-amber)'
+    : allOk ? 'var(--status-green)' : 'var(--status-amber)';
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <RefreshCw size={18} className={styles.sectionIcon} />
+        <h2 className={styles.sectionTitle}>Hopp Sync</h2>
+      </div>
+      <p className={styles.sectionDesc}>
+        Trips, status events, and repair tickets auto-sync from Hopp every hour. The Refresh button in the top bar (or below) triggers an on-demand sync. Manual CSV imports remain available at <code>PME → Ingest</code>, <code>Maintenance → Repair Log</code>, and <code>Scooter Detail → Trips</code> as a fallback for backfill.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
+          <span style={{ fontSize: 13, color: 'var(--fg-secondary)' }}>
+            {lastTs
+              ? `Last synced ${ageMin < 1 ? 'just now' : `${ageMin} min ago`}`
+              : 'No sync history yet'}
+          </span>
+        </div>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={refresh}
+          disabled={syncing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          {syncing
+            ? <><Loader2 size={14} className={styles.spinning} /> Syncing…</>
+            : <><RefreshCw size={14} /> Sync now</>}
+        </button>
+      </div>
+
+      {recentSyncs.length > 0 && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-section)', textAlign: 'left' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>When</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>Trigger</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>Trips / Events / Tickets</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>Duration</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>Errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentSyncs.map((s) => {
+                const when = s.finishedAt?.toDate ? s.finishedAt.toDate() : null;
+                const w = s.written || {};
+                const errs = s.errors?.length || 0;
+                return (
+                  <tr key={s.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {s.ok
+                          ? <CheckCircle size={13} style={{ color: 'var(--status-green)' }} />
+                          : <AlertCircle size={13} style={{ color: 'var(--status-red)' }} />}
+                        {when ? when.toLocaleString() : '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--fg-muted)' }}>{s.trigger}</td>
+                    <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>
+                      {(w.trips || 0)} / {(w.events || 0)} / {(w.tickets || 0)}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--fg-muted)' }}>{s.durationMs ? `${Math.round(s.durationMs / 100) / 10}s` : '—'}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      {errs > 0
+                        ? <span style={{ color: 'var(--status-red)' }}>{errs}</span>
+                        : <span style={{ color: 'var(--fg-muted)' }}>0</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

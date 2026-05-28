@@ -94,6 +94,31 @@
   margin-left: auto;
   flex-shrink: 0;
 }
+/* Refresh button — branded with rust accent on hover; spins while syncing */
+.refreshBtn {
+  position: relative;
+  color: var(--fg-secondary);
+  transition: color 120ms ease, background 120ms ease;
+}
+.refreshBtn:hover:not(:disabled) {
+  color: var(--accent);
+}
+.refreshBtn:disabled {
+  cursor: progress;
+  opacity: 0.85;
+}
+.refreshing svg {
+  color: var(--accent);
+  animation: omni-refresh-spin 900ms linear infinite;
+}
+@keyframes omni-refresh-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refreshing svg { animation: none; }
+}
+
 .bellBtn {
   position: relative;
 }
