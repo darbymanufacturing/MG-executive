@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron-hopp-sync",
-      "schedule": "0 * * * *"
+      "schedule": "30 5 * * *"
     }
   ]
 }
