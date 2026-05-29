@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import * as Sentry from '@sentry/react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import styles from './ErrorBoundary.module.css';
 
@@ -11,7 +12,7 @@ import styles from './ErrorBoundary.module.css';
  *   title         — optional heading override
  *   message       — optional body copy override
  *   fallback      — optional ReactNode or (error, reset) => ReactNode
- *   onError       — optional (error, errorInfo) => void; for Sentry wiring (Phase 6.4)
+ *   onError       — optional (error, errorInfo) => void; extra hook (Sentry capture is already wired in componentDidCatch)
  *   onReset       — optional () => void; called when user clicks "Try again"
  *   resetKeys     — optional array; if any value changes, the boundary auto-resets
  */
@@ -35,6 +36,10 @@ export class ErrorBoundary extends Component {
     if (typeof console !== 'undefined') {
       console.error('[ErrorBoundary]', error, errorInfo);
     }
+    // Report to Sentry — a no-op if Sentry was never initialised (dev / no DSN).
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: errorInfo?.componentStack } },
+    });
     if (this.props.onError) {
       try { this.props.onError(error, errorInfo); } catch { /* swallow */ }
     }
