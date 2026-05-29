@@ -38,3 +38,6 @@ emulator-data/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# On-demand Firestore backups (contain ALL prod data — keep off git; copy elsewhere for durability)
+backups/
