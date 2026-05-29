@@ -37,12 +37,17 @@ function buildPrompt(date, data) {
     costsThisMonth = 0, criticalIssues = 0, fleetSize = 0, inRepair = 0,
   } = data;
 
+  // Defense-in-depth: coerce the array fields so a malformed payload (e.g. a count
+  // sent where an array is expected) can never throw a TypeError → 500.
+  const issuesArr   = Array.isArray(openIssues)   ? openIssues   : [];
+  const projectsArr = Array.isArray(openProjects) ? openProjects : [];
+
   const revChange = revenuePrevWeek > 0
     ? (((revenueThisWeek - revenuePrevWeek) / revenuePrevWeek) * 100).toFixed(1)
     : null;
 
-  const criticalIssuesList = openIssues.filter(i => i.urgency === 'critical' || i.urgency === 'high');
-  const blockedProjects = openProjects.filter(p => p.blockers?.length > 0 || p.status === 'Red');
+  const criticalIssuesList = issuesArr.filter(i => i.urgency === 'critical' || i.urgency === 'high');
+  const blockedProjects = projectsArr.filter(p => p.blockers?.length > 0 || p.status === 'Red');
 
   return `Today is ${date}. Generate a concise daily operational brief for the founder of a Greek micromobility company (Omni platform).
 
@@ -51,7 +56,7 @@ OPERATIONAL DATA:
 - Revenue this week: €${revenueThisWeek.toLocaleString()}${revChange ? ` (${revChange > 0 ? '+' : ''}${revChange}% vs last week)` : ''}
 - Costs this month: €${costsThisMonth.toLocaleString()}
 - Maintenance: ${activeTickets} active tickets, ${overdueTickets.length} overdue (>7 days), ${completedToday} closed today
-- Issues: ${openIssues.length} open (${criticalIssues} critical/high)
+- Issues: ${issuesArr.length} open (${criticalIssues} critical/high)
 ${criticalIssuesList.length ? `- Critical/high issues:\n${criticalIssuesList.slice(0, 3).map(i => `  • [${i.urgency.toUpperCase()}] ${i.title}${i.nextAction ? ` → ${i.nextAction}` : ''}`).join('\n')}` : ''}
 ${blockedProjects.length ? `- Blocked projects:\n${blockedProjects.slice(0, 2).map(p => `  • ${p.name}${p.blockers?.[0]?.text ? `: ${p.blockers[0].text.slice(0, 60)}` : ''}`).join('\n')}` : ''}
 ${overdueTickets.length ? `- Most overdue tickets:\n${overdueTickets.slice(0, 2).map(t => `  • ${t.issueDescription?.slice(0, 60)} (${t.daysOpen}d)`).join('\n')}` : ''}

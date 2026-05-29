@@ -135,11 +135,13 @@ export default function DailyBrief() {
             userId: user.uid,
             date: todayKey(),
             data: {
-              openIssues:      openIssuesCount,
+              // buildPrompt expects ARRAYS here (it .filter()s + reads titles/names), not counts.
+              // Sending counts threw a TypeError → 500 (brief unavailable). Send the real arrays.
+              openIssues:      issueCtx?.activeIssues ?? [],
               overdueTickets:  [],
               activeTickets:   activeTicketsCount,
               completedToday:  0,
-              openProjects:    activeProjectsCount,
+              openProjects:    projectCtx?.activeProjects ?? [],
               revenueThisWeek: 0,
               revenuePrevWeek: 0,
               revenueThisMonth,
