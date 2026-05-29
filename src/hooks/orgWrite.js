@@ -1,8 +1,11 @@
 /**
  * orgWrite / orgUpdate / orgDelete — the leak-proof WRITE half of the ADR-0003
  * org-scoped data layer. Every create auto-stamps `orgId` (from the active org
- * published by OrgProvider) + `createdByUid` + `createdAt`/`updatedAt`, and routes
- * through `safeWrite` so a failure toasts instead of disappearing.
+ * published by OrgProvider) + `createdByUid`, and stamps `createdAt`/`updatedAt`
+ * with a server timestamp UNLESS the caller passes explicit values (e.g.
+ * CostContext keeps ISO-string timestamps to match docs/SCHEMA.md and avoid a
+ * mixed-type field). Routes through `safeWrite` so a failure toasts instead of
+ * disappearing.
  *
  * `orgId` comes from a module singleton (published by OrgProvider via
  * `setActiveOrg`, mirroring the existing `setToastErrorHandler` pattern) so these
@@ -55,7 +58,7 @@ export async function orgWrite(collectionName, data, opts = {}) {
     orgId,
     createdByUid: data.createdByUid ?? uid,
     createdAt: data.createdAt ?? serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    updatedAt: data.updatedAt ?? serverTimestamp(),
   };
   return safeWrite(
     () => (id
@@ -71,7 +74,7 @@ export async function orgUpdate(collectionName, docId, patch, opts = {}) {
   // Firestore rules block patching another org's doc. We only guard that a write
   // never happens with no org in context.
   return safeWrite(
-    () => updateDoc(doc(db, collectionName, docId), { ...patch, updatedAt: serverTimestamp() }),
+    () => updateDoc(doc(db, collectionName, docId), { ...patch, updatedAt: patch.updatedAt ?? serverTimestamp() }),
     { errorMessage: `Failed to update ${collectionName}`, ...opts },
   );
 }

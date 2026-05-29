@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'rea
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { ErrorBoundary } from './components/Shared/ErrorBoundary.jsx';
+import { OrgProvider } from './context/OrgContext.jsx';
 import { CostProvider } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
@@ -359,29 +360,31 @@ export default function App() {
                 path="/*"
                 element={
                   <ProtectedRoute>
-                    <CostProvider>
-                      <RevenueProvider>
-                        <MaintenanceProvider>
-                          <RepairProcedureProvider>
-                            <RepairSessionProvider>
-                              <ProjectProvider>
-                                <IssueProvider>
-                                  <InboxProvider>
-                                    <NotificationProvider>
-                                      <DiaryProvider>
-                                        <ErrorBoundary>
-                                          <AppShell />
-                                        </ErrorBoundary>
-                                      </DiaryProvider>
-                                    </NotificationProvider>
-                                  </InboxProvider>
-                                </IssueProvider>
-                              </ProjectProvider>
-                            </RepairSessionProvider>
-                          </RepairProcedureProvider>
-                        </MaintenanceProvider>
-                      </RevenueProvider>
-                    </CostProvider>
+                    <OrgProvider>
+                      <CostProvider>
+                        <RevenueProvider>
+                          <MaintenanceProvider>
+                            <RepairProcedureProvider>
+                              <RepairSessionProvider>
+                                <ProjectProvider>
+                                  <IssueProvider>
+                                    <InboxProvider>
+                                      <NotificationProvider>
+                                        <DiaryProvider>
+                                          <ErrorBoundary>
+                                            <AppShell />
+                                          </ErrorBoundary>
+                                        </DiaryProvider>
+                                      </NotificationProvider>
+                                    </InboxProvider>
+                                  </IssueProvider>
+                                </ProjectProvider>
+                              </RepairSessionProvider>
+                            </RepairProcedureProvider>
+                          </MaintenanceProvider>
+                        </RevenueProvider>
+                      </CostProvider>
+                    </OrgProvider>
                   </ProtectedRoute>
                 }
               />

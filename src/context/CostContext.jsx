@@ -1,86 +1,74 @@
-import { createContext, useContext, useCallback, useState, useEffect } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  collection, doc, onSnapshot,
-  addDoc, updateDoc, deleteDoc, setDoc, writeBatch, getDocs,
-  query, limit,
+  collection, doc, writeBatch, getDocs, query, where,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { DEFAULT_CONFIG } from '../utils/constants.js';
 import { SAMPLE_COSTS, SAMPLE_CONFIG } from '../utils/sampleData.js';
-import { useAuth } from './AuthContext.jsx';
+import { useOrg } from './OrgContext.jsx';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgDoc } from '../hooks/useOrgDoc.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 
-// Firestore paths
-const COSTS_COL = 'costs';
-const CONFIG_DOC = 'config/fleet';
+// ── Firestore paths (ADR-0002: flat collections + orgId; ADR-0003 query layer) ──
+const COSTS_COL  = 'costs';
+const CONFIG_COL = 'config';
+// Singleton fleet config is org-scoped by composite doc id: `config/${orgId}_fleet`
+// (was `config/fleet` pre-Phase-2). See docs/SCHEMA.md.
+const fleetConfigId = (orgId) => `${orgId}_fleet`;
+
 const BATCH_SIZE = 450; // safely below Firestore's 500-op batch limit
-// #365 — Phase 1 free-tier cap. costs is a small collection, so this bounds the
-// previously-unbounded root listener with zero behaviour change. orderBy is omitted
-// on purpose: sample/imported costs may lack createdAt, and orderBy would exclude them.
+// #365 — free-tier cap on the previously-unbounded costs listener. orderBy is
+// omitted on purpose: sample/imported costs may lack createdAt, and orderBy would
+// exclude them. Preserved verbatim through the Phase-2 useOrgCollection conversion.
 const MAX_COSTS = 2000;
 
 const CostContext = createContext(null);
 
-// Module-level flag: prevents StrictMode double-invoke from writing bootstrap defaults twice
-let configBootstrapped = false;
+// Per-org bootstrap guard: prevents a StrictMode double-write AND a re-bootstrap
+// when a different org signs in within one session. Holds config doc-ids already seeded.
+const bootstrappedConfigs = new Set();
 
 export function CostProvider({ children }) {
-  const { user } = useAuth();
-  const [costs, setCosts] = useState([]);
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [loading, setLoading] = useState(true);
-  // Track each listener independently to avoid premature loading=false
-  const [costsLoaded,  setCostsLoaded]  = useState(false);
-  const [configLoaded, setConfigLoaded] = useState(false);
+  const { orgId } = useOrg();
+  const configDocId = orgId ? fleetConfigId(orgId) : null;
 
+  // ── Real-time reads through the locked org layer (ADR-0003) ──────────────────
+  // Both hooks inject where('orgId','==',orgId) and throw if the org resolved but
+  // is absent — costs/config can never leak across orgs or load unscoped.
+  const { items: costs, loading: costsLoading } = useOrgCollection(COSTS_COL, { limit: MAX_COSTS });
+  const { item: configItem, loading: configLoading } = useOrgDoc(CONFIG_COL, configDocId);
+
+  // Config is derived from the org doc (minus the synthetic _docId), falling back to
+  // defaults. Optimistic update + rollback come for free from onSnapshot latency
+  // compensation, so no manual local config state is needed anymore.
+  const config = useMemo(() => {
+    if (!configItem) return DEFAULT_CONFIG;
+    const { _docId, ...configData } = configItem;
+    return configData;
+  }, [configItem]);
+
+  const loading = costsLoading || configLoading;
+
+  // First load for an org with no config doc → silently seed defaults (org-stamped),
+  // once per org. Mirrors the pre-Phase-2 bootstrap; no setState so it's effect-safe.
   useEffect(() => {
-    if (costsLoaded && configLoaded) setLoading(false);
-  }, [costsLoaded, configLoaded]);
+    if (configLoading || !configDocId) return;
+    if (!configItem && !bootstrappedConfigs.has(configDocId)) {
+      bootstrappedConfigs.add(configDocId);
+      orgWrite(CONFIG_COL, DEFAULT_CONFIG, { id: configDocId, silent: true });
+    }
+  }, [configItem, configLoading, configDocId]);
 
-  // ── Real-time listeners ───────────────────────────────────────────────────
-
-  useEffect(() => {
-    // Reset state when user changes (e.g. sign out or different user signs in)
-    setCosts([]);
-    setConfig(DEFAULT_CONFIG);
-    setLoading(true);
-    setCostsLoaded(false);
-    setConfigLoaded(false);
-
-    // Listen to costs collection
-    const unsubCosts = onSnapshot(query(collection(db, COSTS_COL), limit(MAX_COSTS)), (snap) => {
-      const items = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
-      setCosts(items);
-      setCostsLoaded(true);
-    });
-
-    // Listen to config document
-    const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
-      if (snap.exists()) {
-        setConfig(snap.data());
-      } else {
-        // First time — write defaults (silent bootstrap, guarded against StrictMode double-fire)
-        if (!configBootstrapped) {
-          configBootstrapped = true;
-          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
-        }
-      }
-      setConfigLoaded(true);
-    });
-
-    return () => { unsubCosts(); unsubConfig(); };
-  }, [user]);
-
-  // ── CRUD ──────────────────────────────────────────────────────────────────
+  // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   const addCost = useCallback(async (costData) => {
     const now = new Date().toISOString();
+    // Keep ISO-string timestamps + the business `id` (uuid); orgWrite adds orgId + createdByUid.
     const newCost = { ...costData, id: uuidv4(), createdAt: now, updatedAt: now };
-    await safeWrite(
-      () => addDoc(collection(db, COSTS_COL), newCost),
-      { rethrow: true, errorMessage: 'Failed to save cost' },
-    );
+    await orgWrite(COSTS_COL, newCost, { rethrow: true, errorMessage: 'Failed to save cost' });
     return newCost;
   }, []);
 
@@ -88,12 +76,10 @@ export function CostProvider({ children }) {
     // Find the Firestore document by the app-level id field
     const cost = costs.find((c) => c.id === id);
     if (!cost?._docId) return;
-    await safeWrite(
-      () => updateDoc(doc(db, COSTS_COL, cost._docId), {
-        ...costData,
-        id,
-        updatedAt: new Date().toISOString(),
-      }),
+    await orgUpdate(
+      COSTS_COL,
+      cost._docId,
+      { ...costData, id, updatedAt: new Date().toISOString() },
       { rethrow: true, errorMessage: 'Failed to update cost' },
     );
   }, [costs]);
@@ -101,79 +87,80 @@ export function CostProvider({ children }) {
   const deleteCost = useCallback(async (id) => {
     const cost = costs.find((c) => c.id === id);
     if (!cost?._docId) return;
-    await safeWrite(
-      () => deleteDoc(doc(db, COSTS_COL, cost._docId)),
-      { rethrow: true, errorMessage: 'Failed to delete cost' },
-    );
+    await orgDelete(COSTS_COL, cost._docId, { rethrow: true, errorMessage: 'Failed to delete cost' });
   }, [costs]);
 
   const getCostById = useCallback((id) => costs.find((c) => c.id === id), [costs]);
 
-  // ── Config ────────────────────────────────────────────────────────────────
+  // ── Config ─────────────────────────────────────────────────────────────────────
 
   const updateConfig = useCallback(async (updates) => {
-    const previousConfig = config;
-    const next = { ...config, ...updates };
-    setConfig(next); // optimistic local update
-    await safeWrite(
-      () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to save config — change reverted',
-        optimisticRollback: () => setConfig(previousConfig),
-      },
-    );
-  }, [config]);
+    if (!configDocId) return;
+    // Full-replace (matches the pre-Phase-2 setDoc semantics). Strip updatedAt so it
+    // always bumps; orgWrite re-stamps orgId and preserves createdAt if present.
+    const { updatedAt: _drop, ...base } = config;
+    const next = { ...base, ...updates };
+    await orgWrite(CONFIG_COL, next, {
+      id: configDocId,
+      rethrow: true,
+      errorMessage: 'Failed to save config — change reverted',
+    });
+  }, [config, configDocId]);
 
-  // ── Sample data ───────────────────────────────────────────────────────────
+  // ── Sample data ──────────────────────────────────────────────────────────────
 
   const loadSampleData = useCallback(async () => {
-    // Delete existing costs in chunks (Firestore batch limit = 500)
-    const existingSnap = await getDocs(collection(db, COSTS_COL));
+    if (!orgId || !configDocId) throw new Error('loadSampleData: no active org');
+    const uid = auth.currentUser?.uid ?? null;
+
+    // Delete THIS org's existing costs in chunks (org-filtered — never another org's).
+    const existingSnap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId)));
     for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while clearing old costs' });
     }
 
-    // Add sample costs in chunks
+    // Add sample costs in chunks, org-stamped.
     for (let i = 0; i < SAMPLE_COSTS.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       SAMPLE_COSTS.slice(i, i + BATCH_SIZE).forEach((cost) => {
         const ref = doc(collection(db, COSTS_COL));
-        batch.set(ref, cost);
+        batch.set(ref, { ...cost, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while seeding costs' });
     }
 
-    await safeWrite(
-      () => setDoc(doc(db, CONFIG_DOC), SAMPLE_CONFIG),
-      { rethrow: true, errorMessage: 'Sample data load failed while writing config' },
-    );
-  }, []);
+    await orgWrite(CONFIG_COL, SAMPLE_CONFIG, {
+      id: configDocId, rethrow: true, errorMessage: 'Sample data load failed while writing config',
+    });
+  }, [orgId, configDocId]);
 
   const clearAllData = useCallback(async () => {
-    const existingSnap = await getDocs(collection(db, COSTS_COL));
+    if (!orgId || !configDocId) throw new Error('clearAllData: no active org');
+    const existingSnap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId)));
     for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Failed to clear costs' });
     }
-    await safeWrite(
-      () => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG),
-      { rethrow: true, errorMessage: 'Failed to reset config to defaults' },
-    );
-  }, []);
+    await orgWrite(CONFIG_COL, DEFAULT_CONFIG, {
+      id: configDocId, rethrow: true, errorMessage: 'Failed to reset config to defaults',
+    });
+  }, [orgId, configDocId]);
 
-  // ── Import ────────────────────────────────────────────────────────────────
+  // ── Import ─────────────────────────────────────────────────────────────────────
 
   const importData = useCallback(async (data, mode = 'replace') => {
+    if (!orgId || !configDocId) throw new Error('importData: no active org');
+    const uid = auth.currentUser?.uid ?? null;
+
     // BUG #42 — split delete + insert into separate batched phases so combined
     // ops never exceed Firestore's 500-op limit.
 
     if (mode === 'replace') {
-      // Phase 1: delete existing docs in chunks of BATCH_SIZE
-      const docsSnap = await getDocs(collection(db, COSTS_COL));
+      // Phase 1: delete THIS org's existing docs in chunks of BATCH_SIZE
+      const docsSnap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId)));
       const allDocs = docsSnap.docs;
       for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
@@ -196,19 +183,19 @@ export function CostProvider({ children }) {
     for (let i = 0; i < costsToInsert.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       costsToInsert.slice(i, i + BATCH_SIZE).forEach((cost) => {
-        const ref = doc(db, COSTS_COL, cost.id || crypto.randomUUID());
-        batch.set(ref, { ...cost, id: cost.id || crypto.randomUUID() });
+        const id = cost.id || crypto.randomUUID(); // compute once so _docId === id field
+        const ref = doc(db, COSTS_COL, id);
+        batch.set(ref, { ...cost, id, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Cost import failed mid-batch' });
     }
 
     if (data.config && mode === 'replace') {
-      await safeWrite(
-        () => setDoc(doc(db, CONFIG_DOC), data.config),
-        { rethrow: true, errorMessage: 'Failed to write imported config' },
-      );
+      await orgWrite(CONFIG_COL, data.config, {
+        id: configDocId, rethrow: true, errorMessage: 'Failed to write imported config',
+      });
     }
-  }, [costs]);
+  }, [costs, orgId, configDocId]);
 
   return (
     <CostContext.Provider
