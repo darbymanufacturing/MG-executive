@@ -9,9 +9,11 @@ const VARIANT_COLORS = {
 
 export default function MetricCard({ label, value, icon: Icon, sublabel, variant = 'default' }) {
   const accentColor = VARIANT_COLORS[variant] ?? VARIANT_COLORS.default;
+  // #284 — aria-label so screen readers announce label + value, not a bare number
+  const ariaLabel = [label, value, sublabel].filter(Boolean).join(': ');
 
   return (
-    <div className={styles.card} style={{ '--accent': accentColor }}>
+    <div className={styles.card} style={{ '--accent': accentColor }} aria-label={ariaLabel}>
       {Icon && (
         <div className={styles.iconWrap}>
           <Icon size={18} style={{ color: accentColor }} />

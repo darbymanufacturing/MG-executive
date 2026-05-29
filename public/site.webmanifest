@@ -1,0 +1,18 @@
+{
+  "name": "Omni Fleet Manager",
+  "short_name": "Omni",
+  "description": "Greek micromobility fleet operations platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#A0521D",
+  "icons": [
+    {
+      "src": "/asterism.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}

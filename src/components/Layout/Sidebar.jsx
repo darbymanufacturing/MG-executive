@@ -63,6 +63,7 @@ function NavItem({ to, icon: Icon, label, badge, collapsed, end }) {
         `${styles.navItem} ${isActive ? styles.active : ''} ${collapsed ? styles.collapsed : ''}`
       }
     >
+      {/* #285 — React Router v7 NavLink auto-applies aria-current="page" on the active link */}
       {({ isActive }) => (
         <>
           {isActive && !collapsed && <div className={styles.activeStripe} />}
@@ -97,12 +98,25 @@ function SidebarSection({ label, children, collapsed }) {
   );
 }
 
+// #84 — safe wrappers: call the hooks but catch the "must be inside provider" error.
+//  React rules of hooks require hooks to be called unconditionally, so we call them
+//  at the top level inside the component below. These helpers let us handle the
+//  case where a provider is absent without crashing.
+function useSafeIssues() {
+  try { return useIssues(); } catch { return null; }
+}
+function useSafeMaintenance() {
+  try { return useMaintenance(); } catch { return null; }
+}
+
 export default function Sidebar({ open, onClose, collapsed = false, onCollapse }) {
   const { user, signOut, userRole } = useAuth();
   const { badgeCount } = useNotifications();
-  const { issues } = useIssues();
-  const { activeCount } = useMaintenance();
-  const openIssueCount = issues.filter(i => i.status !== 'done').length;
+  // #84 — safe reads: null when provider is absent
+  const issueCtx = useSafeIssues();
+  const maintenanceCtx = useSafeMaintenance();
+  const openIssueCount = (issueCtx?.issues ?? []).filter(i => i.status !== 'done').length;
+  const activeCount = maintenanceCtx?.activeCount ?? 0;
   const navigate = useNavigate();
 
   const handleSignOut = useCallback(async () => {

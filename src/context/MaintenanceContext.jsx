@@ -135,11 +135,12 @@ const MaintenanceContext = createContext(null);
 let maintenanceConfigBootstrapped = false;
 
 export function MaintenanceProvider({ children }) {
-  const [tickets,  setTickets]  = useState([]);
-  const [parts,    setParts]    = useState([]);
-  const [scooters, setScooters] = useState([]);
-  const [config,   setConfig]   = useState(DEFAULT_CONFIG);
-  const [loading,  setLoading]  = useState(true);
+  const [tickets,       setTickets]       = useState([]);
+  const [parts,         setParts]         = useState([]);
+  const [scooters,      setScooters]      = useState([]);
+  const [config,        setConfig]        = useState(DEFAULT_CONFIG);
+  const [loading,       setLoading]       = useState(true);
+  const [snapshotError, setSnapshotError] = useState(null);
 
   // Track which listeners have fired at least once
   const [loaded, setLoaded] = useState({ tickets: false, parts: false, config: false, scooters: false });
@@ -153,12 +154,20 @@ export function MaintenanceProvider({ children }) {
         setTickets(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
         markLoaded('tickets');
       },
+      (err) => {
+        console.error('[MaintenanceContext] tickets snapshot error:', err);
+        setSnapshotError(err.message);
+      },
     );
     const unsubParts = onSnapshot(
       query(collection(db, PARTS_COL), limit(MAX_PARTS)),
       (snap) => {
         setParts(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
         markLoaded('parts');
+      },
+      (err) => {
+        console.error('[MaintenanceContext] parts snapshot error:', err);
+        setSnapshotError(err.message);
       },
     );
     const unsubScooters = onSnapshot(
@@ -167,19 +176,30 @@ export function MaintenanceProvider({ children }) {
         setScooters(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
         markLoaded('scooters');
       },
+      (err) => {
+        console.error('[MaintenanceContext] scooters snapshot error:', err);
+        setSnapshotError(err.message);
+      },
     );
-    const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
-      if (snap.exists()) {
-        setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
-      } else {
-        // Bootstrap defaults once — guarded against StrictMode double-fire
-        if (!maintenanceConfigBootstrapped) {
-          maintenanceConfigBootstrapped = true;
-          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+    const unsubConfig = onSnapshot(
+      doc(db, CONFIG_DOC),
+      (snap) => {
+        if (snap.exists()) {
+          setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
+        } else {
+          // Bootstrap defaults once — guarded against StrictMode double-fire
+          if (!maintenanceConfigBootstrapped) {
+            maintenanceConfigBootstrapped = true;
+            safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+          }
         }
-      }
-      markLoaded('config');
-    });
+        markLoaded('config');
+      },
+      (err) => {
+        console.error('[MaintenanceContext] config snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return () => { unsubTickets(); unsubParts(); unsubScooters(); unsubConfig(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -420,46 +440,56 @@ export function MaintenanceProvider({ children }) {
     }
   }, []);
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    tickets: ticketsWithCalc,
+    parts,
+    scooters,
+    config,
+    loading,
+    snapshotError,
+    // Computed
+    activeTickets,
+    activeCount,
+    isAtMaxActive,
+    totalRevenueLost,
+    lowStockParts,
+    // Ticket ops
+    addTicket,
+    updateTicket,
+    deleteTicket,
+    completeTicket,
+    assignTicket,
+    // Scooter ops
+    addScooter,
+    updateScooter,
+    deleteScooter,
+    // Part ops
+    addPart,
+    updatePart,
+    deletePart,
+    // Config
+    updateConfig,
+    // Import
+    importTickets,
+    importParts,
+    // Custom tags
+    addCustomTag,
+    // Seed
+    loadSeedData,
+    patchPartModels,
+  }), [
+    ticketsWithCalc, parts, scooters, config, loading, snapshotError,
+    activeTickets, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts,
+    addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
+    addScooter, updateScooter, deleteScooter,
+    addPart, updatePart, deletePart,
+    updateConfig, importTickets, importParts, addCustomTag,
+    loadSeedData, patchPartModels,
+  ]);
+
   return (
-    <MaintenanceContext.Provider
-      value={{
-        tickets: ticketsWithCalc,
-        parts,
-        scooters,
-        config,
-        loading,
-        // Computed
-        activeTickets,
-        activeCount,
-        isAtMaxActive,
-        totalRevenueLost,
-        lowStockParts,
-        // Ticket ops
-        addTicket,
-        updateTicket,
-        deleteTicket,
-        completeTicket,
-        assignTicket,
-        // Scooter ops
-        addScooter,
-        updateScooter,
-        deleteScooter,
-        // Part ops
-        addPart,
-        updatePart,
-        deletePart,
-        // Config
-        updateConfig,
-        // Import
-        importTickets,
-        importParts,
-        // Custom tags
-        addCustomTag,
-        // Seed
-        loadSeedData,
-        patchPartModels,
-      }}
-    >
+    <MaintenanceContext.Provider value={value}>
       {children}
     </MaintenanceContext.Provider>
   );

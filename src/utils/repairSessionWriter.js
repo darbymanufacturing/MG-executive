@@ -1,4 +1,4 @@
-import { doc, writeBatch, increment, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, writeBatch, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
 const BATCH_SIZE = 450;
@@ -41,10 +41,43 @@ export async function completeRepairSession({
     (sum, p) => sum + p.quantity * (p.unitCost ?? 0), 0
   );
 
-  const batch = writeBatch(db);
+  // #23 — Use a transaction to read each part's current stock, validate it is
+  // sufficient before decrementing, and reject the whole session atomically if any
+  // part has insufficient stock.
+  //
+  // #24 — After the transaction validates stock, write the ticket update + audit doc
+  // in the first batch, then split part decrements into BATCH_SIZE chunks to stay
+  // safely under Firestore's 500-op-per-batch limit (relevant if > 400 distinct parts).
+  await runTransaction(db, async (transaction) => {
+    // Read all part docs inside the transaction to get current stock
+    const partRefs = aggregatedPartsUsed.map(({ partId }) =>
+      doc(db, 'maintenanceParts', partId)
+    );
+    const partSnaps = await Promise.all(partRefs.map((ref) => transaction.get(ref)));
+
+    // Validate stock for every part before writing anything
+    partSnaps.forEach((snap, idx) => {
+      const { partId, partName, quantity } = aggregatedPartsUsed[idx];
+      const currentStock = snap.exists() ? (snap.data().stockOnHand ?? 0) : 0;
+      if (currentStock < quantity) {
+        throw new Error(`Insufficient stock for ${partName ?? partId}: have ${currentStock}, need ${quantity}`);
+      }
+    });
+
+    // All stock checks passed — decrement each part inside the transaction
+    partSnaps.forEach((snap, idx) => {
+      const { quantity } = aggregatedPartsUsed[idx];
+      transaction.update(snap.ref, { stockOnHand: increment(-quantity) });
+    });
+  });
+
+  // #24 — Ticket update + audit doc go in the first batch; part decrements already
+  // handled by the transaction above, so here we only write ticket + session docs.
+  // Split into batches if somehow we exceed BATCH_SIZE (defensive).
+  const firstBatch = writeBatch(db);
 
   // 1. Update ticket
-  batch.update(doc(db, 'maintenanceTickets', ticketDocId), {
+  firstBatch.update(doc(db, 'maintenanceTickets', ticketDocId), {
     status:         'Completed',
     dateCompleted:  completedAt.toISOString().slice(0, 10),
     completedBy:    technicianUid,
@@ -59,15 +92,8 @@ export async function completeRepairSession({
     }),
   });
 
-  // 2. Decrement parts (split into BATCH_SIZE chunks if huge, unlikely but safe)
-  aggregatedPartsUsed.forEach(({ partId, quantity }) => {
-    batch.update(doc(db, 'maintenanceParts', partId), {
-      stockOnHand: increment(-quantity),
-    });
-  });
-
-  // 3. Create audit doc
-  batch.set(doc(db, 'repairSessions', sessionId), {
+  // 2. Create audit doc
+  firstBatch.set(doc(db, 'repairSessions', sessionId), {
     ticketId:          ticketDocId,
     scooterId,
     procedureId:       procedureId ?? null,
@@ -88,5 +114,5 @@ export async function completeRepairSession({
     createdAt: serverTimestamp(),
   });
 
-  await batch.commit();
+  await firstBatch.commit();
 }

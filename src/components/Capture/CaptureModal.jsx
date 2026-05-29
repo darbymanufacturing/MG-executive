@@ -3,15 +3,8 @@ import {
   Sparkles, Paperclip, Camera, Mic, Send, Check, X, Eye, Receipt, RotateCcw,
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
+import { useCosts } from '../../context/CostContext.jsx';
 import styles from './CaptureModal.module.css';
-
-/* ─── Safe useCosts (may not be mounted in all contexts) ─── */
-function useCostsSafe() {
-  try {
-    const { useCosts } = require('../../context/CostContext.jsx');
-    return useCosts();
-  } catch { return null; }
-}
 
 /** Maps diary-parse module kinds to Issue types */
 const ACTION_TO_ISSUE_TYPE = {
@@ -54,7 +47,7 @@ function ModeTab({ label, icon: Icon, active, onClick }) {
 }
 
 /* ─── Invoice mode ─── */
-function InvoiceCapture({ onClose }) {
+function InvoiceCapture({ onClose, addCost }) {
   const [stage, setStage] = useState('pick'); /* pick | parsing | confirm | saving | done | error */
   const [preview, setPreview] = useState(null);   /* data URL */
   const [imageBase64, setImageBase64] = useState(null);
@@ -62,6 +55,10 @@ function InvoiceCapture({ onClose }) {
   const [invoice, setInvoice] = useState(null);
   const [savingMsg, setSavingMsg] = useState('');
   const fileRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
+  /* Cancel auto-close timer on unmount */
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -100,8 +97,7 @@ function InvoiceCapture({ onClose }) {
     setStage('saving');
     setSavingMsg('Saving cost entry…');
     try {
-      /* Try to use CostContext addCost if available */
-      const costData = {
+      const costPayload = {
         name: invoice.vendor || 'Invoice',
         amount: invoice.amount || 0,
         category: invoice.suggestedCategory || 'variable',
@@ -111,21 +107,12 @@ function InvoiceCapture({ onClose }) {
         source: 'invoice-capture',
       };
 
-      /* Dynamically import CostContext to avoid circular dep issues */
-      let added = false;
-      try {
-        const { useCosts } = await import('../../context/CostContext.jsx');
-        /* Can't call hooks in async fn — use a workaround: store ref */
-      } catch {}
+      await addCost(costPayload);
 
-      /* Fallback: store in localStorage as pending review */
-      const pending = JSON.parse(localStorage.getItem('omni_pending_costs') || '[]');
-      pending.push({ ...costData, capturedAt: new Date().toISOString(), status: 'pending-review' });
-      localStorage.setItem('omni_pending_costs', JSON.stringify(pending));
-
-      setSavingMsg('Saved as pending cost — review in Costs page.');
+      setSavingMsg('Cost saved successfully.');
       setStage('done');
-      setTimeout(onClose, 2500);
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = setTimeout(onClose, 2500);
     } catch {
       setStage('error');
     }
@@ -242,6 +229,7 @@ function InvoiceCapture({ onClose }) {
 /* ─── Main modal ─── */
 export default function CaptureModal({ open, onClose }) {
   const { createIssue } = useIssues();
+  const { addCost } = useCosts();
   const [mode, setMode] = useState('text');       /* text | invoice */
   const [text, setText] = useState('');
   const [stage, setStage] = useState('idle');     /* idle | typed | parsing | confirmed | error */
@@ -249,6 +237,10 @@ export default function CaptureModal({ open, onClose }) {
   const [createdId, setCreatedId] = useState(null);
   const textareaRef = useRef(null);
   const overlayRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
+  /* Cancel auto-close timer on unmount */
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
   /* Reset on open */
   useEffect(() => {
@@ -318,7 +310,8 @@ export default function CaptureModal({ open, onClose }) {
         contact: data.contact || data.counterparty || '',
       });
       setStage('confirmed');
-      setTimeout(() => onClose(), 2500);
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = setTimeout(() => onClose(), 2500);
 
     } catch (err) {
       console.error('Capture failed:', err);
@@ -333,7 +326,8 @@ export default function CaptureModal({ open, onClose }) {
         setCreatedId(ref.id);
         setResult({ title: text.slice(0, 80).trim(), type: 'Other', urgency: 'Medium', nextAction: '', contact: '' });
         setStage('confirmed');
-        setTimeout(() => onClose(), 2500);
+        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = setTimeout(() => onClose(), 2500);
       } catch {
         setStage('error');
       }
@@ -449,7 +443,7 @@ export default function CaptureModal({ open, onClose }) {
 
         {/* Invoice mode */}
         {mode === 'invoice' && (
-          <InvoiceCapture onClose={onClose} />
+          <InvoiceCapture onClose={onClose} addCost={addCost} />
         )}
       </div>
     </div>

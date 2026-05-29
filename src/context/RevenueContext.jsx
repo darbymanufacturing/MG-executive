@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot,
   writeBatch, setDoc, deleteDoc, getDocs, query, orderBy, limit,
@@ -16,8 +16,9 @@ const RevenueContext = createContext(null);
 
 export function RevenueProvider({ children }) {
   const { user } = useAuth();
-  const [revenueData, setRevenueData]     = useState([]);
+  const [revenueData,    setRevenueData]    = useState([]);
   const [revenueLoading, setRevenueLoading] = useState(true);
+  const [snapshotError,  setSnapshotError]  = useState(null);
 
   // ── Real-time listener ────────────────────────────────────────────────────
 
@@ -26,6 +27,9 @@ export function RevenueProvider({ children }) {
     setRevenueData([]);
     setRevenueLoading(true);
 
+    // BUG #220 — guard: do not start listener before auth resolves
+    if (!user) return;
+
     // orderBy 'date' desc + limit — Firestore enforces the cap server-side so big collections
     // don't blow the free-tier read quota. Client still sorts to handle any same-date rows.
     const q = query(
@@ -33,13 +37,20 @@ export function RevenueProvider({ children }) {
       orderBy('date', 'desc'),
       limit(MAX_REVENUE_ROWS),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs
-        .map((d) => ({ _docId: d.id, ...d.data() }))
-        .sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
-      setRevenueData(rows);
-      setRevenueLoading(false);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs
+          .map((d) => ({ _docId: d.id, ...d.data() }))
+          .sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
+        setRevenueData(rows);
+        setRevenueLoading(false);
+      },
+      (err) => {
+        console.error('[RevenueContext] snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return unsub;
   }, [user]);
 
@@ -86,16 +97,18 @@ export function RevenueProvider({ children }) {
     }
   }, []);
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    revenueData,
+    revenueLoading,
+    snapshotError,
+    importRevenueDays,
+    deleteRevenueDay,
+    clearAllRevenue,
+  }), [revenueData, revenueLoading, snapshotError, importRevenueDays, deleteRevenueDay, clearAllRevenue]);
+
   return (
-    <RevenueContext.Provider
-      value={{
-        revenueData,
-        revenueLoading,
-        importRevenueDays,
-        deleteRevenueDay,
-        clearAllRevenue,
-      }}
-    >
+    <RevenueContext.Provider value={value}>
       {children}
     </RevenueContext.Provider>
   );

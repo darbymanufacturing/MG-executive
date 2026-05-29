@@ -20,36 +20,64 @@ export default function SettingsTab() {
   const { importTickets, importParts, patchPartModels, loadSeedData } = useMaintenance();
 
   const [ticketsSuccess, setTicketsSuccess] = useState(null);
+  const [ticketsError, setTicketsError] = useState(null);
   const [partsSuccess, setPartsSuccess] = useState(null);
-  const [patchState, setPatchState] = useState('idle');   // idle | loading | done
-  const [seedState,  setSeedState]  = useState('idle');   // idle | loading | done
+  const [partsError, setPartsError] = useState(null);
+  const [patchState, setPatchState] = useState('idle');   // idle | loading | done | error
+  const [seedState,  setSeedState]  = useState('idle');   // idle | loading | done | error
+  const [patchError, setPatchError] = useState(null);
+  const [seedError,  setSeedError]  = useState(null);
 
   async function handleImportTickets(rows) {
     setTicketsSuccess(null);
-    await importTickets(rows);
-    setTicketsSuccess(rows.length);
-    setTimeout(() => setTicketsSuccess(null), 4000);
+    setTicketsError(null);
+    try {
+      await importTickets(rows);
+      setTicketsSuccess(rows.length);
+      setTimeout(() => setTicketsSuccess(null), 4000);
+    } catch (err) {
+      setTicketsError(err?.message || 'Import failed.');
+      setTimeout(() => setTicketsError(null), 6000);
+    }
   }
 
   async function handleReseedParts() {
     setSeedState('loading');
-    await loadSeedData();
-    setSeedState('done');
-    setTimeout(() => setSeedState('idle'), 4000);
+    setSeedError(null);
+    try {
+      await loadSeedData();
+      setSeedState('done');
+      setTimeout(() => setSeedState('idle'), 4000);
+    } catch (err) {
+      setSeedError(err?.message || 'Reseed failed.');
+      setTimeout(() => { setSeedState('idle'); setSeedError(null); }, 6000);
+    }
   }
 
   async function handlePatchModels() {
     setPatchState('loading');
-    await patchPartModels();
-    setPatchState('done');
-    setTimeout(() => setPatchState('idle'), 4000);
+    setPatchError(null);
+    try {
+      await patchPartModels();
+      setPatchState('done');
+      setTimeout(() => setPatchState('idle'), 4000);
+    } catch (err) {
+      setPatchError(err?.message || 'Sync failed.');
+      setTimeout(() => { setPatchState('idle'); setPatchError(null); }, 6000);
+    }
   }
 
   async function handleImportParts(rows) {
     setPartsSuccess(null);
-    await importParts(rows);
-    setPartsSuccess(rows.length);
-    setTimeout(() => setPartsSuccess(null), 4000);
+    setPartsError(null);
+    try {
+      await importParts(rows);
+      setPartsSuccess(rows.length);
+      setTimeout(() => setPartsSuccess(null), 4000);
+    } catch (err) {
+      setPartsError(err?.message || 'Import failed.');
+      setTimeout(() => setPartsError(null), 6000);
+    }
   }
 
   return (
@@ -100,6 +128,11 @@ export default function SettingsTab() {
               Parts updated successfully.
             </span>
           )}
+          {(patchError || seedError) && (
+            <span style={{ fontSize: '0.875rem', color: 'var(--color-danger, #DC2626)' }}>
+              {patchError || seedError}
+            </span>
+          )}
         </div>
       </section>
 
@@ -131,6 +164,11 @@ export default function SettingsTab() {
                 {ticketsSuccess} ticket{ticketsSuccess !== 1 ? 's' : ''} imported successfully.
               </div>
             )}
+            {ticketsError && (
+              <div style={{ fontSize: '0.875rem', color: 'var(--color-danger, #DC2626)', marginTop: 6 }}>
+                {ticketsError}
+              </div>
+            )}
           </div>
 
           <div className={styles.importCard}>
@@ -143,6 +181,11 @@ export default function SettingsTab() {
             {partsSuccess != null && (
               <div className={styles.successMsg}>
                 {partsSuccess} part{partsSuccess !== 1 ? 's' : ''} imported successfully.
+              </div>
+            )}
+            {partsError && (
+              <div style={{ fontSize: '0.875rem', color: 'var(--color-danger, #DC2626)', marginTop: 6 }}>
+                {partsError}
               </div>
             )}
           </div>

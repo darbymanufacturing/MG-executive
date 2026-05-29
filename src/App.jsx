@@ -48,6 +48,7 @@ import Notifications from './pages/Notifications.jsx';
 import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
+import { safeStorage } from './utils/safeStorage.js';
 
 /* ─── Route title map ─── */
 const ROUTE_TITLES = {
@@ -151,7 +152,8 @@ function AppShell() {
   const rootRef = useRef(null);
 
   /* Theme — also propagate to <html> so body/globals.css can read it */
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  // BUG #158 — use safeStorage so this doesn't throw in Safari Private Mode
+  const [theme, setTheme] = useState(() => safeStorage.getRaw(THEME_KEY) || 'light');
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
@@ -162,7 +164,7 @@ function AppShell() {
     }
     setTheme(t => {
       const next = t === 'dark' ? 'light' : 'dark';
-      localStorage.setItem(THEME_KEY, next);
+      safeStorage.setRaw(THEME_KEY, next); // BUG #158 — safe write
       return next;
     });
   }, []);

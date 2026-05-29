@@ -8,10 +8,13 @@ const HEALTH_BORDER = {
 
 export default function KpiCard({ icon: Icon, label, value, sub, trend, accent = false, highlight = false, healthColor }) {
   const borderColor = healthColor ? HEALTH_BORDER[healthColor] : undefined;
+  // #284 — aria-label so screen readers announce the full card context, not bare numbers
+  const ariaLabel = [label, value, sub].filter(Boolean).join(': ');
   return (
     <div
       className={`${styles.card} ${accent ? styles.accent : ''} ${highlight ? styles.highlight : ''}`}
       style={borderColor ? { borderLeft: `3px solid ${borderColor}` } : undefined}
+      aria-label={ariaLabel}
     >
       <div className={styles.header}>
         <span className={styles.label}>{label}</span>

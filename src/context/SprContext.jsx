@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot,
   writeBatch, setDoc, getDocs, query, limit, where,
@@ -32,10 +32,11 @@ const SprContext = createContext(null);
 let sprConfigBootstrapped = false;
 
 export function SprProvider({ children }) {
-  const [events,      setEvents]      = useState([]);
-  const [weather,     setWeather]     = useState([]);
-  const [sprConfig,   setSprConfig]   = useState(DEFAULT_CONFIG);
-  const [loading,     setLoading]     = useState(true);
+  const [events,        setEvents]        = useState([]);
+  const [weather,       setWeather]       = useState([]);
+  const [sprConfig,     setSprConfig]     = useState(DEFAULT_CONFIG);
+  const [loading,       setLoading]       = useState(true);
+  const [snapshotError, setSnapshotError] = useState(null);
 
   // ── Real-time listeners ───────────────────────────────────────────────────
 
@@ -47,6 +48,10 @@ export function SprProvider({ children }) {
         setEvents(items);
         setLoading(false);
       },
+      (err) => {
+        console.error('[SprContext] events snapshot error:', err);
+        setSnapshotError(err.message);
+      },
     );
 
     const unsubWeather = onSnapshot(
@@ -55,19 +60,30 @@ export function SprProvider({ children }) {
         const items = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
         setWeather(items);
       },
+      (err) => {
+        console.error('[SprContext] weather snapshot error:', err);
+        setSnapshotError(err.message);
+      },
     );
 
-    const unsubConfig = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
-      if (snap.exists()) {
-        setSprConfig({ ...DEFAULT_CONFIG, ...snap.data() });
-      } else {
-        // Bootstrap defaults once — guarded against StrictMode double-fire
-        if (!sprConfigBootstrapped) {
-          sprConfigBootstrapped = true;
-          safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+    const unsubConfig = onSnapshot(
+      doc(db, CONFIG_DOC),
+      (snap) => {
+        if (snap.exists()) {
+          setSprConfig({ ...DEFAULT_CONFIG, ...snap.data() });
+        } else {
+          // Bootstrap defaults once — guarded against StrictMode double-fire
+          if (!sprConfigBootstrapped) {
+            sprConfigBootstrapped = true;
+            safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
+          }
         }
-      }
-    });
+      },
+      (err) => {
+        console.error('[SprContext] config snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
 
     return () => { unsubEvents(); unsubWeather(); unsubConfig(); };
   }, []);
@@ -222,25 +238,31 @@ export function SprProvider({ children }) {
     }
   }, []);
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    events,
+    weather,
+    sprConfig,
+    loading,
+    snapshotError,
+    updateSprConfig,
+    addZone,
+    updateZone,
+    deleteZone,
+    setCityCenter,
+    importEvents,
+    clearEvents,
+    importWeather,
+    clearWeather,
+    loadNafplioData,
+  }), [
+    events, weather, sprConfig, loading, snapshotError,
+    updateSprConfig, addZone, updateZone, deleteZone, setCityCenter,
+    importEvents, clearEvents, importWeather, clearWeather, loadNafplioData,
+  ]);
+
   return (
-    <SprContext.Provider
-      value={{
-        events,
-        weather,
-        sprConfig,
-        loading,
-        updateSprConfig,
-        addZone,
-        updateZone,
-        deleteZone,
-        setCityCenter,
-        importEvents,
-        clearEvents,
-        importWeather,
-        clearWeather,
-        loadNafplioData,
-      }}
-    >
+    <SprContext.Provider value={value}>
       {children}
     </SprContext.Provider>
   );

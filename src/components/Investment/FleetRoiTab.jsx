@@ -142,6 +142,7 @@ export default function FleetRoiTab() {
             </label>
             <input
               type="number"
+              inputMode="decimal"
               className={styles.input}
               placeholder={baseInvestment.toFixed(0)}
               value={investmentOverride}
@@ -155,6 +156,7 @@ export default function FleetRoiTab() {
             </label>
             <input
               type="number"
+              inputMode="decimal"
               className={styles.input}
               placeholder={baseMonthlyRevenue.toFixed(0)}
               value={revenueOverride}
@@ -168,6 +170,7 @@ export default function FleetRoiTab() {
             </label>
             <input
               type="number"
+              inputMode="decimal"
               className={styles.input}
               placeholder={baseMonthlyOpex.toFixed(0)}
               value={opexOverride}

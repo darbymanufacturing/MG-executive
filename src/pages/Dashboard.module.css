@@ -411,3 +411,17 @@
 .needsNowRow:hover {
   background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface-2));
 }
+
+@media (max-width: 768px) {
+  /* Charts: reduce min height */
+  .chartCard, .chartCardFull { min-height: 200px; }
+  /* Tables: horizontal scroll */
+  .tableWrapper, .table { overflow-x: auto; display: block; max-width: 100%; }
+  /* Full-width sections */
+  .section, .panel { width: 100% !important; padding: 0.75rem !important; }
+}
+
+@media (max-width: 480px) {
+  /* Stack KPI cards into single column (supplements the 2-col rule already present) */
+  .kpiGrid { grid-template-columns: 1fr !important; }
+}

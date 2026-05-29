@@ -59,6 +59,7 @@ export default function ConfigEditor() {
             <input
               className={styles.input}
               type="number"
+              inputMode="decimal"
               min="0"
               step="0.01"
               value={rate}
@@ -75,6 +76,7 @@ export default function ConfigEditor() {
           <input
             className={styles.input}
             type="number"
+            inputMode="numeric"
             min="1"
             max="10"
             step="1"

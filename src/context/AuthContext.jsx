@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.js';
 
 const AuthContext = createContext(null);
@@ -50,21 +50,13 @@ export function AuthProvider({ children }) {
       }
 
       const userRef = doc(db, 'users', firebaseUser.uid);
-      profileUnsub = onSnapshot(userRef, async (snap) => {
+      profileUnsub = onSnapshot(userRef, (snap) => {
         if (snap.exists()) {
           setUserProfile(snap.data());
           setAuthLoading(false);
-        } else {
-          // Auto-create admin profile for first login (single-tenant app)
-          const newProfile = {
-            role: 'admin',
-            displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-            email: firebaseUser.email,
-            createdAt: serverTimestamp(),
-          };
-          await setDoc(userRef, newProfile);
-          // onSnapshot fires again once the doc is written
         }
+        // Don't write inside the snapshot callback — provisioning is handled
+        // by the separate effect below to avoid async races on first login.
       });
     });
 
@@ -73,6 +65,30 @@ export function AuthProvider({ children }) {
       if (profileUnsub) profileUnsub();
     };
   }, []);
+
+  // BUG #154/#155 — First-login provisioning moved OUT of snapshot callback
+  // to avoid async-write races. Runs once per uid change.
+  useEffect(() => {
+    if (!user) return;
+    const provisionUser = async () => {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (!snap.exists()) {
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            role: 'admin',
+            displayName: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            createdAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Profile creation failed:', err);
+          // Does not crash the app; onSnapshot will not set userProfile,
+          // so authLoading stays true — acceptable vs. silent data loss.
+        }
+      }
+    };
+    provisionUser().catch(err => console.error('provision failed', err));
+  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = async (email, password) => {
     try {
@@ -98,6 +114,8 @@ export function AuthProvider({ children }) {
   // Uses the Firebase Auth REST API so the current session is unaffected.
   // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
   const createTechnicianAccount = async (email, password, displayName, role = 'crew') => {
+    // BUG #19 — client-side admin guard (server-side enforcement is Phase 2)
+    if (userProfile?.role !== 'admin') throw new Error('Only admins can create accounts');
     const apiKey = import.meta.env.VITE_FIREBASE_WEB_API_KEY;
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,

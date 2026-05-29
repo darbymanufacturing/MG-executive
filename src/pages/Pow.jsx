@@ -11,7 +11,9 @@ import styles from './Pow.module.css';
 const ASSIGNEES = ['Panos', 'Kostas'];
 
 // Week 1 = Nov 3, 2025 (Monday).
-const WEEK1_START = new Date('2025-11-03T00:00:00');
+// #109 — Explicit Athens EET offset (UTC+2 in winter) so week boundaries are
+// consistent regardless of the browser's local timezone.
+const WEEK1_START = new Date('2025-11-03T00:00:00+02:00');
 
 function getWeekRange(weekNumber) {
   const start = new Date(WEEK1_START);

@@ -159,22 +159,22 @@ export default function ZoneManager({ city }) {
             </div>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Min Lat</label>
-              <input className={styles.input} placeholder="37.5720" type="number" step="0.0001"
+              <input className={styles.input} placeholder="37.5720" type="number" inputMode="decimal" step="0.0001"
                 value={form.minLat} onChange={(e) => setForm((f) => ({ ...f, minLat: e.target.value }))} />
             </div>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Max Lat</label>
-              <input className={styles.input} placeholder="37.5760" type="number" step="0.0001"
+              <input className={styles.input} placeholder="37.5760" type="number" inputMode="decimal" step="0.0001"
                 value={form.maxLat} onChange={(e) => setForm((f) => ({ ...f, maxLat: e.target.value }))} />
             </div>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Min Lon</label>
-              <input className={styles.input} placeholder="22.7960" type="number" step="0.0001"
+              <input className={styles.input} placeholder="22.7960" type="number" inputMode="decimal" step="0.0001"
                 value={form.minLon} onChange={(e) => setForm((f) => ({ ...f, minLon: e.target.value }))} />
             </div>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Max Lon</label>
-              <input className={styles.input} placeholder="22.8020" type="number" step="0.0001"
+              <input className={styles.input} placeholder="22.8020" type="number" inputMode="decimal" step="0.0001"
                 value={form.maxLon} onChange={(e) => setForm((f) => ({ ...f, maxLon: e.target.value }))} />
             </div>
           </div>
@@ -212,12 +212,12 @@ export default function ZoneManager({ city }) {
           <div className={styles.cityCenterRow}>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Latitude</label>
-              <input className={styles.input} placeholder="37.5747" type="number" step="0.0001"
+              <input className={styles.input} placeholder="37.5747" type="number" inputMode="decimal" step="0.0001"
                 value={centerLat} onChange={(e) => setCenterLat(e.target.value)} style={{ width: 120 }} />
             </div>
             <div className={styles.formField}>
               <label className={styles.fieldLabel}>Longitude</label>
-              <input className={styles.input} placeholder="22.8000" type="number" step="0.0001"
+              <input className={styles.input} placeholder="22.8000" type="number" inputMode="decimal" step="0.0001"
                 value={centerLon} onChange={(e) => setCenterLon(e.target.value)} style={{ width: 120 }} />
             </div>
             <Button

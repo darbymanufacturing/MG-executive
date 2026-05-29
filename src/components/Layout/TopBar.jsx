@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Sparkles, Paperclip, Mic, Sun, Moon, Bell, Menu, X, RefreshCw } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -20,7 +20,8 @@ function formatRelative(ts) {
 }
 
 function Avatar({ name = 'U', size = 30 }) {
-  const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  // #179 — use Array.from to correctly handle emoji / surrogate-pair display names
+  const initials = name.split(' ').map(s => Array.from(s)[0] ?? '').slice(0, 2).join('').toUpperCase();
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
@@ -38,6 +39,13 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
   const { refresh, syncing, lastSync } = useHoppSync();
   const inputRef = useRef(null);
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+
+  // #188 — tick every 60 s so relative time in refreshTitle stays fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const refreshTitle = syncing
     ? 'Syncing…'

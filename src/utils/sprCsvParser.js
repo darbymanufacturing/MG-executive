@@ -8,31 +8,9 @@
  * Rebalance State values: PICKUP | DROP | (empty for non-rebalance events)
  */
 
-/** Parse a single quoted CSV row into raw string values. */
-function parseRow(line) {
-  const values = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        // Escaped double-quote inside a quoted field
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      values.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  values.push(current.trim());
-  return values;
-}
+// #213 — use the canonical parseCSVRow from csvParser.js so all parsers share one
+// implementation. The old local parseRow had identical logic but was a duplicate.
+import { parseCSVRow as parseRow } from './csvParser.js';
 
 /** Normalise a raw string from CSV to a clean value. */
 function clean(val) {

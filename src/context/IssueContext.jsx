@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   collection, query, orderBy, onSnapshot, addDoc, updateDoc,
   doc, serverTimestamp, where, arrayUnion,
@@ -13,20 +13,29 @@ const COLLECTION = 'issues';
 
 export function IssueProvider({ children }) {
   const { user } = useAuth();
-  const [issues, setIssues] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [issues,        setIssues]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [snapshotError, setSnapshotError] = useState(null);
 
   useEffect(() => {
+    // BUG #220 — guard: do not start listener before auth resolves
     if (!user) {
       setIssues([]);
       setLoading(true);
       return;
     }
     const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setIssues(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[IssueContext] snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return unsub;
   }, [user]);
 
@@ -92,13 +101,20 @@ export function IssueProvider({ children }) {
   }
 
   /* Active issues: not done, and not snoozed (unless snoozeUntil has passed) */
-  const activeIssues = issues.filter(i =>
+  const activeIssues = issues.filter((i) =>
     i.status !== 'done' &&
     !(i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil > new Date().toISOString())
   );
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    issues, activeIssues, loading, snapshotError,
+    createIssue, updateIssue, snoozeIssue, resolveIssue, addNote,
+  }), [issues, activeIssues, loading, snapshotError,
+      createIssue, updateIssue, snoozeIssue, resolveIssue, addNote]);
+
   return (
-    <IssueContext.Provider value={{ issues, activeIssues, loading, createIssue, updateIssue, snoozeIssue, resolveIssue, addNote }}>
+    <IssueContext.Provider value={value}>
       {children}
     </IssueContext.Provider>
   );

@@ -163,30 +163,39 @@ export function CostProvider({ children }) {
   // ── Import ────────────────────────────────────────────────────────────────
 
   const importData = useCallback(async (data, mode = 'replace') => {
-    const batch = writeBatch(db);
+    // BUG #42 — split delete + insert into separate batched phases so combined
+    // ops never exceed Firestore's 500-op limit.
 
     if (mode === 'replace') {
-      // Delete all existing costs
-      const existingSnap = await getDocs(collection(db, COSTS_COL));
-      existingSnap.docs.forEach((d) => batch.delete(d.ref));
+      // Phase 1: delete existing docs in chunks of BATCH_SIZE
+      const docsSnap = await getDocs(collection(db, COSTS_COL));
+      const allDocs = docsSnap.docs;
+      for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        allDocs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+        await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Cost import failed while clearing old costs' });
+      }
     }
 
-    // Add imported costs — in merge mode skip by id (if present) or by name+startDate composite
+    // Phase 2: insert imported costs in chunks of BATCH_SIZE
     const existingIds        = new Set(costs.filter((c) => c.id).map((c) => c.id));
     const existingComposites = new Set(costs.map((c) => `${c.name}__${c.startDate}__${c.frequency}`));
-    (data.costs || []).forEach((cost) => {
+    const costsToInsert = (data.costs || []).filter((cost) => {
       if (mode === 'merge') {
-        if (cost.id && existingIds.has(cost.id)) return;
-        if (!cost.id && existingComposites.has(`${cost.name}__${cost.startDate}__${cost.frequency}`)) return;
+        if (cost.id && existingIds.has(cost.id)) return false;
+        if (!cost.id && existingComposites.has(`${cost.name}__${cost.startDate}__${cost.frequency}`)) return false;
       }
-      const ref = doc(collection(db, COSTS_COL));
-      batch.set(ref, { ...cost, id: cost.id || uuidv4() });
+      return true;
     });
 
-    await safeWrite(
-      () => batch.commit(),
-      { rethrow: true, errorMessage: 'Cost import failed mid-batch' },
-    );
+    for (let i = 0; i < costsToInsert.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      costsToInsert.slice(i, i + BATCH_SIZE).forEach((cost) => {
+        const ref = doc(db, COSTS_COL, cost.id || crypto.randomUUID());
+        batch.set(ref, { ...cost, id: cost.id || crypto.randomUUID() });
+      });
+      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Cost import failed mid-batch' });
+    }
 
     if (data.config && mode === 'replace') {
       await safeWrite(

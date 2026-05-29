@@ -22,7 +22,7 @@ function TabSpinner() {
 export default function ScooterDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { scooters, updateScooter } = useMaintenance();
   const { config } = useCosts();
@@ -34,12 +34,11 @@ export default function ScooterDetail() {
     [scooters, id],
   );
 
-  // Default to ?tab= query param, or first enabled tab
-  const [activeTab, setActiveTab] = useState(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam && enabledTabs.some((t) => t.id === tabParam)) return tabParam;
-    return enabledTabs[0]?.id || 'details';
-  });
+  // Derive active tab from URL — makes ?tab= reactive to back/forward navigation
+  const activeTab = searchParams.get('tab') && enabledTabs.some((t) => t.id === searchParams.get('tab'))
+    ? searchParams.get('tab')
+    : (enabledTabs[0]?.id || 'details');
+  const setActiveTab = (tab) => setSearchParams((prev) => { prev.set('tab', tab); return prev; });
   const [editOpen,  setEditOpen]  = useState(false);
 
   if (!scooter) {

@@ -55,7 +55,12 @@ function resolveColumn(headers, aliases) {
   return -1;
 }
 
-/** Parse "YYYY-MM-DD" or "DD/MM/YYYY" or "MM/DD/YYYY" → "YYYY-MM-DD" */
+/** Parse "YYYY-MM-DD" or "DD/MM/YYYY" or "MM/DD/YYYY" → "YYYY-MM-DD"
+ *
+ * #193 — Greek platform exports DD/MM/YYYY. US format MM/DD/YYYY is detected
+ * by day > 12 heuristic: if the first numeric part is > 12 it can only be a day,
+ * so the format must be DD/MM. Otherwise we assume DD/MM for the Greek platform.
+ */
 function parseDate(raw) {
   if (!raw) return null;
   const clean = raw.replace(/"/g, '').trim();
@@ -64,10 +69,18 @@ function parseDate(raw) {
   // ISO format
   if (/^\d{4}-\d{2}-\d{2}/.test(clean)) return clean.slice(0, 10);
 
-  // DD/MM/YYYY
+  // Slash-separated date — determine DD/MM vs MM/DD order
   const m1 = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m1) {
-    const [, d, mo, y] = m1;
+    const [, part1, part2, y] = m1;
+    let d, mo;
+    if (parseInt(part1, 10) > 12) {
+      // part1 > 12 → must be DD/MM/YYYY (month can't exceed 12)
+      d = part1; mo = part2;
+    } else {
+      // Ambiguous — assume DD/MM/YYYY (Greek platform native format)
+      d = part1; mo = part2;
+    }
     return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
   }
 

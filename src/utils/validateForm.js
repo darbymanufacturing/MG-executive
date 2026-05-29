@@ -122,14 +122,16 @@ function checkType(value, type, label) {
 function isAfter(a, b) {
   const ta = new Date(a).getTime();
   const tb = new Date(b).getTime();
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return true;
+  // #29 — unparseable dates must FAIL validation, not silently pass
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
   return ta > tb;
 }
 
 function isOnOrAfter(a, b) {
   const ta = new Date(a).getTime();
   const tb = new Date(b).getTime();
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return true;
+  // #29 — unparseable dates must FAIL validation, not silently pass
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
   return ta >= tb;
 }
 

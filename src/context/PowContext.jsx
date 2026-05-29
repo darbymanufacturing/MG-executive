@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot, setDoc, deleteDoc,
   updateDoc, serverTimestamp,
@@ -28,27 +28,37 @@ function computeCurrentWeek() {
 // checkedSteps: number[]  (indices of checked steps in summary)
 
 export function PowProvider({ children }) {
-  const [categories, setCategories]        = useState(DEFAULT_CATEGORIES);
-  const [tasks, setTasks]                  = useState([]);
-  const [currentWeek, setCurrentWeekState] = useState(computeCurrentWeek);
-  const [showDone, setShowDone]            = useState(false);
-  const [loading, setLoading]              = useState(true);
+  const [categories,    setCategories]       = useState(DEFAULT_CATEGORIES);
+  const [tasks,         setTasks]            = useState([]);
+  const [currentWeek,   setCurrentWeekState] = useState(computeCurrentWeek);
+  const [showDone,      setShowDone]         = useState(false);
+  const [loading,       setLoading]          = useState(true);
+  const [snapshotError, setSnapshotError]    = useState(null);
 
   // ── Subscribe to config ──────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, CONFIG_DOC), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.categories?.length) setCategories(data.categories);
-        if (data.currentWeek)        setCurrentWeekState(data.currentWeek);
-      }
-    });
+    const unsub = onSnapshot(
+      doc(db, CONFIG_DOC),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.categories?.length) setCategories(data.categories);
+          if (data.currentWeek)        setCurrentWeekState(data.currentWeek);
+        }
+      },
+      (err) => {
+        console.error('[PowContext] config snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return unsub;
   }, []);
 
   // ── Subscribe to tasks ───────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, TASKS_COL), (snap) => {
+    const unsub = onSnapshot(
+      collection(db, TASKS_COL),
+      (snap) => {
       const list = snap.docs.map(d => {
         const data = d.data();
         // Normalize assignees: old tasks may have assignee (string) or none
@@ -80,9 +90,14 @@ export function PowProvider({ children }) {
         };
       });
       list.sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
-      setTasks(list);
-      setLoading(false);
-    });
+        setTasks(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[PowContext] tasks snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return unsub;
   }, []);
 
@@ -223,16 +238,27 @@ export function PowProvider({ children }) {
     ...(showDone ? doneTasks : []),
   ];
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    categories, currentWeek, showDone, loading, snapshotError,
+    tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
+    setCurrentWeek, setShowDone,
+    addCategory, removeCategory, renameCategory,
+    addTask, updateTask,
+    toggleAssignee, toggleStep,
+    markDone, markBacklog, deleteTask,
+  }), [
+    categories, currentWeek, showDone, loading, snapshotError,
+    tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
+    setCurrentWeek, setShowDone,
+    addCategory, removeCategory, renameCategory,
+    addTask, updateTask,
+    toggleAssignee, toggleStep,
+    markDone, markBacklog, deleteTask,
+  ]);
+
   return (
-    <PowContext.Provider value={{
-      categories, currentWeek, showDone, loading,
-      tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
-      setCurrentWeek, setShowDone,
-      addCategory, removeCategory, renameCategory,
-      addTask, updateTask,
-      toggleAssignee, toggleStep,
-      markDone, markBacklog, deleteTask,
-    }}>
+    <PowContext.Provider value={value}>
       {children}
     </PowContext.Provider>
   );

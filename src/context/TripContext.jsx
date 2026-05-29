@@ -52,7 +52,14 @@ export function TripProvider({ children }) {
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       rows.slice(i, i + BATCH_SIZE).forEach((row) => {
-        const docId = row._docId || `${row.scooterId}_${row.startedAt}`;
+        // #115 — Date objects produce strings with spaces/parens (invalid Firestore IDs).
+        // Normalise startedAt to an ISO string, then strip all non-alphanumeric chars.
+        const safeStartedAt = row.startedAt instanceof Date
+          ? row.startedAt.toISOString()
+          : typeof row.startedAt === 'string'
+            ? row.startedAt
+            : String(row.startedAt ?? '');
+        const docId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[^0-9TZ]/g, '').slice(0, 19));
         batch.set(
           doc(db, TRIPS_COL, docId),
           { ...row, _importedAt: serverTimestamp() },

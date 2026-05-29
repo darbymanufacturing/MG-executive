@@ -18,8 +18,9 @@ export const CATEGORIES = {
   variable: {
     label: 'Variable',
     fullLabel: 'Variable Costs',
-    color: '#CCCCCC',
-    textColor: '#000000',
+    // #146 — was #CCCCCC (fails 3:1 contrast on light); slate-500 passes at ~4.6:1 on white
+    color: '#64748B',
+    textColor: '#FFFFFF',
     icon: 'TrendingUp',
     description: 'Costs that fluctuate with usage (maintenance, charging)',
   },
@@ -95,28 +96,47 @@ export const DEFAULT_CONFIG = {
   },
 };
 
+// #144 — prefixes were 'smfc_' (old brand); updated to 'omni_' to match runtime.
+// Nothing in the app currently imports STORAGE_KEYS directly — this export is kept
+// for forward-compatibility but the keys are now consistent with the runtime prefix.
 export const STORAGE_KEYS = {
-  COSTS: 'smfc_costs',
-  CONFIG: 'smfc_config',
-  VERSION: 'smfc_version',
+  COSTS: 'omni_costs',
+  CONFIG: 'omni_config',
+  VERSION: 'omni_version',
 };
 
 export const CURRENT_VERSION = '1.0.0';
 
-export const CHART_COLORS = {
+// #145 — static fallback kept so existing consumers don't break;
+// prefer getChartColors() for theme-aware chart rendering.
+export const CHART_COLORS_STATIC = {
   'one-off':     '#A0521D',
   fixed:         '#C97D49',
-  variable:      '#CCCCCC',
+  variable:      '#64748B',
   investment:    '#7A3E16',
   loan:          '#1E88E5',
   'credit-card': '#8E24AA',
 };
+
+/** @deprecated Use getChartColors() for theme-aware charts. */
+export const CHART_COLORS = CHART_COLORS_STATIC;
+
+// #145 — reads CSS custom properties at call time so dark-theme overrides are honoured
+export function getChartColors() {
+  const s = typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null;
+  return [
+    s?.getPropertyValue('--accent')?.trim()      || '#A0521D',
+    s?.getPropertyValue('--color-info')?.trim()  || '#3B82F6',
+    '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4',
+  ];
+}
 
 export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+// #145 — see getChartColors() above for theme-aware variant
 export const REVENUE_CHART_COLORS = {
   revenue: '#4CAF50',
   profit:  '#66BB6A',

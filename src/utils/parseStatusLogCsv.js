@@ -177,8 +177,11 @@ export function parseStatusLogCsv(csvText, defaultScooterId = null, scooterCityM
     const city      = scooterCityMap[scooterId] || '';
 
     // Fingerprint docId — deterministic, enables idempotent upsert
-    const safeAfter = afterState.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-    const docId     = `${scooterId}_${timestamp.replace(/[^0-9T]/g, '')}_${safeAfter}`;
+    // #194 — include beforeState in the key to avoid collision when the same
+    // scooter+timestamp has multiple rows differing only in beforeState.
+    const safeAfter  = afterState.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const beforeKey  = (beforeState || '').replace(/\s/g, '').slice(0, 8);
+    const docId      = `${scooterId}_${timestamp.replace(/[^0-9T]/g, '')}_${safeAfter}_${beforeKey}`;
 
     events.push({
       _docId: docId,

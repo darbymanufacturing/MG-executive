@@ -7,6 +7,7 @@ export default function TaskModal({ task, onClose }) {
   const { categories, addTask, updateTask } = usePow();
   const isEdit = Boolean(task?.id);
   const containerRef = useRef(null);
+  const mousedownTarget = useRef(null);
 
   const [title,       setTitle]      = useState(task?.title       ?? '');
   const [description, setDesc]       = useState(task?.description ?? '');
@@ -34,19 +35,19 @@ export default function TaskModal({ task, onClose }) {
     if (e.key === 'Enter') {
       e.preventDefault();
       setSteps(prev => [...prev.slice(0, i + 1), '', ...prev.slice(i + 1)]);
-      // focus next input after render — scoped to modal container (#229)
-      setTimeout(() => {
+      // focus next input after render — scoped to modal container (#229), microtask not fragile setTimeout (#230)
+      queueMicrotask(() => {
         const inputs = containerRef.current?.querySelectorAll('[data-step-input]');
         if (inputs?.[i + 1]) inputs[i + 1].focus();
-      }, 10);
+      });
     }
     if (e.key === 'Backspace' && steps[i] === '' && steps.length > 1) {
       e.preventDefault();
       removeStep(i);
-      setTimeout(() => {
+      queueMicrotask(() => {
         const inputs = containerRef.current?.querySelectorAll('[data-step-input]');
         if (inputs?.[i - 1]) inputs[i - 1].focus();
-      }, 10);
+      });
     }
   };
 
@@ -69,7 +70,11 @@ export default function TaskModal({ task, onClose }) {
   };
 
   return (
-    <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={styles.overlay}
+      onMouseDown={(e) => { mousedownTarget.current = e.target; }}
+      onClick={(e) => { if (mousedownTarget.current === e.currentTarget && e.target === e.currentTarget) onClose(); }}
+    >
       <div className={styles.modal} ref={containerRef}>
         <div className={styles.header}>
           <h2>{isEdit ? 'Edit Task' : 'New Task'}</h2>

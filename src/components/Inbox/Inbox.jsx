@@ -5,6 +5,8 @@ import {
   Flag, Wrench, Folder, Receipt, Landmark, AlertTriangle,
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
+import { useProjects } from '../../context/ProjectContext.jsx';
 import styles from './Inbox.module.css';
 
 /* ─── Constants ─── */
@@ -57,7 +59,10 @@ function GroupHeading({ label, count }) {
 /* ─── Row variant (default) ─── */
 function InboxRowItem({ item, onSnooze, onDone }) {
   const navigate = useNavigate();
-  const u = URGENCY[item.urgency] || URGENCY.medium;
+  // Items open > 180 days are "stale" — show a neutral badge instead of keeping Critical treatment
+  const isVeryStale = item.ageHours > 180 * 24;
+  const displayUrgency = isVeryStale ? 'low' : item.urgency;
+  const u = URGENCY[displayUrgency] || URGENCY.medium;
   const stale = item.ageHours > 96 && item.urgency === 'low';
 
   return (
@@ -72,7 +77,7 @@ function InboxRowItem({ item, onSnooze, onDone }) {
 
       {/* Dot */}
       <div className={styles.dotCol}>
-        <UrgencyDot urgency={item.urgency} />
+        <UrgencyDot urgency={displayUrgency} />
       </div>
 
       {/* Content */}
@@ -80,6 +85,11 @@ function InboxRowItem({ item, onSnooze, onDone }) {
         <div className={styles.rowMeta}>
           <SourceBadge source={item.source} sourceIcon={item.sourceIcon} />
           <span className={styles.rowAge}>{item.age}</span>
+          {isVeryStale && (
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-hover)', color: 'var(--fg-muted)' }}>
+              Stale
+            </span>
+          )}
           {item.owner?.name && (
             <span className={styles.rowOwner}>{item.owner.name}</span>
           )}
@@ -152,6 +162,19 @@ function EmptyInbox() {
   );
 }
 
+/* ─── Loading skeleton ─── */
+function InboxSkeleton() {
+  return (
+    <div className={styles.skeletonList} style={{ opacity: 0.5 }}>
+      {[0, 1, 2, 3].map(i => (
+        <div key={i} className={styles.skeletonRow} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+          Loading…
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ─── Group items ─── */
 function groupItems(items, mode) {
   if (mode === 'flat') return [{ key: 'all', label: null, items }];
@@ -175,8 +198,17 @@ const DEFAULT_LIMIT = 7;
 
 export default function Inbox({ items = [], grouping = 'urgency', showHeader = true, title = 'Omni Inbox' }) {
   const { resolveIssue } = useIssues();
+  const maintenanceCtx = useMaintenanceSafe();
+  const projectCtx = useProjectsSafe();
+  const issueCtx = useIssuesSafe();
   const [snoozeTarget, setSnoozeTarget] = useState(null);
   const [showAll, setShowAll] = useState(false);
+
+  /* BUG #295: show skeleton while contexts are still loading to avoid misleading "Inbox zero" */
+  const isLoading =
+    issueCtx?.loading === true ||
+    maintenanceCtx?.loading === true ||
+    projectCtx?.loading === true;
 
   const visibleItems = showAll ? items : items.slice(0, DEFAULT_LIMIT);
   const groups = groupItems(visibleItems, grouping);
@@ -201,7 +233,9 @@ export default function Inbox({ items = [], grouping = 'urgency', showHeader = t
         </div>
       )}
 
-      {items.length === 0 ? (
+      {isLoading ? (
+        <InboxSkeleton />
+      ) : items.length === 0 ? (
         <EmptyInbox />
       ) : (
         <>
@@ -238,4 +272,15 @@ export default function Inbox({ items = [], grouping = 'urgency', showHeader = t
       )}
     </div>
   );
+}
+
+/* Safe hooks — return null if context not mounted (provider may be absent on non-home routes) */
+function useIssuesSafe() {
+  try { return useIssues(); } catch { return null; }
+}
+function useMaintenanceSafe() {
+  try { return useMaintenance(); } catch { return null; }
+}
+function useProjectsSafe() {
+  try { return useProjects(); } catch { return null; }
 }

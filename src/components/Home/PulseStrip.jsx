@@ -9,8 +9,13 @@ function MiniSparkline({ data = [], color = 'var(--accent)' }) {
   const w = 100, h = 28;
   const min = Math.min(...data), max = Math.max(...data);
   const span = max - min || 1;
+  // BUG #178: guard data.length <= 1 to avoid division by zero → NaN coords
   const pts = data
-    .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / span) * (h - 4) - 2}`)
+    .map((v, i) => {
+      const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * w;
+      const y = h - ((v - min) / span) * (h - 4) - 2;
+      return `${x},${y}`;
+    })
     .join(' ');
   return (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, overflow: 'visible' }}>
@@ -47,28 +52,98 @@ function fmtEur(val) {
   return `€${Math.round(val)}`;
 }
 
+/** Build a 7-day daily revenue sparkline (oldest → newest). */
+function buildRevenueSparkline(revenueData) {
+  const days = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days.map(day =>
+    revenueData
+      .filter(r => r.date === day)
+      .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0)
+  );
+}
+
+/** Derive trend from last 3 days vs prior 3 days of the sparkline. */
+function deriveTrend(sparkline) {
+  if (!sparkline || sparkline.length < 6) return 'flat';
+  const recent = sparkline.slice(-3).reduce((a, b) => a + b, 0);
+  const prior  = sparkline.slice(-6, -3).reduce((a, b) => a + b, 0);
+  if (recent > prior * 1.03) return 'up';
+  if (recent < prior * 0.97) return 'down';
+  return 'flat';
+}
+
 export default function PulseStrip() {
-  const { costs } = useCosts();
+  const { costs, config } = useCosts();
   const revenueCtx = useRevenueSafe();
   const maintenanceCtx = useMaintenanceSafe();
 
-  /* Costs MTD */
+  const revenueData = revenueCtx?.revenueData || [];
+
+  /* Current month key e.g. "2026-05" */
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const costsMTD = costs?.filter(c => c.date?.startsWith(monthKey)).reduce((s, c) => s + (c.amount || 0), 0) || 0;
 
-  /* Revenue MTD (best effort) */
-  const revenueMTD = revenueCtx?.totalRevenue || 0;
+  /* Revenue MTD: sum totalPaidRevenue for rows in current month */
+  const revenueMTD = revenueData
+    .filter(r => r.date?.startsWith(monthKey))
+    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+
+  /* Costs MTD: sum amounts where startDate is in current month */
+  const costsMTD = (costs || [])
+    .filter(c => c.startDate?.startsWith(monthKey))
+    .reduce((s, c) => s + (c.amount || 0), 0);
+
+  /* Active fleet: from CostContext config, never hardcoded */
+  const activeFleet = config?.fleetSize ?? '—';
 
   /* Open tickets */
-  const openTickets = maintenanceCtx?.tickets?.filter(t => t.status !== 'Completed' && t.status !== 'Donor').length || 0;
+  const openTickets = maintenanceCtx?.tickets?.filter(
+    t => t.status !== 'Completed' && t.status !== 'Donor'
+  ).length || 0;
+
+  /* 7-day revenue sparkline + trend */
+  const revenueSparkline = buildRevenueSparkline(revenueData);
+  const revenueTrend = deriveTrend(revenueSparkline);
 
   const tiles = [
-    { label: 'Revenue MTD',  value: fmtEur(revenueMTD), trend: 'up',   sparkline: [12,14,15,13,17,18,20,22,21,24,25,28] },
-    { label: 'Costs MTD',    value: fmtEur(costsMTD),   trend: 'flat',  sparkline: [16,18,15,14,12,13,12,10,11,12,11,10] },
-    { label: 'Net margin',   value: revenueMTD > 0 ? `${Math.round(((revenueMTD - costsMTD) / revenueMTD) * 100)}%` : '—', trend: 'up', sparkline: [30,32,28,34,36,38,35,38,40,38,41,42] },
-    { label: 'Open tickets', value: String(openTickets), trend: openTickets > 10 ? 'down' : 'up', sparkline: [30,28,27,29,26,25,24,23,25,24,23,openTickets] },
-    { label: 'Active fleet', value: '184',              trend: 'flat',  sparkline: [180,182,181,184,183,185,184,186,184,183,184,184] },
+    {
+      label: 'Revenue MTD',
+      value: fmtEur(revenueMTD),
+      trend: revenueTrend,
+      sparkline: revenueSparkline,
+    },
+    {
+      label: 'Costs MTD',
+      value: fmtEur(costsMTD),
+      trend: 'flat',
+      sparkline: null,
+    },
+    {
+      label: 'Net margin',
+      value: revenueMTD > 0
+        ? `${Math.round(((revenueMTD - costsMTD) / revenueMTD) * 100)}%`
+        : '—',
+      trend: revenueMTD > costsMTD ? 'up' : revenueMTD > 0 ? 'down' : 'flat',
+      sparkline: null,
+    },
+    {
+      label: 'Open tickets',
+      value: String(openTickets),
+      trend: openTickets > 10 ? 'down' : 'up',
+      sparkline: null,
+    },
+    {
+      label: 'Active fleet',
+      value: String(activeFleet),
+      trend: 'flat',
+      sparkline: null,
+    },
   ];
 
   return (

@@ -144,6 +144,7 @@ export default function ScooterForm({ open, onClose, onSave, initial, cities = [
             <label>Purchase Price (€)</label>
             <input
               type="number"
+              inputMode="decimal"
               value={form.purchasePrice}
               onChange={(e) => set('purchasePrice', e.target.value)}
               placeholder="e.g. 1800"

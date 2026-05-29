@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
   serverTimestamp, query, orderBy,
@@ -11,15 +11,23 @@ const RepairProcedureContext = createContext(null);
 const COL = 'repairProcedures';
 
 export function RepairProcedureProvider({ children }) {
-  const [procedures, setProcedures] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [procedures,    setProcedures]    = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [snapshotError, setSnapshotError] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, COL), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setProcedures(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setProcedures(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[RepairProcedureContext] snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
     return unsub;
   }, []);
 
@@ -48,8 +56,13 @@ export function RepairProcedureProvider({ children }) {
     );
   };
 
+  const value = useMemo(() => ({
+    procedures, loading, snapshotError,
+    addProcedure, updateProcedure, deleteProcedure,
+  }), [procedures, loading, snapshotError, addProcedure, updateProcedure, deleteProcedure]);
+
   return (
-    <RepairProcedureContext.Provider value={{ procedures, loading, addProcedure, updateProcedure, deleteProcedure }}>
+    <RepairProcedureContext.Provider value={value}>
       {children}
     </RepairProcedureContext.Provider>
   );

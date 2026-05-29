@@ -3,7 +3,10 @@
  * Used by RevenueCostTrend to project 3-month dashed lines.
  */
 
-/** Simple ordinary-least-squares regression over an array of numbers. */
+/** Simple ordinary-least-squares regression over an array of numbers.
+ *  Returns null when den === 0 (all x values equal — all-constant series).
+ *  Callers must check for null before using the result. (#150)
+ */
 function linearRegression(values) {
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: values[0] ?? 0 };
@@ -14,7 +17,10 @@ function linearRegression(values) {
     num += (i - xMean) * (v - yMean);
     den += (i - xMean) ** 2;
   });
-  const slope = den === 0 ? 0 : num / den;
+  // #150 — den === 0 means all x values are identical (only possible when n === 1,
+  // guarded above, but keep for safety). Return null so callers skip the forecast.
+  if (den === 0) return null;
+  const slope = num / den;
   return { slope, intercept: yMean - slope * xMean };
 }
 
@@ -36,6 +42,11 @@ export function forecastTrend(data, monthsAhead = 3) {
 
   const revReg  = linearRegression(revenues);
   const costReg = linearRegression(costs);
+
+  // #150 — if either regression returns null (all values identical), skip forecast
+  if (!revReg || !costReg) {
+    return data.map((d) => ({ ...d, forecastRevenue: null, forecastCost: null }));
+  }
 
   // Extend month labels
   const lastMonth = data[data.length - 1].month; // e.g. "Mar 2025" or "2025-03"

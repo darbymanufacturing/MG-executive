@@ -24,6 +24,11 @@ export default function CsvImportPanel({ locations }) {
 
   function handleFile(file) {
     if (!file) return;
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_SIZE) {
+      setStatus({ type: 'error', text: 'File too large. Maximum size is 50MB.' });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = parseRevenueCSV(e.target.result);

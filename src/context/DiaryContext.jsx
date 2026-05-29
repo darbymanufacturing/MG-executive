@@ -22,7 +22,8 @@ export function DiaryProvider({ children }) {
   const { addCost } = useCosts();
   const { importRevenueDays } = useRevenue();
   const { addTicket, addPart, addScooter } = useMaintenance();
-  const { addProject, addMilestone, addBlocker, addUpdate, addGate, activeProjects } = useProjects();
+  // BUG #20 — addMilestone and addGate don't exist on ProjectContext; removed from destructure
+  const { addProject, addBlocker, addUpdate, activeProjects } = useProjects();
 
   /* ── Real-time listener ── */
   useEffect(() => {
@@ -86,17 +87,16 @@ export function DiaryProvider({ children }) {
             await addProject(action.data);
             break;
           case 'milestone': {
-            const proj = activeProjects.find(
-              (p) => p.name?.toLowerCase() === action.data.projectName?.toLowerCase()
-            );
-            if (proj) await addMilestone(proj._docId, { title: action.data.title, dueDate: action.data.dueDate || null });
+            // BUG #20 — addMilestone not yet implemented on ProjectContext
+            console.warn('milestone diary actions not yet implemented');
             break;
           }
           case 'blocker': {
             const proj = activeProjects.find(
               (p) => p.name?.toLowerCase() === action.data.projectName?.toLowerCase()
             );
-            if (proj) await addBlocker(proj._docId, action.data.text);
+            // BUG #20 — fix addBlocker signature: pass full blocker object, not bare text
+            if (proj) await addBlocker(proj._docId, { text: action.data.text, type: 'general', escalation: 'none' });
             break;
           }
           case 'update': {
@@ -107,7 +107,8 @@ export function DiaryProvider({ children }) {
             break;
           }
           case 'gate':
-            await addGate(action.data);
+            // BUG #20 — addGate not yet implemented on ProjectContext
+            console.warn('gate diary actions not yet implemented');
             break;
           default:
             break;
@@ -131,7 +132,7 @@ export function DiaryProvider({ children }) {
       { rethrow: true, errorMessage: 'Failed to save diary apply result' },
     );
   }, [entries, addCost, importRevenueDays, addTicket, addPart, addScooter,
-      addProject, addMilestone, addBlocker, addUpdate, addGate, activeProjects]);
+      addProject, addBlocker, addUpdate, activeProjects]);
 
   /* ── Reject / discard entry ── */
   const rejectEntry = useCallback(async (docId) => {

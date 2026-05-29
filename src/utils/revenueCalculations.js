@@ -209,7 +209,9 @@ export function monthlyRevenueSummary(revenueData, year) {
       revenue:        rows.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0),
       trips:          rows.reduce((s, r) => s + (r.totalTrips || 0), 0),
       distance:       rows.reduce((s, r) => s + (r.totalTripDistanceKm || 0), 0),
-      uniqueUsers:    rows.length ? rows.reduce((s, r) => s + (r.uniqueUsersCount || 0), 0) / rows.length : 0,
+      // #69 — this is an AVERAGE of daily unique user counts, not a true monthly
+      // unique count. True monthly unique requires raw user IDs across days.
+      avgDailyUniqueUsers: rows.length ? rows.reduce((s, r) => s + (r.uniqueUsersCount || 0), 0) / rows.length : 0,
       uniqueVehicles: rows.length ? rows.reduce((s, r) => s + (r.uniqueVehiclesCount || 0), 0) / rows.length : 0,
     };
   });

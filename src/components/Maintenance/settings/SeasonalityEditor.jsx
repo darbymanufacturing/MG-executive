@@ -98,6 +98,7 @@ export default function SeasonalityEditor() {
                 <input
                   className={styles.input}
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
                   value={values[key] ?? ''}

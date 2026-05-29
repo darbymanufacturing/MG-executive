@@ -83,26 +83,6 @@ if (USE_EMULATOR) {
   );
 }
 
-/* ─── Firestore collection name constants ─── */
-export const COLLECTIONS = {
-  /* Existing */
-  COSTS:               'costs',
-  REVENUE:             'revenue',
-  TICKETS:             'tickets',
-  PARTS:               'parts',
-  SCOOTERS:            'scooters',
-  PROJECTS:            'projects',
-  BRAINSTORM:          'brainstorm',
-  GATES:               'gates',
-  DIARY:               'diary',
-  USERS:               'users',
-  REPAIR_PROCEDURES:   'repair_procedures',
-  REPAIR_SESSIONS:     'repair_sessions',
-  TRIPS:               'trips',
-
-  /* Omni Phase 1 — new */
-  ISSUES:              'issues',
-  NOTIFICATIONS:       'notifications',
-  BRIEFS:              'briefs',
-  ACCOUNTANT_FORWARDS: 'accountant_forwards',
-};
+// #93 — COLLECTIONS constant removed. Values were stale (e.g. 'tickets' instead of
+// 'maintenanceTickets', 'parts' instead of 'maintenanceParts') and nothing imported
+// this export. Collection name constants now live as COL vars in each context file.

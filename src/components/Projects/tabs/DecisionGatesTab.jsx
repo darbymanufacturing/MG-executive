@@ -21,7 +21,12 @@ const EMPTY_GATE = {
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
-  return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+  const [ty, tm, td] = dateStr.split('-').map(Number);
+  const now = new Date();
+  const [ny, nm, nd] = [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+  const target = Date.UTC(ty, tm - 1, td);
+  const today  = Date.UTC(ny, nm - 1, nd);
+  return Math.ceil((target - today) / 86400000);
 }
 
 function GateForm({ open, onClose, onSave, initial }) {

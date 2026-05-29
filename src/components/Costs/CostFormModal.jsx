@@ -152,6 +152,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
             <span className={styles.eurSymbol}>€</span>
             <input
               type="number"
+              inputMode="decimal"
               className={`${styles.input} ${styles.amountInput} ${errors.amount ? styles.inputError : ''}`}
               value={form.amount}
               onChange={set('amount')}
@@ -205,17 +206,17 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Interest Rate (% / yr)</label>
-                <input type="number" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 5.5" step="0.01" min="0" />
+                <input type="number" inputMode="decimal" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 5.5" step="0.01" min="0" />
               </div>
             </div>
             <div className={styles.row}>
               <div className={styles.field}>
                 <label className={styles.label}>Original Principal (€)</label>
-                <input type="number" className={styles.input} value={form.principalAmount} onChange={set('principalAmount')} placeholder="e.g. 50000" step="0.01" min="0" />
+                <input type="number" inputMode="decimal" className={styles.input} value={form.principalAmount} onChange={set('principalAmount')} placeholder="e.g. 50000" step="0.01" min="0" />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Loan Term (months)</label>
-                <input type="number" className={styles.input} value={form.loanTermMonths} onChange={set('loanTermMonths')} placeholder="e.g. 60" step="1" min="1" />
+                <input type="number" inputMode="numeric" className={styles.input} value={form.loanTermMonths} onChange={set('loanTermMonths')} placeholder="e.g. 60" step="1" min="1" />
               </div>
             </div>
           </>
@@ -232,17 +233,17 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Interest Rate / APR (%)</label>
-                <input type="number" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 18.5" step="0.01" min="0" />
+                <input type="number" inputMode="decimal" className={styles.input} value={form.interestRate} onChange={set('interestRate')} placeholder="e.g. 18.5" step="0.01" min="0" />
               </div>
             </div>
             <div className={styles.row}>
               <div className={styles.field}>
                 <label className={styles.label}>Credit Limit (€)</label>
-                <input type="number" className={styles.input} value={form.creditLimit} onChange={set('creditLimit')} placeholder="e.g. 10000" step="0.01" min="0" />
+                <input type="number" inputMode="decimal" className={styles.input} value={form.creditLimit} onChange={set('creditLimit')} placeholder="e.g. 10000" step="0.01" min="0" />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Minimum Payment (€)</label>
-                <input type="number" className={styles.input} value={form.minimumPayment} onChange={set('minimumPayment')} placeholder="e.g. 250" step="0.01" min="0" />
+                <input type="number" inputMode="decimal" className={styles.input} value={form.minimumPayment} onChange={set('minimumPayment')} placeholder="e.g. 250" step="0.01" min="0" />
               </div>
             </div>
           </>

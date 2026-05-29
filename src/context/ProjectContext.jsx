@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot,
   addDoc, updateDoc, deleteDoc, serverTimestamp,
@@ -29,10 +29,11 @@ function patchProject(docId, changes, errorMessage) {
 }
 
 export function ProjectProvider({ children }) {
-  const [projects, setProjects]             = useState([]);
-  const [gates, setGates]                   = useState([]);
-  const [brainstormIdeas, setBrainstormIdeas] = useState([]);
-  const [loading, setLoading]               = useState(true);
+  const [projects, setProjects]               = useState([]);
+  const [gates, setGates]                     = useState([]);
+  const [brainstormIdeas, setBrainstormIdeas]  = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [snapshotError, setSnapshotError]     = useState(null);
 
   // ── Real-time listeners ───────────────────────────────────────────────────
   useEffect(() => {
@@ -44,30 +45,51 @@ export function ProjectProvider({ children }) {
       if (projectsDone && gatesDone && brainstormDone) setLoading(false);
     };
 
-    const unsubProjects = onSnapshot(collection(db, PROJECTS_COL), (snap) => {
-      const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-      const sorted = raw.sort((a, b) =>
-        (b.createdAt || '') > (a.createdAt || '') ? 1 : -1
-      );
-      setProjects(sorted.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
-      projectsDone = true;
-      checkDone();
-    });
+    const unsubProjects = onSnapshot(
+      collection(db, PROJECTS_COL),
+      (snap) => {
+        const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+        const sorted = raw.sort((a, b) =>
+          (b.createdAt || '') > (a.createdAt || '') ? 1 : -1
+        );
+        setProjects(sorted.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
+        projectsDone = true;
+        checkDone();
+      },
+      (err) => {
+        console.error('[ProjectContext] projects snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
 
-    const unsubGates = onSnapshot(collection(db, GATES_COL), (snap) => {
-      setGates(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-      gatesDone = true;
-      checkDone();
-    });
+    const unsubGates = onSnapshot(
+      collection(db, GATES_COL),
+      (snap) => {
+        setGates(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
+        gatesDone = true;
+        checkDone();
+      },
+      (err) => {
+        console.error('[ProjectContext] gates snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
 
-    const unsubBrainstorm = onSnapshot(collection(db, BRAINSTORM_COL), (snap) => {
-      const ideas = snap.docs
-        .map((d) => ({ _docId: d.id, ...d.data() }))
-        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-      setBrainstormIdeas(ideas);
-      brainstormDone = true;
-      checkDone();
-    });
+    const unsubBrainstorm = onSnapshot(
+      collection(db, BRAINSTORM_COL),
+      (snap) => {
+        const ideas = snap.docs
+          .map((d) => ({ _docId: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setBrainstormIdeas(ideas);
+        brainstormDone = true;
+        checkDone();
+      },
+      (err) => {
+        console.error('[ProjectContext] brainstorm snapshot error:', err);
+        setSnapshotError(err.message);
+      },
+    );
 
     return () => { unsubProjects(); unsubGates(); unsubBrainstorm(); };
   }, []);
@@ -477,36 +499,55 @@ export function ProjectProvider({ children }) {
   const activeProjects   = projects.filter((p) => !p.archived);
   const archivedProjects = projects.filter((p) => p.archived);
 
+  // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
+  const value = useMemo(() => ({
+    projects, activeProjects, archivedProjects,
+    gates, brainstormIdeas, loading, snapshotError,
+    // Project CRUD
+    addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
+    setStatus,
+    // Phases
+    addPhase, updatePhase, deletePhase, reorderPhases,
+    // Next Action
+    setNextAction, completeNextAction,
+    // Blockers
+    addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
+    // Activity log
+    addUpdate,
+    // Decisions
+    addDecision,
+    // POW
+    addPowEntry,
+    // Brainstorm (global)
+    addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
+    // Task assignee
+    setTaskAssignee,
+    // Interconnection
+    promotePhaseToProject, linkProjects, unlinkProjects,
+    // Milestones (War Room compat)
+    toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
+    // Decision Gates (War Room compat)
+    addGate, updateGate, deleteGate,
+  }), [
+    projects, activeProjects, archivedProjects,
+    gates, brainstormIdeas, loading, snapshotError,
+    addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
+    setStatus,
+    addPhase, updatePhase, deletePhase, reorderPhases,
+    setNextAction, completeNextAction,
+    addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
+    addUpdate,
+    addDecision,
+    addPowEntry,
+    addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
+    setTaskAssignee,
+    promotePhaseToProject, linkProjects, unlinkProjects,
+    toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
+    addGate, updateGate, deleteGate,
+  ]);
+
   return (
-    <ProjectContext.Provider value={{
-      projects, activeProjects, archivedProjects,
-      gates, brainstormIdeas, loading,
-      // Project CRUD
-      addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
-      setStatus,
-      // Phases
-      addPhase, updatePhase, deletePhase, reorderPhases,
-      // Next Action
-      setNextAction, completeNextAction,
-      // Blockers
-      addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
-      // Activity log
-      addUpdate,
-      // Decisions
-      addDecision,
-      // POW
-      addPowEntry,
-      // Brainstorm (global)
-      addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
-      // Task assignee
-      setTaskAssignee,
-      // Interconnection
-      promotePhaseToProject, linkProjects, unlinkProjects,
-      // Milestones (War Room compat)
-      toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
-      // Decision Gates (War Room compat)
-      addGate, updateGate, deleteGate,
-    }}>
+    <ProjectContext.Provider value={value}>
       {children}
     </ProjectContext.Provider>
   );

@@ -157,6 +157,11 @@ export default function CostManager() {
   const handleCsvImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_SIZE) {
+      setCsvMsg({ type: 'error', text: 'File too large. Maximum size is 50MB.' });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const parsed = parseCostsCSV(ev.target.result);

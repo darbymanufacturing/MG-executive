@@ -1,8 +1,13 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Check, ArrowRight, X } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useCosts } from '../../context/CostContext.jsx';
+import { useRevenue } from '../../context/RevenueContext.jsx';
+import { useIssues } from '../../context/IssueContext.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
+import { useProjects } from '../../context/ProjectContext.jsx';
 import styles from './DailyBrief.module.css';
 
 /* ─── Helpers ─── */
@@ -16,8 +21,9 @@ function todayLabel() {
 
 function parseBriefData(data) {
   const sections = data.sections || [];
+  // BUG #161: filter(Boolean) guards against undefined keywords
   const find = (keywords) => sections.find(s =>
-    keywords.some(k => s.title?.toLowerCase().includes(k))
+    keywords.filter(Boolean).some(k => s.title?.toLowerCase().includes(k))
   );
   return {
     date: todayLabel(),
@@ -40,11 +46,39 @@ function BriefCollapsed({ text }) {
   );
 }
 
+/* ─── Error / unavailable fallback ─── */
+function BriefUnavailable({ onRetry }) {
+  return (
+    <div
+      className={`card ${styles.briefCollapsed}`}
+      style={{ opacity: 0.6, cursor: 'pointer' }}
+      onClick={onRetry}
+      role="button"
+      title="Tap to retry"
+    >
+      <Sparkles size={16} className={styles.sparkle} />
+      <span className={styles.collapsedText} style={{ color: 'var(--fg-muted)' }}>
+        <strong>Daily Brief</strong> · ⚠ Brief unavailable — tap to retry
+      </span>
+    </div>
+  );
+}
+
 export default function DailyBrief() {
   const { user } = useAuth();
+
+  /* Pull real data from contexts for the brief payload */
+  const issueCtx       = useIssuesSafe();
+  const maintenanceCtx = useMaintenanceSafe();
+  const projectCtx     = useProjectsSafe();
+  const revenueCtx     = useRevenueSafe();
+  const costsCtx       = useCostsSafe();
+
   const [brief, setBrief] = useState(null);
   const [status, setStatus] = useState('loading'); /* loading | generating | ready | error */
   const [dismissed, setDismissed] = useState(false);
+  // BUG #304: retryCount forces effect to re-run on retry
+  const [retryCount, setRetryCount] = useState(0);
   const hasFetched = useRef(false);
 
   /* Check if dismissed today */
@@ -59,6 +93,25 @@ export default function DailyBrief() {
     hasFetched.current = true;
 
     const briefKey = `${todayKey()}_${user.uid}`;
+
+    /* ── Build real payload from contexts (BUG #159) ── */
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const openIssuesCount = issueCtx?.activeIssues?.filter(i => i.status !== 'done').length ?? 0;
+    const activeTicketsCount = maintenanceCtx?.tickets?.filter(t => t.status === 'Active').length ?? 0;
+    const revenueThisMonth = (revenueCtx?.revenueData || [])
+      .filter(r => r.date?.startsWith(monthKey))
+      .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+    const costsThisMonth = (costsCtx?.costs || [])
+      .filter(c => c.startDate?.startsWith(monthKey))
+      .reduce((s, c) => s + (c.amount || 0), 0);
+    const activeProjectsCount = (projectCtx?.projects || [])
+      .filter(p => p.effectiveStatus !== 'archived' && !p.archived).length;
+    const fleetSize = costsCtx?.config?.fleetSize ?? 0;
+    const inRepair = maintenanceCtx?.tickets?.filter(
+      t => t.status === 'Active' || t.status === 'Backlog'
+    ).length ?? 0;
 
     async function fetchOrGenerate() {
       try {
@@ -80,21 +133,19 @@ export default function DailyBrief() {
           body: JSON.stringify({
             userId: user.uid,
             date: todayKey(),
-            /* Passing minimal data — the API generates a brief
-               asking the user to open the app. Once we have server-side
-               aggregation (firebase-admin), this will be richer. */
             data: {
-              openIssues:      [],
+              openIssues:      openIssuesCount,
               overdueTickets:  [],
-              activeTickets:   0,
+              activeTickets:   activeTicketsCount,
               completedToday:  0,
-              openProjects:    [],
+              openProjects:    activeProjectsCount,
               revenueThisWeek: 0,
               revenuePrevWeek: 0,
-              costsThisMonth:  0,
-              criticalIssues:  0,
-              fleetSize:       0,
-              inRepair:        0,
+              revenueThisMonth,
+              costsThisMonth,
+              criticalIssues:  issueCtx?.activeIssues?.filter(i => i.urgency === 'critical').length ?? 0,
+              fleetSize,
+              inRepair,
             },
           }),
         });
@@ -113,15 +164,8 @@ export default function DailyBrief() {
           setBrief(parseBriefData(generated));
           setStatus('ready');
         } else {
-          /* API down — show a soft fallback, don't error out */
-          setBrief({
-            date: todayLabel(),
-            narrative: 'Brief generation is loading. Check back in a moment.',
-            yesterday: [],
-            today: ['Open Inbox to review what needs your attention today.'],
-            extra: [],
-          });
-          setStatus('ready');
+          /* API down — show error state, don't pass it off as a real brief (#304) */
+          setStatus('error');
         }
       } catch {
         setStatus('error');
@@ -129,18 +173,31 @@ export default function DailyBrief() {
     }
 
     fetchOrGenerate();
-  }, [user, dismissed]);
+
+    // BUG #160: reset hasFetched on cleanup so StrictMode remounts (and retries) re-fetch
+    return () => {
+      hasFetched.current = false;
+    };
+  }, [user, dismissed, retryCount]); // retryCount forces re-run on manual retry
 
   const handleDismiss = () => {
     localStorage.setItem(`omni_brief_dismissed_${todayKey()}`, '1');
     setDismissed(true);
   };
 
+  // BUG #304: retry handler — reset state and bump counter
+  const handleRetry = () => {
+    setBrief(null);
+    setStatus('loading');
+    setRetryCount(c => c + 1);
+  };
+
   /* ─── Render ─── */
   if (dismissed)               return null;
   if (status === 'loading')    return <BriefCollapsed text="Loading…" />;
   if (status === 'generating') return <BriefCollapsed text="Generating your brief…" />;
-  if (status === 'error')      return <BriefCollapsed text="Unavailable — open Inbox to triage." />;
+  // BUG #304: error state is now visually distinct and retryable
+  if (status === 'error')      return <BriefUnavailable onRetry={handleRetry} />;
   if (!brief)                  return null;
 
   return (
@@ -191,4 +248,21 @@ export default function DailyBrief() {
       </div>
     </div>
   );
+}
+
+/* Safe hooks — return null if context not mounted */
+function useIssuesSafe() {
+  try { return useIssues(); } catch { return null; }
+}
+function useMaintenanceSafe() {
+  try { return useMaintenance(); } catch { return null; }
+}
+function useProjectsSafe() {
+  try { return useProjects(); } catch { return null; }
+}
+function useRevenueSafe() {
+  try { return useRevenue(); } catch { return null; }
+}
+function useCostsSafe() {
+  try { return useCosts(); } catch { return null; }
 }

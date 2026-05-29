@@ -31,8 +31,12 @@ function parseNum(val) {
   return isNaN(num) ? 0 : num;
 }
 
-/** Parse a single quoted CSV row into an array of raw string values. */
-function parseRow(line) {
+/**
+ * Parse a single quoted CSV row into an array of raw string values.
+ * Handles "" escaped double-quotes within quoted fields.
+ * Exported as parseCSVRow so other parsers can reuse the canonical implementation. (#213)
+ */
+export function parseCSVRow(line) {
   const values = [];
   let current = '';
   let inQuotes = false;
@@ -74,7 +78,7 @@ export function parseRevenueCSV(csvText) {
   }
 
   // Validate header
-  const headerValues = parseRow(lines[0]);
+  const headerValues = parseCSVRow(lines[0]);
   const missing = EXPECTED_HEADERS.filter((h) => !headerValues.includes(h));
   if (missing.length > 0) {
     return {
@@ -92,7 +96,7 @@ export function parseRevenueCSV(csvText) {
   const errors = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseRow(lines[i]);
+    const cols = parseCSVRow(lines[i]);
     // #76 — warn when a row has more columns than expected (silently truncated data)
     if (cols.length > EXPECTED_HEADERS.length) {
       errors.push(`Row ${i + 1}: has ${cols.length} columns but expected ${EXPECTED_HEADERS.length} — check CSV format for extra commas.`);

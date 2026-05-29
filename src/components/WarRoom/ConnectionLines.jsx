@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import { useMap } from 'react-map-gl/mapbox';
 
 /**
@@ -9,7 +9,18 @@ import { useMap } from 'react-map-gl/mapbox';
 export default function ConnectionLines({ cities }) {
   const { current: map } = useMap();
   const [lines, setLines] = useState([]);
-  const [size,  setSize]  = useState({ w: window.innerWidth, h: window.innerHeight });
+  // BUG #181 — lazy initializer avoids reading window during SSR
+  const [size,  setSize]  = useState(() =>
+    typeof window !== 'undefined'
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: 0, h: 0 }
+  );
+
+  // BUG #182 — stable string key so useEffect doesn't re-subscribe on every render
+  const citiesKey = useMemo(
+    () => cities?.map((c) => c.id || c.name).join(',') ?? '',
+    [cities],
+  );
 
   const computeLines = useCallback(() => {
     if (!map) return;
@@ -43,7 +54,8 @@ export default function ConnectionLines({ cities }) {
       map.off('load', computeLines);
       window.removeEventListener('resize', onResize);
     };
-  }, [map, cities, computeLines]);
+  // BUG #182 — depend on citiesKey (stable string) instead of cities (unstable reference)
+  }, [map, citiesKey, computeLines]);
 
   if (!lines.length) return null;
 

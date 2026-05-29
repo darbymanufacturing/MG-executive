@@ -128,13 +128,18 @@ export function computeSpotPerformance({
       .map((w) => w.date)
   );
 
-  // Generate date range
+  // Generate date range — use UTC millisecond arithmetic instead of setDate() so
+  // DST transitions cannot duplicate or skip a calendar day. (#128)
   const dates = [];
-  let cur = new Date(startDate + 'T12:00:00');
-  const end = new Date(endDate + 'T12:00:00');
-  while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
+  {
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    let currentMs = Date.UTC(sy, sm - 1, sd);
+    const endMs   = Date.UTC(ey, em - 1, ed);
+    while (currentMs <= endMs) {
+      dates.push(new Date(currentMs).toISOString().slice(0, 10));
+      currentMs += 86400000; // always exactly 24 h in UTC
+    }
   }
 
   const rows = [];

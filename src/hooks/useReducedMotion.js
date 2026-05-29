@@ -22,11 +22,16 @@ export default function useReducedMotion() {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const onChange = (e) => setReduced(e.matches);
-    // Older Safari uses addListener; modern uses addEventListener
+    // Modern path — all browsers that support prefers-reduced-motion also support
+    // addEventListener (shipped simultaneously, ~2019). The addListener fallback
+    // below is effectively dead code in all real-world browsers; it exists only as
+    // a safety net for ancient environments.
+    // Note: addListener is deprecated (removed from the spec). Do not expand its use.
     if (mq.addEventListener) {
       mq.addEventListener('change', onChange);
       return () => mq.removeEventListener('change', onChange);
     }
+    // Legacy fallback — deprecated, never reached in modern browsers
     mq.addListener(onChange);
     return () => mq.removeListener(onChange);
   }, []);

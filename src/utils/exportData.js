@@ -103,6 +103,11 @@ export async function exportDashboardToPDF(filename = 'omni-dashboard.pdf') {
       return;
     }
 
+    // Scroll to top so html2canvas captures from the beginning, not current scroll position
+    window.scrollTo(0, 0);
+    el.scrollIntoView({ block: 'start' });
+    await new Promise((r) => setTimeout(r, 100));
+
     const canvas = await html2canvas(el, {
       scale:           2,
       useCORS:         true,

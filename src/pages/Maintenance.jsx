@@ -32,7 +32,7 @@ const TABS = [
 export default function Maintenance() {
   const { tickets, parts, loadSeedData } = useMaintenance();
   const { config: costConfig } = useCosts();
-  const locations = costConfig.locations?.length ? costConfig.locations : ['Corinth', 'Nafplion'];
+  const locations = costConfig?.locations ?? [];
 
   const [activeTab,   setActiveTab]   = useState('overview');
   const [city,        setCity]        = useState('');
@@ -78,8 +78,8 @@ export default function Maintenance() {
       />
 
       <div className={styles.content}>
-        {/* Seed banner */}
-        {tickets.length === 0 && parts.length === 0 && (
+        {/* Seed banner — hide immediately when seedDone, without waiting for snapshot */}
+        {tickets.length === 0 && !seedDone && (
           <div className={styles.seedBanner}>
             <Database size={16} />
             <span>No maintenance data yet. Load the existing Xslide fleet data.</span>
