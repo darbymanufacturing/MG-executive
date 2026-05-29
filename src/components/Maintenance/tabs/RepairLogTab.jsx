@@ -8,6 +8,7 @@ import ActiveTicketsBanner from '../tickets/ActiveTicketsBanner.jsx';
 import TicketFilters from '../tickets/TicketFilters.jsx';
 import TicketTable from '../tickets/TicketTable.jsx';
 import TicketForm from '../tickets/TicketForm.jsx';
+import Skeleton from '../../Shared/Skeleton.jsx';
 import styles from './RepairLogTab.module.css';
 
 const ARCHIVED_STATUSES = ['Completed', 'Donor'];
@@ -15,7 +16,7 @@ const EMPTY_FILTERS = { search: '', statuses: [], categories: [], tags: [] };
 
 export default function RepairLogTab({ filteredTickets }) {
   const {
-    config, isAtMaxActive, activeCount,
+    config, isAtMaxActive, activeCount, loading,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
   } = useMaintenance();
 
@@ -138,14 +139,20 @@ export default function RepairLogTab({ filteredTickets }) {
         </Button>
       </div>
 
-      <TicketTable
-        tickets={displayTickets}
-        onEdit={handleOpenEdit}
-        onDelete={handleDelete}
-        onComplete={handleComplete}
-        technicians={technicians}
-        onAssign={handleAssign}
-      />
+      {loading ? (
+        <div style={{ padding: 'var(--space-4)' }}>
+          <Skeleton variant="text" lines={6} height="44px" />
+        </div>
+      ) : (
+        <TicketTable
+          tickets={displayTickets}
+          onEdit={handleOpenEdit}
+          onDelete={handleDelete}
+          onComplete={handleComplete}
+          technicians={technicians}
+          onAssign={handleAssign}
+        />
+      )}
 
       <TicketForm
         isOpen={showForm}

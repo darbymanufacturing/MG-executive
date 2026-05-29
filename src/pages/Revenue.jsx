@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CsvImportPanel from '../components/Revenue/CsvImportPanel.jsx';
 import RevenueTable from '../components/Revenue/RevenueTable.jsx';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
+import Skeleton from '../components/Shared/Skeleton.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { formatEUR, formatTrips, formatKm } from '../utils/formatters.js';
@@ -14,7 +15,7 @@ import { totalRevenue, avgTripsPerDay, totalDistanceKm, totalTrips, filterRevenu
 import styles from './Revenue.module.css';
 
 export default function Revenue() {
-  const { revenueData, clearAllRevenue } = useRevenue();
+  const { revenueData, revenueLoading, clearAllRevenue } = useRevenue();
   const { config } = useCosts();
   const locations = config.locations || [];
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -51,8 +52,22 @@ export default function Revenue() {
       />
 
       <div className={styles.content}>
+        {/* Loading skeleton */}
+        {revenueLoading && (
+          <>
+            <div className={styles.statsRow}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div className={styles.statCard} key={i}>
+                  <Skeleton variant="text" lines={2} height="18px" />
+                </div>
+              ))}
+            </div>
+            <Skeleton height="280px" radius="var(--radius-lg)" style={{ marginTop: 'var(--space-4)' }} />
+          </>
+        )}
+
         {/* Summary stats (only when data exists) */}
-        {hasData && (
+        {!revenueLoading && hasData && (
           <div className={styles.statsRow}>
             <div className={styles.statCard}>
               <span className={styles.statLabel}>Total Revenue (all time)</span>
@@ -78,10 +93,10 @@ export default function Revenue() {
         )}
 
         {/* CSV Import */}
-        <CsvImportPanel locations={locations} />
+        {!revenueLoading && <CsvImportPanel locations={locations} />}
 
         {/* Data table */}
-        {hasData && (
+        {!revenueLoading && hasData && (
           <div className={styles.tableSection}>
             <div className={styles.tableSectionHeader}>
               <TrendingUp size={16} className={styles.tableSectionIcon} />

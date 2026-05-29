@@ -13,6 +13,9 @@ import ScooterEventTimeline  from './scooter/ScooterEventTimeline.jsx';
 import AnomalyFlags       from './scooter/AnomalyFlags.jsx';
 import WeeklyDigest       from './reports/WeeklyDigest.jsx';
 import MonthlyOverview    from './reports/MonthlyOverview.jsx';
+import { Inbox, MousePointerClick } from 'lucide-react';
+import Skeleton           from '../Shared/Skeleton.jsx';
+import EmptyState         from '../Shared/EmptyState.jsx';
 import styles from './PmeTabs.module.css';
 
 const TABS = [
@@ -22,18 +25,26 @@ const TABS = [
   { id: 'reports',  label: 'Reports',         icon: '📊' },
 ];
 
-function EmptyState({ tab }) {
+function PmeEmptyState({ tab }) {
   return (
-    <div className={styles.emptyState}>
-      <span className={styles.emptyIcon}>📥</span>
-      <p>No telemetry data loaded yet.</p>
-      <p>Go to the <strong>Ingest</strong> tab and upload a Status Log CSV to unlock {tab}.</p>
+    <EmptyState
+      icon={Inbox}
+      title="No telemetry data loaded yet"
+      description={`Go to the Ingest tab and upload a Status Log CSV to unlock ${tab}.`}
+    />
+  );
+}
+
+function PmeLoading() {
+  return (
+    <div style={{ padding: 'var(--space-4)' }}>
+      <Skeleton variant="text" lines={6} height="40px" />
     </div>
   );
 }
 
 export default function PmeTabs() {
-  const { hasData } = useTelemetry();
+  const { hasData, loading } = useTelemetry();
   const [tab, setTab]       = useState('ingest');
   const [scooterId, setScooterId] = useState(null);
 
@@ -72,7 +83,8 @@ export default function PmeTabs() {
         )}
 
         {tab === 'fleet' && (
-          !hasData ? <EmptyState tab="Fleet Risk" /> : (
+          loading ? <PmeLoading /> :
+          !hasData ? <PmeEmptyState tab="Fleet Risk" /> : (
             <div className={styles.fleetLayout}>
               <FleetKpiStrip />
               <FleetRiskTable onSelectScooter={selectScooterAndNavigate} />
@@ -96,16 +108,18 @@ export default function PmeTabs() {
                 </div>
               </div>
             ) : (
-              <div className={styles.emptyState}>
-                <span className={styles.emptyIcon}>🛴</span>
-                <p>Select a scooter above to see its health report and event timeline.</p>
-              </div>
+              <EmptyState
+                icon={MousePointerClick}
+                title="Select a scooter"
+                description="Pick a scooter above to see its health report and event timeline."
+              />
             )}
           </div>
         )}
 
         {tab === 'reports' && (
-          !hasData ? <EmptyState tab="Reports" /> : (
+          loading ? <PmeLoading /> :
+          !hasData ? <PmeEmptyState tab="Reports" /> : (
             <div className={styles.reportsLayout}>
               <WeeklyDigest />
               <hr className={styles.divider} />

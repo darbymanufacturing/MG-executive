@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pencil, CheckSquare, Trash2, ClipboardX } from 'lucide-react';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './TicketTable.module.css';
 
 const STATUS_COLORS = {
@@ -45,10 +46,11 @@ export default function TicketTable({ tickets, onEdit, onDelete, onComplete, tec
 
   if (tickets.length === 0) {
     return (
-      <div className={styles.empty}>
-        <ClipboardX size={32} className={styles.emptyIcon} />
-        <p className={styles.emptyText}>No tickets match the current filters.</p>
-      </div>
+      <EmptyState
+        icon={ClipboardX}
+        title="No tickets match the current filters."
+        description="Add a ticket or adjust the filters above to see results."
+      />
     );
   }
 

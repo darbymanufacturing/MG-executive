@@ -8,6 +8,8 @@ import PortfolioOverview from './PortfolioOverview.jsx';
 import NewProjectModal from './NewProjectModal.jsx';
 import Brainstorm from './Brainstorm.jsx';
 import ChecklistTab from './tabs/ChecklistTab.jsx';
+import Skeleton from '../Shared/Skeleton.jsx';
+import EmptyState from '../Shared/EmptyState.jsx';
 const CalendarTab = lazy(() => import('./tabs/CalendarTab.jsx'));
 const TimelineTab = lazy(() => import('./tabs/TimelineTab.jsx'));
 import styles from './ProjectsDashboard.module.css';
@@ -50,7 +52,15 @@ export default function ProjectsDashboard() {
   const reviewStale = daysSinceReview !== null && daysSinceReview >= 7;
 
   if (loading) {
-    return <div className={styles.loading}>Loading projects…</div>;
+    return (
+      <div className={styles.page}>
+        <div className={styles.grid}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} height="170px" radius="var(--radius-lg)" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -125,11 +135,11 @@ export default function ProjectsDashboard() {
       ) : tab === 'checklist' ? (
         <ChecklistTab />
       ) : tab === 'calendar' ? (
-        <Suspense fallback={<div className={styles.loading}>Loading calendar…</div>}>
+        <Suspense fallback={<Skeleton height="320px" radius="var(--radius-lg)" />}>
           <CalendarTab />
         </Suspense>
       ) : tab === 'timeline' ? (
-        <Suspense fallback={<div className={styles.loading}>Loading timeline…</div>}>
+        <Suspense fallback={<Skeleton height="320px" radius="var(--radius-lg)" />}>
           <TimelineTab />
         </Suspense>
       ) : (
@@ -151,18 +161,19 @@ export default function ProjectsDashboard() {
           <PortfolioOverview />
 
           {/* Card grid */}
-          <div className={styles.grid}>
-            {filtered.length === 0 ? (
-              <div className={styles.emptyState}>
-                <p className={styles.emptyStateTitle}>No projects here</p>
-                <p>Create your first project or change the filter.</p>
-              </div>
-            ) : (
-              filtered.map((project) => (
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={FolderKanban}
+              title="No projects here"
+              description="Create your first project or change the filter."
+            />
+          ) : (
+            <div className={styles.grid}>
+              {filtered.map((project) => (
                 <ProjectCard key={project._docId} project={project} />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 

@@ -13,6 +13,8 @@ import RevenueCostTrend from '../components/Dashboard/RevenueCostTrend.jsx';
 import DailyRevenueTrend from '../components/Dashboard/DailyRevenueTrend.jsx';
 import Button from '../components/Shared/Button.jsx';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
+import Skeleton from '../components/Shared/Skeleton.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
@@ -66,8 +68,23 @@ const selectStyle = {
   cursor: 'pointer',
 };
 
+function DashboardSkeleton() {
+  return (
+    <div className={styles.page}>
+      <div className={styles.content}>
+        <Skeleton height="320px" radius="var(--radius-lg)" />
+        <div className={styles.kpiGrid}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} height="120px" radius="var(--radius-lg)" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
-  const { costs, config, loadSampleData } = useCosts();
+  const { costs, config, loadSampleData, loading: costsLoading } = useCosts();
   const { revenueData } = useRevenue();
   const {
     totalRevenueLost,
@@ -271,6 +288,10 @@ export default function Dashboard() {
     setExportingPDF(false);
   }
 
+  if (costsLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className={styles.page} id="dashboard-export">
       <Header
@@ -353,17 +374,19 @@ export default function Dashboard() {
 
       <div className={styles.content}>
         {isEmpty && (
-          <div className={styles.emptyBanner}>
-            <div>
-              <strong>No data yet.</strong> Load sample data or go to Cost Manager to add your first cost.
-            </div>
-            <div className={styles.emptyActions}>
-              <Button variant="outline" size="sm" onClick={loadSampleData}>Load Sample Data</Button>
-              <Button variant="primary" size="sm" onClick={() => navigate('/costs')}>
-                <Plus size={14} /> Add Costs
-              </Button>
-            </div>
-          </div>
+          <EmptyState
+            icon={Activity}
+            title="No data yet"
+            description="Load sample data or add your first cost to populate your dashboard."
+            action={
+              <div className={styles.emptyActions}>
+                <Button variant="outline" size="sm" onClick={loadSampleData}>Load Sample Data</Button>
+                <Button variant="primary" size="sm" onClick={() => navigate('/costs')}>
+                  <Plus size={14} /> Add Costs
+                </Button>
+              </div>
+            }
+          />
         )}
 
         {/* ── Revenue vs. Costs chart — full width, top ── */}
