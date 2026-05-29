@@ -182,7 +182,10 @@ export function revenuePerTrip(revenueData) {
 export function vehicleUtilization(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return 0;
   const avgVehicles = revenueData.reduce((s, r) => s + (r.uniqueVehiclesCount || 0), 0) / revenueData.length;
-  return (avgVehicles / fleetSize) * 100;
+  // Cap at 100%: uniqueVehiclesCount can exceed a stale/undercounted fleetSize,
+  // and a KPI reading ">100% utilization" is nonsensical to users. Restored
+  // after round-2 bug sweep dropped the cap (caught by revenueCalculations.test.js).
+  return Math.min(100, (avgVehicles / fleetSize) * 100);
 }
 
 /** Total trip distance across all rows (km) */
