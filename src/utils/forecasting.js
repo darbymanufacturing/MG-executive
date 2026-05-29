@@ -74,7 +74,7 @@ export function forecastTrend(data, monthsAhead = 3) {
   });
 
   // Attach anchor values to all historical data too (null = not shown)
-  const historical = data.map((d, i) => ({
+  const historical = data.map((d, _i) => ({
     ...d,
     forecastRevenue: null,
     forecastCost:    null,

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, doc, onSnapshot,
-  writeBatch, setDoc, deleteDoc, getDocs, query, orderBy, limit,
+  writeBatch, deleteDoc, getDocs, query, orderBy, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -63,7 +63,7 @@ export function RevenueProvider({ children }) {
       const batch = writeBatch(db);
       chunk.forEach((day) => {
         const rawId = `${day.date}_${day.location || 'global'}`;
-        const docId = rawId.replace(/[\/\.#$[\]]/g, '_');
+        const docId = rawId.replace(/[/.#$[\]]/g, '_');
         const ref = doc(db, REVENUE_COL, docId);
         batch.set(ref, day); // setDoc via batch → overwrites existing doc
       });

@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Trash2, X } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { useTrips } from '../../context/TripContext.jsx';
 import { parseTripLogCsv } from '../../utils/parseTripLogCsv.js';
 import { formatKm, formatMinutes, formatEUR } from '../../utils/formatters.js';

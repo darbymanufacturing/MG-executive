@@ -13,7 +13,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, deleteDoc, limit,
+  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';

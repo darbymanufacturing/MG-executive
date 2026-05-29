@@ -24,7 +24,7 @@ import { formatEUR } from '../utils/formatters.js';
 import styles from './Settings.module.css';
 
 // #221, #223: Proper component so useState is valid (field() helper can't call hooks directly)
-function FieldInput({ configKey, label, type, configValue, onCommit, extra, styles: s }) {
+function FieldInput({ configKey: _configKey, label, type, configValue, onCommit, extra, styles: s }) {
   const [localVal, setLocalVal] = useState(configValue);
 
   // Sync when config value changes externally (e.g. on initial load)

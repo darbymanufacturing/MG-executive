@@ -6,7 +6,7 @@ import styles from './Scooter.module.css';
 
 export default function AnomalyFlags({ scooterId }) {
   const { events } = useTelemetry();
-  const { tickets, scooters } = useMaintenance();
+  const { tickets } = useMaintenance();
 
   const flags = useMemo(() => {
     if (!scooterId) return [];

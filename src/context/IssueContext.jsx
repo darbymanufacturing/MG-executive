@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   collection, query, orderBy, onSnapshot, addDoc, updateDoc,
-  doc, serverTimestamp, where, arrayUnion,
+  doc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';

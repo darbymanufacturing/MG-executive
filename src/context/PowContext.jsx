@@ -75,7 +75,7 @@ export function PowProvider({ children }) {
           // parse old summary string into array
           steps = (data.summary ?? '')
             .split('\n')
-            .map(l => l.replace(/^(\d+[\.\)]|[-•])\s+/, '').trim())
+            .map(l => l.replace(/^(\d+[.)]|[-•])\s+/, '').trim())
             .filter(Boolean);
         }
         return {

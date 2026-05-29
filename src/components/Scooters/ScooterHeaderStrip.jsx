@@ -33,7 +33,7 @@ export default function ScooterHeaderStrip({ scooter }) {
   const { events }    = useTelemetry();
   const { trips }     = useTrips();
   const { revenueData } = useRevenue();
-  const { tickets, config: maintConfig } = useMaintenance();
+  const { tickets } = useMaintenance();
   const { config: costConfig } = useCosts();
 
   const scooterId    = scooter?.scooterId;

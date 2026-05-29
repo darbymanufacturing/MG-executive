@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
@@ -37,7 +37,7 @@ export default function ProjectCard({ project }) {
   const doneCount = phases.filter((p) => p.status === 'done').length;
 
   // Budget
-  const { expenses, revenue, net } = budgetFromCity(costs, revenueData, project.linkedCity);
+  const { expenses } = budgetFromCity(costs, revenueData, project.linkedCity);
   const hasBudget = project.plannedBudget > 0;
   const budgetPct = hasBudget ? Math.min((expenses / project.plannedBudget) * 100, 100) : 0;
   const budgetColor = budgetPct >= 90 ? '#E84545' : budgetPct >= 70 ? '#F5A623' : '#00C896';
@@ -46,7 +46,7 @@ export default function ProjectCard({ project }) {
   const staleness = updateStaleness(project.updatedAt);
   const daysAgo = project.updatedAt ? daysSince(project.updatedAt) : null;
 
-  function handleCardClick(e) {
+  function handleCardClick(_e) {
     if (editing) return;
     navigate(`/projects/${project._docId}`);
   }

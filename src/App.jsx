@@ -148,7 +148,7 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [_notificationsOpen, setNotificationsOpen] = useState(false);
   const rootRef = useRef(null);
 
   /* Theme — also propagate to <html> so body/globals.css can read it */

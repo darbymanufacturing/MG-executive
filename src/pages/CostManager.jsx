@@ -8,7 +8,7 @@ import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CategoryBadge from '../components/Costs/CategoryBadge.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
-import { CATEGORIES, FREQUENCIES } from '../utils/constants.js';
+import { FREQUENCIES } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
 import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';

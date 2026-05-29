@@ -1,7 +1,7 @@
 import { doc, writeBatch, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
-const BATCH_SIZE = 450;
+const _BATCH_SIZE = 450; // reserved for future batching; currently writes fit in one batch
 
 /**
  * Writes back a completed repair session in one atomic batch:

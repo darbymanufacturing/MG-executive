@@ -1,4 +1,3 @@
-/* global process */
 /**
  * Hopp MCP HTTP client — calls tools on the deployed hopp-mcp server
  * (https://hopp-mcp.vercel.app/api/mcp) using JSON-RPC over Streamable HTTP.

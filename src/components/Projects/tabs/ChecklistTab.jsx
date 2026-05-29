@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, User, ChevronDown } from 'lucide-react';
+import { Check, User } from 'lucide-react';
 import { useProjects } from '../../../context/ProjectContext.jsx';
 import { flattenTasks, tasksByAssignee } from '../../../utils/projectAggregations.js';
 import { ASSIGNEES } from '../constants.js';

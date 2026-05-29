@@ -44,7 +44,7 @@ export default function CriticalPathPanel({ project }) {
     );
   }
 
-  const missingDurations = cpmResult.filter((ph) => !ph.duration || ph.duration === 7 && !phases.find((p) => p.id === ph.id)?.duration);
+  const _missingDurations = cpmResult.filter((ph) => !ph.duration || ph.duration === 7 && !phases.find((p) => p.id === ph.id)?.duration);
   const hasDurations = phases.some((p) => p.duration);
 
   return (

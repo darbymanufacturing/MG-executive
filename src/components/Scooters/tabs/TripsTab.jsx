@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react';
 import { Upload, Trash2 } from 'lucide-react';
 import { useTrips } from '../../../context/TripContext.jsx';
-import { formatDate, formatKm, formatMinutes, formatEUR } from '../../../utils/formatters.js';
+import { formatKm, formatMinutes, formatEUR } from '../../../utils/formatters.js';
 import TripImporter from '../TripImporter.jsx';
 import Button from '../../Shared/Button.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';

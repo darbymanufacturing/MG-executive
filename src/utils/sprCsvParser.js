@@ -47,7 +47,7 @@ function normaliseDateTime(raw) {
 }
 
 const REQUIRED_HEADERS = ['ScooterID', 'DATE & TIME'];
-const OPTIONAL_HEADERS = [
+const _OPTIONAL_HEADERS = [
   'Before State', 'After State', 'Reason/Action',
   'Lat', 'Lon', 'Battery Level', 'Rebalance State',
 ];

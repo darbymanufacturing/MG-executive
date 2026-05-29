@@ -19,7 +19,7 @@ export default function ZoneManager({ city }) {
   const [saving, setSaving]         = useState(false);
   const [coordError, setCoordError] = useState('');
 
-  const locations = config.locations || [];
+  const _locations = config.locations || [];
   const zones = (sprConfig.zones || []).filter((z) => !city || z.city === city);
   const center = city ? sprConfig.cityCenters?.[city] : null;
 

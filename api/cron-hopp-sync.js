@@ -1,4 +1,3 @@
-/* global process */
 /**
  * cron-hopp-sync — pulls latest trips / status events / repair tickets from
  * the deployed hopp-mcp server (https://hopp-mcp.vercel.app/api/mcp) and

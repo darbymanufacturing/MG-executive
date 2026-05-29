@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link2, RefreshCw, Unlink, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { collection, doc, writeBatch, setDoc } from 'firebase/firestore';
+import { doc, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { mapTransactionToCost } from '../../utils/bankTransactionMapper.js';
 import Button from '../Shared/Button.jsx';

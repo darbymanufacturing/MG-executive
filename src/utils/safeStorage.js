@@ -12,7 +12,7 @@ export const safeStorage = {
     catch { return false; }
   },
   remove(key) {
-    try { localStorage.removeItem(key); } catch {}
+    try { localStorage.removeItem(key); } catch { /* fire-and-forget; removal failure is non-fatal */ }
   },
   getRaw(key, fallback = null) {
     try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }

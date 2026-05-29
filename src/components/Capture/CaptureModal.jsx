@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Sparkles, Paperclip, Camera, Mic, Send, Check, X, Eye, Receipt, RotateCcw,
+  Sparkles, Paperclip, Camera, Send, Check, Eye, Receipt, RotateCcw,
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';

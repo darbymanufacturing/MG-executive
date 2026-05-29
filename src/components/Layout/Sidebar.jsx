@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Inbox, Sparkles, Activity, Bell, Flag, Wrench, Folder,
-  Users, Receipt, Landmark, Package, Settings, ChevronLeft, ChevronRight,
-  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, HardHat, ClipboardList,
+  Inbox, Sparkles, Activity, Bell, Flag, Wrench,
+  Users, Receipt, Landmark, Settings, ChevronLeft, ChevronRight,
+  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
@@ -11,31 +11,6 @@ import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import AsterismMark from '../Shared/AsterismMark.jsx';
 import styles from './Sidebar.module.css';
-
-/* ─── Nav structure ─── */
-const NAV_PRIMARY = [
-  { to: '/',       icon: Inbox,     label: 'Inbox',         key: 'inbox' },
-  { to: '/brief',  icon: Sparkles,  label: 'Daily Brief',   key: 'brief' },
-  { to: '/pulse',  icon: Activity,  label: 'Pulse',         key: 'pulse' },
-];
-
-const NAV_OPERATIONS = [
-  { to: '/issues',      icon: Flag,        label: 'Issues',    key: 'issues'   },
-  { to: '/maintenance', icon: Wrench,      label: 'Tickets',   key: 'tickets'  },
-  { to: '/projects',    icon: ClipboardList,label: 'Projects',  key: 'projects' },
-  { to: '/crew',        icon: Users,       label: 'Crew',      key: 'crew'     },
-  { to: '/war-room',    icon: Crosshair,   label: 'War Room',  key: 'warroom'  },
-  { to: '/scooters',    icon: Bike,        label: 'Scooters',  key: 'scooters' },
-  { to: '/pme',         icon: Activity,    label: 'PME',       key: 'pme'      },
-  { to: '/pow',         icon: Zap,         label: 'POW v3',    key: 'pow'      },
-];
-
-const NAV_FINANCE = [
-  { to: '/costs',      icon: Receipt,    label: 'Costs',    key: 'costs'    },
-  { to: '/revenue',    icon: TrendingUp, label: 'Revenue',  key: 'revenue'  },
-  { to: '/investment', icon: Landmark,   label: 'Investment', key: 'invest' },
-  { to: '/spr',        icon: Radar,      label: 'SPR',      key: 'spr'      },
-];
 
 function Avatar({ name = 'U', size = 28 }) {
   const initials = (() => {

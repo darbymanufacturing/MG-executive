@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ChevronRight, CheckCircle2, Package, Plus, Minus,
-  Clock, Wrench, Search, X, Loader2,
+  ArrowLeft, ChevronRight, CheckCircle2, Plus, Minus,
+  Clock, Search, X, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
@@ -123,7 +123,7 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
 }
 
 // ── Summary screen ────────────────────────────────────────────────────────────
-function SummaryScreen({ procedure, stepData, startedAt, onComplete, completing, completeErr }) {
+function SummaryScreen({ procedure: _procedure, stepData, startedAt, onComplete, completing, completeErr }) {
   const allParts = {};
   stepData.forEach((s) => {
     (s.partsUsed ?? []).forEach(({ partId, partName, quantity, unitCost }) => {

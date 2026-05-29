@@ -12,7 +12,7 @@ export default function StatusLogImporter() {
   const [defaultId, setDefaultId]   = useState('');
   const [progress, setProgress]     = useState(null);  // null | 0-100
   const [result, setResult]         = useState(null);
-  const [errors, setErrors]         = useState([]);
+  const [_errors, setErrors]         = useState([]);
   const [dragging, setDragging]     = useState(false);
   const fileRef = useRef();
 

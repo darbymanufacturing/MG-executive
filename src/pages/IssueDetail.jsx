@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Sparkles, Calendar, Folder, Lock,
-  Paperclip, Plus, Send, Check, Flag,
+  Paperclip, Plus, Send, Check,
 } from 'lucide-react';
 import { useIssue, useIssues } from '../context/IssueContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';

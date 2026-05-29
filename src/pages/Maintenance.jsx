@@ -30,7 +30,7 @@ const TABS = [
 ];
 
 export default function Maintenance() {
-  const { tickets, parts, loadSeedData } = useMaintenance();
+  const { tickets, loadSeedData } = useMaintenance();
   const { config: costConfig } = useCosts();
   const locations = costConfig?.locations ?? [];
 

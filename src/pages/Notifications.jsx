@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, X, Zap, Flag, Wrench, CalendarClock } from 'lucide-react';
+import { Bell, Check, X, Zap, Flag, Wrench } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext.jsx';
 import { useIssues } from '../context/IssueContext.jsx';
 import styles from './Notifications.module.css';

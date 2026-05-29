@@ -6,7 +6,7 @@
  * When provided, annualizedRevenue applies franchise fee and SIM deductions so that
  * P&L metrics reflect operating revenue, not gross paid revenue.
  */
-import { normalizeToAnnual, normalizeToMonthly, totalMonthlyCost, totalAnnualCost } from './calculations.js';
+import { normalizeToAnnual, totalMonthlyCost, totalAnnualCost } from './calculations.js';
 import { monthlyRevenueSummary } from './revenueCalculations.js';
 
 /**

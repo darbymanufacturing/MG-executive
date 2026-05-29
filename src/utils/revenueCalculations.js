@@ -1,5 +1,5 @@
 import { MONTHS } from './constants.js';
-import { totalMonthlyCost, totalAnnualCost, allTimeMonthlyTrendData } from './calculations.js';
+import { totalMonthlyCost, allTimeMonthlyTrendData } from './calculations.js';
 
 const DAY_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 

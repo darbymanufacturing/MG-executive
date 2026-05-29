@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Flag, ArrowRight, Check, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Plus, Flag, ArrowRight, Check, Clock } from 'lucide-react';
 import { useIssues } from '../context/IssueContext.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import Skeleton from '../components/Shared/Skeleton.jsx';

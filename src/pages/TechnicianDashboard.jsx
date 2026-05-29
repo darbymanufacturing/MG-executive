@@ -10,7 +10,7 @@ const CATEGORY_COLOR = { Q: '#00C896', M: '#F5A623', C: '#E84545', B: '#888', F:
 
 function TicketCard({ ticket, techUid, onClaim }) {
   const navigate = useNavigate();
-  const isAssignedToMe = ticket.assignedTo === techUid;
+  const _isAssignedToMe = ticket.assignedTo === techUid;
   const isUnassigned   = !ticket.assignedTo;
 
   const catColor = CATEGORY_COLOR[ticket.category] ?? '#888';

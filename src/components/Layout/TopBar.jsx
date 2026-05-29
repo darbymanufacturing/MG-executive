@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Sparkles, Paperclip, Mic, Sun, Moon, Bell, Menu, X, RefreshCw } from 'lucide-react';
+import { Sparkles, Sun, Moon, Bell, Menu, X, RefreshCw } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import useHoppSync from '../../hooks/useHoppSync.js';

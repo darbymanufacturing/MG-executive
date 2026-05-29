@@ -26,7 +26,7 @@ import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
-  revenuePerCityBreakdown, revenueBreakdown, operatingRevenue as calcOperatingRevenue,
+  revenuePerCityBreakdown, revenueBreakdown,
   applyFinancialAdjustments,
 } from '../utils/revenueCalculations.js';
 import { forecastTrend } from '../utils/forecasting.js';

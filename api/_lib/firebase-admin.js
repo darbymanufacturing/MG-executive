@@ -1,4 +1,3 @@
-/* global process */
 /**
  * Firebase Admin SDK singleton — used by serverless functions that need
  * server-side Firestore writes or to verify Firebase Auth ID tokens.

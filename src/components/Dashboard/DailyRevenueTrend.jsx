@@ -1,5 +1,5 @@
 import {
-  ComposedChart, Bar, Line, Area, ReferenceLine,
+  ComposedChart, Bar, Line, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   Cell,
 } from 'recharts';

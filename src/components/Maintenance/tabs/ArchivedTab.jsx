@@ -7,7 +7,7 @@ import styles from './RepairLogTab.module.css';
 const ARCHIVED_STATUSES = ['Completed', 'Donor'];
 
 export default function ArchivedTab({ filteredTickets }) {
-  const { updateTicket, deleteTicket } = useMaintenance();
+  const { updateTicket } = useMaintenance();
   const [search, setSearch]           = useState('');
   const [editingTicket, setEditingTicket] = useState(null);
   const [showForm,      setShowForm]      = useState(false);
@@ -57,7 +57,7 @@ export default function ArchivedTab({ filteredTickets }) {
       <TicketTable
         tickets={archived}
         onEdit={(ticket) => { setEditingTicket(ticket); setShowForm(true); }}
-        onDelete={async (docId) => { /* soft-protection: no delete from archive */ }}
+        onDelete={async (_docId) => { /* soft-protection: no delete from archive */ }}
         onComplete={() => {}}
       />
 

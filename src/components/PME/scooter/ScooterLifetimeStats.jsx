@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTelemetry } from '../../../context/TelemetryContext.jsx';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
-import { trueOverturnsReport, downtimeByCause, countRealTrips } from '../../../utils/pmeAnalyses.js';
+import { downtimeByCause, countRealTrips } from '../../../utils/pmeAnalyses.js';
 import { validTickets } from '../../../utils/repairJunkFilter.js';
 import { isTrueOverturn } from '../../../utils/classifyEventType.js';
 import styles from './Scooter.module.css';

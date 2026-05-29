@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Activity, X, ChevronDown, ChevronUp, Image } from 'lucide-react';
+import { Activity, X, Image } from 'lucide-react';
 import { useRepairSessions } from '../../../context/RepairSessionContext.jsx';
 import styles from './RepairSessionFeed.module.css';
 

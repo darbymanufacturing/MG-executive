@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronDown, ChevronUp, Link2, X, Pencil } from 'lucide-react';
 import { useProjects } from '../../context/ProjectContext.jsx';
-import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CITIES, CATEGORIES } from './constants.js';
+import { STATUS_CONFIG, OWNERS, PROJECT_TYPES, CATEGORIES } from './constants.js';
 import PhaseTracker from './PhaseTracker.jsx';
 import NextActionPanel from './NextActionPanel.jsx';
 import BlockersPanel from './BlockersPanel.jsx';
@@ -133,7 +133,7 @@ function RelatedProjects({ project }) {
               ↑ {parent.name}
             </button>
           )}
-          {children.map(({ phase, child }) => (
+          {children.map(({ phase: _phase, child }) => (
             <button key={child._docId} style={chipStyle('#C97D49')} onClick={() => navigate(`/projects/${child._docId}`)}>
               ↓ {child.name}
             </button>

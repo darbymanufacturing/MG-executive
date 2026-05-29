@@ -81,7 +81,7 @@ function daysBetween(a, b) {
   return (new Date(b) - new Date(a)) / 86_400_000;
 }
 
-function addDays(dateStr, n) {
+function _addDays(dateStr, n) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
@@ -92,7 +92,7 @@ function mean(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-function stddev(arr) {
+function _stddev(arr) {
   if (arr.length < 2) return 0;
   const m = mean(arr);
   return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
@@ -107,7 +107,7 @@ function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
  * then count repairs in that window + lagDays ahead.
  * Returns { pearsonR, perScooter: [{ scooterId, overturns, repairs, ratio }] }
  */
-export function overturnToRepairCorrelation(events, tickets, lagDays = 30) {
+export function overturnToRepairCorrelation(events, tickets, _lagDays = 30) {
   const trueOvt     = events.filter(isTrueOverturn);
   const goodTickets = validTickets(tickets);
   const scooterIds  = [...new Set([
@@ -143,7 +143,7 @@ export function overturnToRepairCorrelation(events, tickets, lagDays = 30) {
  */
 export function trueOverturnsReport(events) {
   const trueOvt = events.filter(isTrueOverturn);
-  const now     = new Date().toISOString();
+  const _now    = new Date().toISOString();
   const cutoff  = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   const byScooter = {};
@@ -231,7 +231,7 @@ export function overturnBaseline(events, scooterId, windowDays = 30) {
   // Sort by date to find lifetime span
   const sorted  = [...trueOvt].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const firstEv = sorted[0].timestamp;
-  const lastEv  = sorted[sorted.length - 1].timestamp;
+  const _lastEv = sorted[sorted.length - 1].timestamp;
   const lifetimeDays = Math.max(1, daysBetween(firstEv, new Date().toISOString()));
 
   const lifetimeMean = trueOvt.length / lifetimeDays; // per day

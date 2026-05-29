@@ -34,7 +34,7 @@ export default function Spr() {
 
   // Stats
   const cityEvents  = useMemo(() => events.filter((e) => !city || e.city === city), [events, city]);
-  const cityWeather = useMemo(() => weather.filter((w) => !city || w.city === city), [weather, city]);
+  const _cityWeather = useMemo(() => weather.filter((w) => !city || w.city === city), [weather, city]);
   const eventDates  = useMemo(() => getEventDates(cityEvents), [cityEvents]);
   const scooterIds  = useMemo(() => getScooterIds(cityEvents), [cityEvents]);
   const cityZones   = useMemo(() => (sprConfig.zones || []).filter((z) => !city || z.city === city), [sprConfig.zones, city]);

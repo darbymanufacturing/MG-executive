@@ -49,7 +49,7 @@ export default function RepairLogImporter() {
     setProgress(0);
 
     const text = await file.text();
-    const { tickets: parsed, errors, total } = parseRepairLogCsv(
+    const { tickets: parsed, errors, total: _total } = parseRepairLogCsv(
       text,
       defaultId.trim() || null,
     );

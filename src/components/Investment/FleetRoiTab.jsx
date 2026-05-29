@@ -18,7 +18,7 @@ import {
   projectCumulativePnL,
   findBreakEvenMonth,
 } from '../../utils/investmentCalculations.js';
-import { formatEUR, formatEURCompact, formatPercent } from '../../utils/formatters.js';
+import { formatEUR, formatEURCompact } from '../../utils/formatters.js';
 import KpiCard from '../Dashboard/KpiCard.jsx';
 import styles from './FleetRoiTab.module.css';
 
