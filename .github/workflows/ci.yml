@@ -1,0 +1,37 @@
+name: CI
+
+# Runs on every push to main and every PR targeting main.
+# build + test are BLOCKING (a red here = broken changeset).
+# lint is REPORTED but non-blocking until the pre-existing unused-var debt
+# is cleared (see BUGS.md #312). Flip `continue-on-error` to false once lint
+# is at zero, then enable branch protection requiring the "verify" check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (blocking)
+        run: npm run build
+
+      - name: Test (blocking)
+        run: npm run test:run
+
+      - name: Lint (reported — non-blocking until #312 cleared)
+        run: npm run lint
+        continue-on-error: true
