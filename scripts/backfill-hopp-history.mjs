@@ -221,9 +221,13 @@ async function main() {
         if (COMMIT) await progRef.set({ completed: [...done], totals, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       } catch (err) {
         console.error(`  !! ${key}: ${err.message}`);
-        // Token death (#316) or transient — stop so we don't spin on errors; re-seed + re-run.
+        // Stop cleanly (don't spin through errors) on the two expected fatal conditions — both resumable.
         if (/refresh token|NOT_AUTHORIZED|401|All \d+ refresh/i.test(err.message)) {
           console.error('  Hopp token appears dead (#316). Re-seed a fresh token and re-run — progress is saved.');
+          stopped = true; break outer;
+        }
+        if (/RESOURCE_EXHAUSTED|Quota exceeded|quota/i.test(err.message)) {
+          console.error('  Firebase Spark daily write quota hit. Re-run after the ~07:00 UTC reset — progress is saved.');
           stopped = true; break outer;
         }
       }
