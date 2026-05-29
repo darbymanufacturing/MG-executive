@@ -57,6 +57,39 @@ function FieldInput({ configKey: _configKey, label, type, configValue, onCommit,
   );
 }
 
+// #221 — money inputs commit on BLUR (not per-keystroke) to stop Firestore write-spam.
+// Separate component because the category-budget inputs render inside a .map() (hooks
+// can't be called in a map callback). Preserves the € amount markup + null-on-empty.
+function MoneyField({ label, value, onCommit, styles: s, placeholder, step = '0.01' }) {
+  const [local, setLocal] = useState(value ?? '');
+  useEffect(() => { setLocal(value ?? ''); }, [value]);
+  return (
+    <div className={s.field}>
+      <label className={s.label}>{label}</label>
+      <div className={s.amountWrap}>
+        <span className={s.eurSymbol}>€</span>
+        <input
+          type="number"
+          className={`${s.input} ${s.amountInput}`}
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={(e) => {
+            const raw = e.target.value;
+            if (raw === '') { setLocal(''); onCommit(null); return; }
+            const parsed = parseFloat(raw);
+            const v = Number.isFinite(parsed) ? parsed : null;
+            setLocal(v ?? '');
+            onCommit(v);
+          }}
+          placeholder={placeholder}
+          min="0"
+          step={step}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
   const { createTechnicianAccount } = useAuth();
@@ -211,21 +244,14 @@ export default function Settings() {
             Set optional targets to see budget variance indicators on the Dashboard.
           </p>
           <div className={styles.grid}>
-            <div className={styles.field}>
-              <label className={styles.label}>Budget Target per Scooter / Month (EUR)</label>
-              <div className={styles.amountWrap}>
-                <span className={styles.eurSymbol}>€</span>
-                <input
-                  type="number"
-                  className={`${styles.input} ${styles.amountInput}`}
-                  value={config.targetCostPerScooter ?? ''}
-                  onChange={(e) => updateConfig({ targetCostPerScooter: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                  placeholder="e.g. 120"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </div>
+            <MoneyField
+              label="Budget Target per Scooter / Month (EUR)"
+              value={config.targetCostPerScooter}
+              onCommit={(v) => updateConfig({ targetCostPerScooter: v })}
+              styles={styles}
+              placeholder="e.g. 120"
+              step="0.01"
+            />
           </div>
         </section>
 
@@ -241,26 +267,17 @@ export default function Settings() {
           </p>
           <div className={styles.grid}>
             {Object.entries(CATEGORIES).map(([key, cat]) => (
-              <div key={key} className={styles.field}>
-                <label className={styles.label}>{cat.fullLabel} / month (€)</label>
-                <div className={styles.amountWrap}>
-                  <span className={styles.eurSymbol}>€</span>
-                  <input
-                    type="number"
-                    className={`${styles.input} ${styles.amountInput}`}
-                    value={config.categoryBudgets?.[key] ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                      updateConfig({
-                        categoryBudgets: { ...(config.categoryBudgets || {}), [key]: val },
-                      });
-                    }}
-                    placeholder="No budget set"
-                    min="0"
-                    step="1"
-                  />
-                </div>
-              </div>
+              <MoneyField
+                key={key}
+                label={`${cat.fullLabel} / month (€)`}
+                value={config.categoryBudgets?.[key]}
+                onCommit={(v) => updateConfig({
+                  categoryBudgets: { ...(config.categoryBudgets || {}), [key]: v },
+                })}
+                styles={styles}
+                placeholder="No budget set"
+                step="1"
+              />
             ))}
           </div>
         </section>

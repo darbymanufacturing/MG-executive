@@ -126,10 +126,25 @@ export default async function handler(req, res) {
     let attachmentData = null;
     if (attachmentUrl) {
       try {
-        const fileRes = await fetch(attachmentUrl);
-        if (fileRes.ok) {
-          const buffer = await fileRes.arrayBuffer();
-          attachmentData = Buffer.from(buffer).toString('base64');
+        // #374 — the allowlist only validates the INITIAL host, so do NOT follow 3xx to an
+        // unvalidated (possibly internal) target. redirect:'manual' returns the 3xx unfollowed;
+        // also cap the embedded body size to avoid an oversize-fetch memory DoS.
+        const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+        const fileRes = await fetch(attachmentUrl, { redirect: 'manual' });
+        if (fileRes.status >= 300 && fileRes.status < 400) {
+          console.warn('Attachment URL returned a redirect; refusing to follow (SSRF guard).');
+        } else if (fileRes.ok) {
+          const declaredLen = Number(fileRes.headers.get('content-length') || 0);
+          if (declaredLen > MAX_ATTACHMENT_BYTES) {
+            console.warn('Attachment exceeds 10 MB (content-length); skipping embed.');
+          } else {
+            const buffer = await fileRes.arrayBuffer();
+            if (buffer.byteLength <= MAX_ATTACHMENT_BYTES) {
+              attachmentData = Buffer.from(buffer).toString('base64');
+            } else {
+              console.warn('Attachment exceeds 10 MB (actual); skipping embed.');
+            }
+          }
         }
       } catch (fetchErr) {
         console.warn('Could not fetch attachment for embedding:', fetchErr.message);

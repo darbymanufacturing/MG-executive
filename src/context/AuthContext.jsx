@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 
 const AuthContext = createContext(null);
 
@@ -114,12 +115,17 @@ export function AuthProvider({ children }) {
     }
     const validRoles = ['crew', 'staff', 'admin', 'technician'];
     const assignedRole = validRoles.includes(role) ? role : 'crew';
-    await setDoc(doc(db, 'users', data.localId), {
-      role: assignedRole,
-      displayName: displayName.trim() || email.split('@')[0],
-      email,
-      createdAt: serverTimestamp(),
-    });
+    // #362 — route through safeWrite so a Firestore failure surfaces (toast) instead of
+    // silently orphaning the just-created Auth account. rethrow so the caller still sees it.
+    await safeWrite(
+      () => setDoc(doc(db, 'users', data.localId), {
+        role: assignedRole,
+        displayName: displayName.trim() || email.split('@')[0],
+        email,
+        createdAt: serverTimestamp(),
+      }),
+      { rethrow: true, errorMessage: 'Account created, but saving its profile failed — check Firestore.' },
+    );
     return data.localId;
   };
 

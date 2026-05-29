@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   collection, doc, onSnapshot,
   addDoc, updateDoc, deleteDoc, setDoc, writeBatch, getDocs,
+  query, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -14,6 +15,10 @@ import { useAuth } from './AuthContext.jsx';
 const COSTS_COL = 'costs';
 const CONFIG_DOC = 'config/fleet';
 const BATCH_SIZE = 450; // safely below Firestore's 500-op batch limit
+// #365 — Phase 1 free-tier cap. costs is a small collection, so this bounds the
+// previously-unbounded root listener with zero behaviour change. orderBy is omitted
+// on purpose: sample/imported costs may lack createdAt, and orderBy would exclude them.
+const MAX_COSTS = 2000;
 
 const CostContext = createContext(null);
 
@@ -44,7 +49,7 @@ export function CostProvider({ children }) {
     setConfigLoaded(false);
 
     // Listen to costs collection
-    const unsubCosts = onSnapshot(collection(db, COSTS_COL), (snap) => {
+    const unsubCosts = onSnapshot(query(collection(db, COSTS_COL), limit(MAX_COSTS)), (snap) => {
       const items = snap.docs.map((d) => ({ ...d.data(), _docId: d.id }));
       setCosts(items);
       setCostsLoaded(true);
