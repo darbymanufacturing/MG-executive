@@ -19,8 +19,12 @@ import { rollupTripsToRevenue } from '../src/utils/hoppSyncRollup.js';
 export const maxDuration = 60;
 
 const BATCH_SIZE = 450;
-const WINDOW_MIN_HOURS  = 2;    // always pull at least the last 2 hours
-const OVERLAP_MINUTES   = 30;   // re-sync the prior 30min for safety; _docId dedup makes this free
+// Sync window starts at 00:00 UTC this many days back. The revenue rollup only
+// emits a day's row when the window FULLY covers that day, so the window must be
+// day-aligned (not "last 2h"). A fixed day-aligned lookback also removes the need
+// for a "last successful sync" composite index. Trips dedupe by _docId and revenue
+// upserts idempotently, so re-pulling these days each run is cheap + safe.
+const LOOKBACK_DAYS = 2;
 
 const COLLECTIONS = {
   scooters:           'scooters',
@@ -77,11 +81,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'Auth check failed: ' + err.message });
   }
 
-  // ── Window ────────────────────────────────────────────────────────
+  // ── Window (day-aligned: 00:00 UTC, LOOKBACK_DAYS back → now) ─────
   const db = getDb();
   const now = new Date();
-  const lastSync = await getLastSuccessfulSyncTime(db);
-  const since = computeSince(lastSync, now);
+  const startOfTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
+  const since = new Date(startOfTodayUtc - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const until = now;
 
   console.log(`[cron-hopp-sync] trigger=${trigger} window=${since.toISOString()}..${until.toISOString()}`);
@@ -114,28 +118,38 @@ export default async function handler(req, res) {
     scooters.map((s) => [String(s.scooterId || s._docId), s.city || s.location || 'Unknown']),
   );
 
-  // ── Fan out: 3 MCP calls per scooter, in parallel ────────────────
-  const perScoooterResults = await Promise.allSettled(
-    scooters.map((s) => syncOneScooter(s, scooterCityMap, since, until)),
-  );
+  // ── Bulk pull: ONE call per tool (no scooterId), SEQUENTIAL ──────
+  // Hopp's list_trips + list_repair_events each return ALL scooters in a single
+  // call, so we no longer fan out 3 × N requests. Sequential (not parallel) on
+  // purpose: Hopp refresh tokens are one-time-use, and firing ~200 calls at once
+  // made them stampede the token rotation → mass 401 ("all candidates failed").
+  // The first call refreshes the token; the next reuses it.
+  //
+  // list_status_events is intentionally NOT pulled: the Hopp operator account
+  // lacks the vehicleEvents privilege (returns NOT_AUTHORIZED) and that query is
+  // per-scooter only. Telemetry keeps flowing via the PME CSV importer — re-enable
+  // here (per-scooter) once Hopp grants the privilege.
+  const range = { since: since.toISOString(), until: until.toISOString() };
+  const aggregated = { trips: [], events: [], tickets: [], errors: [] };
 
-  const aggregated = {
-    trips: [],
-    events: [],
-    tickets: [],
-    errors: [],
-  };
-  for (let i = 0; i < perScoooterResults.length; i++) {
-    const r = perScoooterResults[i];
-    const sid = scooters[i].scooterId || scooters[i]._docId;
-    if (r.status === 'rejected') {
-      aggregated.errors.push({ scooterId: sid, error: String(r.reason?.message || r.reason) });
-      continue;
+  try {
+    const r = await callHoppTool('list_trips', range);
+    aggregated.trips = Array.isArray(r?.rows) ? r.rows : [];
+    if (Array.isArray(r?.errors) && r.errors.length) {
+      aggregated.errors.push(...r.errors.map((e) => ({ tool: 'list_trips', error: String(e) })));
     }
-    aggregated.trips.push(...(r.value.trips || []));
-    aggregated.events.push(...(r.value.events || []));
-    aggregated.tickets.push(...(r.value.tickets || []));
-    if (r.value.errors?.length) aggregated.errors.push(...r.value.errors.map((e) => ({ scooterId: sid, error: e })));
+  } catch (err) {
+    aggregated.errors.push({ tool: 'list_trips', error: String(err?.message || err) });
+  }
+
+  try {
+    const r = await callHoppTool('list_repair_events', range);
+    aggregated.tickets = Array.isArray(r?.tickets) ? r.tickets : [];
+    if (Array.isArray(r?.errors) && r.errors.length) {
+      aggregated.errors.push(...r.errors.map((e) => ({ tool: 'list_repair_events', error: String(e) })));
+    }
+  } catch (err) {
+    aggregated.errors.push({ tool: 'list_repair_events', error: String(err?.message || err) });
   }
 
   // ── Write to Firestore ───────────────────────────────────────────
@@ -181,42 +195,6 @@ export default async function handler(req, res) {
 
 // ─── helpers ─────────────────────────────────────────────────────────
 
-async function syncOneScooter(scooter, scooterCityMap, since, until) {
-  const sid = String(scooter.scooterId || scooter._docId);
-  const args = { scooterId: sid, since: since.toISOString(), until: until.toISOString() };
-
-  const [tripsR, eventsR, ticketsR] = await Promise.allSettled([
-    callHoppTool('list_trips',         args),
-    callHoppTool('list_status_events', args),
-    callHoppTool('list_repair_events', args),
-  ]);
-
-  const errors = [];
-  const trips    = unwrap(tripsR,   'rows',    errors, 'list_trips');
-  const events   = unwrap(eventsR,  'events',  errors, 'list_status_events');
-  const tickets  = unwrap(ticketsR, 'tickets', errors, 'list_repair_events');
-
-  // Inject city into telemetry events at write time (hopp-mcp returns city="")
-  const city = scooterCityMap.get(sid);
-  for (const e of events) {
-    if (!e.city) e.city = city || 'Unknown';
-  }
-
-  return { trips, events, tickets, errors };
-}
-
-function unwrap(settled, key, errors, toolName) {
-  if (settled.status === 'rejected') {
-    errors.push(`${toolName}: ${settled.reason?.message || settled.reason}`);
-    return [];
-  }
-  const payload = settled.value;
-  if (Array.isArray(payload?.errors) && payload.errors.length) {
-    errors.push(`${toolName} returned errors: ${payload.errors.join('; ')}`);
-  }
-  return payload?.[key] || [];
-}
-
 async function writeBatch(db, collection, items, { merge, stampField }) {
   if (!items || items.length === 0) return 0;
   let total = 0;
@@ -235,31 +213,6 @@ async function writeBatch(db, collection, items, { merge, stampField }) {
     await batch.commit();
   }
   return total;
-}
-
-async function getLastSuccessfulSyncTime(db) {
-  try {
-    const snap = await db.collection(COLLECTIONS.syncLogs)
-      .where('ok', '==', true)
-      .orderBy('finishedAt', 'desc')
-      .limit(1)
-      .get();
-    if (snap.empty) return null;
-    const lastFinished = snap.docs[0].data().finishedAt;
-    return lastFinished?.toDate ? lastFinished.toDate() : null;
-  } catch (err) {
-    // First-run case: no syncLogs collection or no composite index yet
-    console.warn('[cron-hopp-sync] could not read last syncLog (first run?):', err.message);
-    return null;
-  }
-}
-
-function computeSince(lastSync, now) {
-  const minAgo = new Date(now.getTime() - WINDOW_MIN_HOURS * 60 * 60 * 1000);
-  if (!lastSync) return minAgo;
-  const overlapped = new Date(lastSync.getTime() - OVERLAP_MINUTES * 60 * 1000);
-  // Take the later of (lastSync - 30min) and (now - 2h)
-  return overlapped > minAgo ? overlapped : minAgo;
 }
 
 function escapeHtml(s) {
