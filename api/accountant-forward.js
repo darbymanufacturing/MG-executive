@@ -24,6 +24,7 @@
  */
 
 import { Resend } from 'resend';
+import { requireUser } from './_lib/require-auth.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -75,6 +76,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // #16 — finance/email action: require a signed-in admin/staff user (was publicly callable).
+  const authUser = await requireUser(req, res, { roles: ['admin', 'staff', 'owner'] });
+  if (!authUser) return;
 
   const { RESEND_API_KEY } = process.env;
   if (!RESEND_API_KEY) {

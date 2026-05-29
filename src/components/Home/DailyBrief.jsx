@@ -8,6 +8,7 @@ import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { authedFetch } from '../../utils/apiClient.js';
 import styles from './DailyBrief.module.css';
 
 /* ─── Helpers ─── */
@@ -127,7 +128,7 @@ export default function DailyBrief() {
         /* 2. None found — call API to generate */
         setStatus('generating');
 
-        const res = await fetch('/api/daily-brief', {
+        const res = await authedFetch('/api/daily-brief', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -10,41 +10,31 @@ import styles from './Login.module.css';
 const THEME_KEY = 'omni_theme';
 
 export default function Login() {
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const currentTheme = localStorage.getItem(THEME_KEY) || 'light';
 
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState('');
 
-  const isSignUp = mode === 'signup';
-
+  // #15 — sign-in only. Public self-sign-up is disabled (it used to auto-grant
+  // admin). Accounts are created by an admin in Settings → Team. Phase 2 adds
+  // proper "create your own org" signup.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      if (isSignUp) {
-        await signUp(email, password);
-      } else {
-        await signIn(email, password);
-      }
+      await signIn(email, password);
       navigate('/', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleMode = () => {
-    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
-    setError('');
-    setResetMsg('');
   };
 
   const handleForgotPassword = async () => {
@@ -70,14 +60,8 @@ export default function Login() {
 
         {/* Heading */}
         <div className={styles.heading}>
-          <h1 className={styles.title}>
-            {isSignUp ? 'Create account' : 'Welcome back'}
-          </h1>
-          <p className={styles.subtitle}>
-            {isSignUp
-              ? 'Sign up to access the fleet dashboard'
-              : 'Sign in to your fleet dashboard'}
-          </p>
+          <h1 className={styles.title}>Welcome back</h1>
+          <p className={styles.subtitle}>Sign in to your fleet dashboard</p>
         </div>
 
         {/* Error banner */}
@@ -114,11 +98,11 @@ export default function Login() {
               <input
                 type="password"
                 className={styles.input}
-                placeholder={isSignUp ? 'At least 6 characters' : '••••••••'}
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                autoComplete="current-password"
                 minLength={6}
               />
             </div>
@@ -126,33 +110,27 @@ export default function Login() {
 
           <button type="submit" className={styles.submitBtn} disabled={loading}>
             {loading
-              ? <><Loader2 size={16} className={styles.spinner} /> {isSignUp ? 'Creating account…' : 'Signing in…'}</>
-              : isSignUp ? 'Create Account' : 'Sign In'
+              ? <><Loader2 size={16} className={styles.spinner} /> Signing in…</>
+              : 'Sign In'
             }
           </button>
         </form>
 
-        {/* Forgot password — sign-in mode only */}
-        {!isSignUp && (
-          <p className={styles.toggle}>
-            <button type="button" className={styles.toggleBtn} onClick={handleForgotPassword}>
-              Forgot password?
-            </button>
-          </p>
-        )}
+        {/* Forgot password */}
+        <p className={styles.toggle}>
+          <button type="button" className={styles.toggleBtn} onClick={handleForgotPassword}>
+            Forgot password?
+          </button>
+        </p>
         {resetMsg && (
           <div className={styles.error} style={{ background: 'var(--color-success, #15803D)', borderColor: 'transparent' }}>
             <span>{resetMsg}</span>
           </div>
         )}
 
-        {/* Toggle */}
-        <p className={styles.toggle}>
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-          {' '}
-          <button type="button" className={styles.toggleBtn} onClick={toggleMode}>
-            {isSignUp ? 'Sign in' : 'Create one'}
-          </button>
+        {/* #15 — no public sign-up. Accounts are provisioned by an admin. */}
+        <p className={styles.toggle} style={{ color: 'var(--fg-muted)' }}>
+          Need access? Ask your administrator to create your account.
         </p>
       </div>
 

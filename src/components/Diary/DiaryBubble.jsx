@@ -5,6 +5,7 @@ import { useCosts } from '../../context/CostContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { exportDiaryCSV } from '../../utils/diaryExport.js';
+import { authedFetch } from '../../utils/apiClient.js';
 import DiaryEntry from './DiaryEntry.jsx';
 import styles from './DiaryBubble.module.css';
 
@@ -53,7 +54,7 @@ export default function DiaryBubble() {
     setPhase('parsing');
     setErrorMsg('');
     try {
-      const res = await fetch('/api/diary-parse', {
+      const res = await authedFetch('/api/diary-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed, context: buildContext() }),
@@ -113,7 +114,7 @@ export default function DiaryBubble() {
     setPhase('parsing');
     setErrorMsg('');
     try {
-      const res = await fetch('/api/diary-parse', {
+      const res = await authedFetch('/api/diary-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: newText.trim(), context: buildContext() }),

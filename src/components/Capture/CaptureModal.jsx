@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import { authedFetch } from '../../utils/apiClient.js';
 import styles from './CaptureModal.module.css';
 
 /** Maps diary-parse module kinds to Issue types */
@@ -79,7 +80,7 @@ function InvoiceCapture({ onClose, addCost }) {
     if (!imageBase64) return;
     setStage('parsing');
     try {
-      const res = await fetch('/api/invoice-parse', {
+      const res = await authedFetch('/api/invoice-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64, mediaType }),
@@ -271,7 +272,7 @@ export default function CaptureModal({ open, onClose }) {
     setStage('parsing');
 
     try {
-      const res = await fetch('/api/diary-parse', {
+      const res = await authedFetch('/api/diary-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),

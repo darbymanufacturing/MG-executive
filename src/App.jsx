@@ -141,6 +141,36 @@ function SprScopedRoutes() {
   );
 }
 
+/* ─── No-access screen (#15) — signed in but no provisioned role ─── */
+function NoAccessScreen() {
+  const { user, signOut } = useAuth();
+  return (
+    <div
+      className="omni-app"
+      data-theme={safeStorage.getRaw(THEME_KEY) || 'light'}
+      style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px' }}
+    >
+      <div style={{ maxWidth: 440, textAlign: 'center' }}>
+        <h1 style={{ marginBottom: 8 }}>Account not provisioned</h1>
+        <p style={{ color: 'var(--fg-muted)', marginBottom: 20 }}>
+          You&rsquo;re signed in as <strong>{user?.email}</strong>, but your account hasn&rsquo;t been
+          granted access yet. Ask an administrator to set up your role.
+        </p>
+        <button
+          onClick={signOut}
+          style={{
+            padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--accent)',
+            color: '#fff', border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)',
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Admin app shell ─── */
 function AppShell() {
   const { userRole } = useAuth();
@@ -193,6 +223,13 @@ function AppShell() {
   // #185 — 'staff' intentionally stays in the admin shell (full ops access); only technician/crew go to /crew
   if (userRole === 'technician' || userRole === 'crew') {
     return <Navigate to="/crew" replace />;
+  }
+
+  // #15 — fail closed: a signed-in user with no valid role (e.g. a Firebase Auth
+  // account with no users/{uid} doc) must NOT land in the admin shell. Only
+  // admin/staff reach here; anyone else gets a no-access screen + sign-out.
+  if (userRole !== 'admin' && userRole !== 'staff') {
+    return <NoAccessScreen />;
   }
 
   const title = getTitle(location.pathname);

@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.js';
 
 const AuthContext = createContext(null);
@@ -51,12 +51,12 @@ export function AuthProvider({ children }) {
 
       const userRef = doc(db, 'users', firebaseUser.uid);
       profileUnsub = onSnapshot(userRef, (snap) => {
-        if (snap.exists()) {
-          setUserProfile(snap.data());
-          setAuthLoading(false);
-        }
-        // Don't write inside the snapshot callback — provisioning is handled
-        // by the separate effect below to avoid async races on first login.
+        // #15 — never auto-provision a role. A signed-in user with no users/{uid}
+        // doc gets userProfile=null → no access (gated in App.jsx). Accounts are
+        // created only by an admin via createTechnicianAccount. Clear authLoading
+        // either way so the app never hangs on a missing doc.
+        setUserProfile(snap.exists() ? snap.data() : null);
+        setAuthLoading(false);
       });
     });
 
@@ -66,29 +66,11 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // BUG #154/#155 — First-login provisioning moved OUT of snapshot callback
-  // to avoid async-write races. Runs once per uid change.
-  useEffect(() => {
-    if (!user) return;
-    const provisionUser = async () => {
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (!snap.exists()) {
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            role: 'admin',
-            displayName: user.displayName || user.email.split('@')[0],
-            email: user.email,
-            createdAt: serverTimestamp(),
-          });
-        } catch (err) {
-          console.error('Profile creation failed:', err);
-          // Does not crash the app; onSnapshot will not set userProfile,
-          // so authLoading stays true — acceptable vs. silent data loss.
-        }
-      }
-    };
-    provisionUser().catch(err => console.error('provision failed', err));
-  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // #15 — first-login auto-provisioning REMOVED. It used to create a users/{uid}
+  // doc with role:'admin' for ANY new sign-in, so anyone who self-signed-up became
+  // an admin (CRITICAL privilege escalation). Accounts are now created only by an
+  // admin via createTechnicianAccount, and public sign-up is disabled in Login.jsx.
+  // Phase 2 adds proper "create your own org" signup (you own a NEW org, not this one).
 
   const signIn = async (email, password) => {
     try {

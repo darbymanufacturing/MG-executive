@@ -2,13 +2,21 @@
 // POST body: { connection_id }
 // Returns: { transactions: [...], accounts: [...] }
 
+import { requireUser } from './_lib/require-auth.js';
+
 const BASE = 'https://www.saltedge.com/api/v6';
+const SAFE_ID = /^[A-Za-z0-9_-]+$/; // #17 — keep user-supplied IDs out of the request URL
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // #16 — banking data: require a signed-in admin/staff user (was publicly callable).
+  const authUser = await requireUser(req, res, { roles: ['admin', 'staff', 'owner'] });
+  if (!authUser) return;
+
   const { connection_id } = req.body || {};
   if (!connection_id) return res.status(400).json({ error: 'connection_id required' });
+  if (!SAFE_ID.test(String(connection_id))) return res.status(400).json({ error: 'Invalid connection_id' });
 
   const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
   if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {

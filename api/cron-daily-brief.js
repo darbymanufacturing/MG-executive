@@ -12,17 +12,18 @@
  *   3. Replace the stub below with the actual fan-out logic
  */
 
+import { requireCronOrUser } from './_lib/require-auth.js';
+
 export default async function handler(req, res) {
   /* Vercel calls crons with GET — allow GET only from Vercel's cron system */
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  /* Optional: verify it's really from Vercel Cron */
-  const cronSecret = req.headers['authorization'];
-  if (process.env.CRON_SECRET && cronSecret !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // #16 — cron secret OR an admin/staff user. (Was CRON_SECRET-only, which silently
+  // allowed ANY caller whenever CRON_SECRET happened to be unset.)
+  const auth = await requireCronOrUser(req, res);
+  if (!auth) return;
 
   const date = new Date().toISOString().slice(0, 10);
   console.log(`[cron-daily-brief] Triggered for date: ${date}`);

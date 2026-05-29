@@ -3,6 +3,7 @@ import { Link2, RefreshCw, Unlink, AlertCircle, CheckCircle2 } from 'lucide-reac
 import { doc, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { mapTransactionToCost } from '../../utils/bankTransactionMapper.js';
+import { authedFetch } from '../../utils/apiClient.js';
 import Button from '../Shared/Button.jsx';
 import styles from './BankConnect.module.css';
 
@@ -39,7 +40,7 @@ async function writeTransactions(rawTxs) {
 
 async function pollForConnection(customerId, maxAttempts = 6, intervalMs = 3000) {
   for (let i = 0; i < maxAttempts; i++) {
-    const res  = await fetch(`/api/bank-connections?customer_id=${customerId}`);
+    const res  = await authedFetch(`/api/bank-connections?customer_id=${customerId}`);
     const data = await res.json();
     const active = (data.connections || []).find((c) => c.status === 'active');
     if (active) return active.id;
@@ -95,7 +96,7 @@ export default function BankConnect({ onNewTransactions }) {
     setStatus('syncing');
     setMessage('Fetching transactions…');
     try {
-      const res  = await fetch('/api/bank-transactions', {
+      const res  = await authedFetch('/api/bank-transactions', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ connection_id: connId }),
@@ -118,7 +119,7 @@ export default function BankConnect({ onNewTransactions }) {
     setMessage('Creating bank session…');
     try {
       const redirectUrl = `${window.location.origin}/settings`;
-      const res  = await fetch('/api/bank-session', {
+      const res  = await authedFetch('/api/bank-session', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ customer_id: customerId || undefined, redirect_url: redirectUrl }),
@@ -143,7 +144,7 @@ export default function BankConnect({ onNewTransactions }) {
     setStatus('syncing');
     setMessage('Syncing latest transactions…');
     try {
-      const res  = await fetch('/api/bank-refresh', {
+      const res  = await authedFetch('/api/bank-refresh', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ connection_id: connectionId }),

@@ -2,13 +2,22 @@
 // GET ?customer_id=...
 // Returns: { connections: [{ id, provider_name, status }] }
 
+import { requireUser } from './_lib/require-auth.js';
+
 const BASE = 'https://www.saltedge.com/api/v6';
+// Salt Edge IDs are alphanumeric; reject anything else to keep it out of the request URL (#17).
+const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
+  // #16 — banking data: require a signed-in admin/staff user (was publicly callable).
+  const authUser = await requireUser(req, res, { roles: ['admin', 'staff', 'owner'] });
+  if (!authUser) return;
+
   const { customer_id } = req.query;
   if (!customer_id) return res.status(400).json({ error: 'customer_id required' });
+  if (!SAFE_ID.test(String(customer_id))) return res.status(400).json({ error: 'Invalid customer_id' });
 
   const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
   if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {

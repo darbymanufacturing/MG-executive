@@ -3,7 +3,10 @@
 // Returns: { connect_url, customer_id }
 // Env vars: SALTEDGE_APP_ID, SALTEDGE_SECRET
 
+import { requireUser } from './_lib/require-auth.js';
+
 const BASE = 'https://www.saltedge.com/api/v6';
+const SAFE_ID = /^[A-Za-z0-9_-]+$/; // #17
 
 function seHeaders() {
   return {
@@ -16,15 +19,23 @@ function seHeaders() {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // #16 — banking link flow: require a signed-in admin/staff user (was publicly callable).
+  const authUser = await requireUser(req, res, { roles: ['admin', 'staff', 'owner'] });
+  if (!authUser) return;
+
   const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
   if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {
     return res.status(500).json({ error: 'Salt Edge credentials not configured (SALTEDGE_APP_ID / SALTEDGE_SECRET)' });
   }
 
   let { customer_id, redirect_url } = req.body || {};
-  // #89 — use env var instead of req.headers.host to prevent host header injection
+  if (customer_id && !SAFE_ID.test(String(customer_id))) {
+    return res.status(400).json({ error: 'Invalid customer_id' });
+  }
+  // #89/#17 — env-var origin; only honor a caller-supplied redirect_url if it points
+  // at our own origin (prevents open-redirect / host-header injection).
   const origin = process.env.APP_ORIGIN || 'https://omni.mgexecutive.app';
-  const redirectTo = redirect_url || `${origin}/settings`;
+  const redirectTo = (redirect_url && redirect_url.startsWith(origin)) ? redirect_url : `${origin}/settings`;
 
   try {
     // 1. Create customer if this is the first connect

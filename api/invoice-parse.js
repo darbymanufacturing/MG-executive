@@ -13,6 +13,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { requireUser } from './_lib/require-auth.js';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 
@@ -44,6 +45,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // #16 — finance action: require a signed-in admin/staff user (was public → anonymous spend).
+  const authUser = await requireUser(req, res, { roles: ['admin', 'staff', 'owner'] });
+  if (!authUser) return;
 
   if (!process.env.ANTHROPIC_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_KEY not configured' });
