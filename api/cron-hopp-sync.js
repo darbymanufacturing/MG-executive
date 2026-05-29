@@ -262,6 +262,54 @@ function computeSince(lastSync, now) {
   return overlapped > minAgo ? overlapped : minAgo;
 }
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Layer C (Hopp bulletproofing) — email an alert when an UNATTENDED (cron) sync hard-fails
+ * or hits a Hopp auth error. Manual Refresh-button failures are NOT emailed (the user sees
+ * those in the toast). Skips silently if RESEND_API_KEY / ALERT_EMAIL aren't configured.
+ */
+async function maybeSendFailureAlert(summary) {
+  if (summary.trigger !== 'cron') return;
+  const errs = (summary.errors || []).map((e) => e.error || e).join('; ') || summary.errorMessage || '';
+  const isAuthErr = /token|refresh|401|unauthor/i.test(errs);
+  if (summary.ok && !isAuthErr) return; // clean run, nothing to alert
+
+  const to = process.env.ALERT_EMAIL;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!to || !apiKey) {
+    console.warn('[cron-hopp-sync] sync failed but no alert sent — set ALERT_EMAIL + RESEND_API_KEY in Vercel to enable email alerts.');
+    return;
+  }
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'Omni <noreply@mgexecutive.app>',
+      to: [to],
+      subject: `⚠️ Omni — Hopp auto-sync failed${isAuthErr ? ' (token needs refresh)' : ''}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:560px">
+          <h2 style="color:#A0521D;margin:0 0 8px">Hopp auto-sync failed</h2>
+          <p style="color:#4a5568">The scheduled Hopp sync at ${escapeHtml(new Date().toISOString())} did not complete cleanly.</p>
+          <p style="color:#1a202c"><b>Error:</b> ${escapeHtml(errs.slice(0, 500)) || 'unknown'}</p>
+          ${isAuthErr ? `<div style="background:#FEF3C7;border:1px solid #D97706;border-radius:6px;padding:12px 16px;margin:12px 0;color:#1a202c">
+            <b>Likely fix (~30 sec):</b> Hopp has rotated past every stored refresh token. Grab a fresh one from
+            <code>opp.hopp.bike → DevTools → Application → Local Storage → "refreshToken"</code> and set
+            <code>HOPP_REFRESH_TOKEN</code> in the <b>hopp-mcp</b> Vercel project. Full steps in the
+            hopp-sync-troubleshooting runbook.
+          </div>` : ''}
+          <p style="color:#718096;font-size:13px">Scooters: ${summary.scooterCount ?? 0} · Manual CSV import remains available as a fallback. — Omni ops</p>
+        </div>`,
+    });
+    console.log('[cron-hopp-sync] failure alert emailed to', to);
+  } catch (e) {
+    console.error('[cron-hopp-sync] failed to send failure alert:', e.message);
+  }
+}
+
 async function finalize(res, db, summary) {
   const durationMs = Date.now() - summary.startedAt;
   const logDoc = {
@@ -285,6 +333,10 @@ async function finalize(res, db, summary) {
   } catch (err) {
     console.error('[cron-hopp-sync] failed to write syncLogs entry', err);
   }
+
+  // Layer C — alert on unattended (cron) failures. Awaited so it sends before the
+  // serverless function freezes. No-op for clean runs + manual triggers.
+  await maybeSendFailureAlert({ ...summary, durationMs });
 
   const statusCode = summary.ok ? 200 : 500;
   return res.status(statusCode).json({
