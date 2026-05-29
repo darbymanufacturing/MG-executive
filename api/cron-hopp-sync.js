@@ -131,10 +131,12 @@ export default async function handler(req, res) {
   // here (per-scooter) once Hopp grants the privilege.
   const range = { since: since.toISOString(), until: until.toISOString() };
   const aggregated = { trips: [], events: [], tickets: [], errors: [] };
+  let pullsOk = 0;
 
   try {
     const r = await callHoppTool('list_trips', range);
     aggregated.trips = Array.isArray(r?.rows) ? r.rows : [];
+    pullsOk++;
     if (Array.isArray(r?.errors) && r.errors.length) {
       aggregated.errors.push(...r.errors.map((e) => ({ tool: 'list_trips', error: String(e) })));
     }
@@ -145,11 +147,25 @@ export default async function handler(req, res) {
   try {
     const r = await callHoppTool('list_repair_events', range);
     aggregated.tickets = Array.isArray(r?.tickets) ? r.tickets : [];
+    pullsOk++;
     if (Array.isArray(r?.errors) && r.errors.length) {
       aggregated.errors.push(...r.errors.map((e) => ({ tool: 'list_repair_events', error: String(e) })));
     }
   } catch (err) {
     aggregated.errors.push({ tool: 'list_repair_events', error: String(err?.message || err) });
+  }
+
+  // If EVERY Hopp pull failed (e.g. the refresh token is exhausted), this is a HARD failure —
+  // report ok:false so the UI shows a real error (not "up to date — nothing new") and the cron
+  // failure-alert fires, instead of silently logging a green zero-data sync.
+  if (pullsOk === 0) {
+    return finalize(res, db, {
+      trigger, triggeredByUid, startedAt, since, until,
+      ok: false,
+      errorMessage: 'All Hopp pulls failed — ' + (aggregated.errors[0]?.error || 'unknown error'),
+      errors: aggregated.errors,
+      scooterCount: scooters.length,
+    });
   }
 
   // ── Write to Firestore ───────────────────────────────────────────
