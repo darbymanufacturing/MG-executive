@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  collection, doc, onSnapshot,
+  collection, doc, onSnapshot, query, limit,
   addDoc, updateDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
@@ -9,6 +9,13 @@ import { safeWrite } from '../utils/firestoreWrite.js';
 const PROJECTS_COL   = 'projects';
 const GATES_COL      = 'decisionGates';
 const BRAINSTORM_COL = 'brainstormIdeas';
+
+// Phase 1.6b — safety caps on listener reads. These collections stay small;
+// the limit just prevents runaway reads if they ever grow. Client-side sort
+// is preserved (no orderBy added, to avoid excluding docs missing createdAt).
+const MAX_PROJECTS   = 500;
+const MAX_GATES      = 500;
+const MAX_BRAINSTORM = 1000;
 
 const ProjectContext = createContext(null);
 
@@ -46,7 +53,7 @@ export function ProjectProvider({ children }) {
     };
 
     const unsubProjects = onSnapshot(
-      collection(db, PROJECTS_COL),
+      query(collection(db, PROJECTS_COL), limit(MAX_PROJECTS)),
       (snap) => {
         const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
         const sorted = raw.sort((a, b) =>
@@ -63,7 +70,7 @@ export function ProjectProvider({ children }) {
     );
 
     const unsubGates = onSnapshot(
-      collection(db, GATES_COL),
+      query(collection(db, GATES_COL), limit(MAX_GATES)),
       (snap) => {
         setGates(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
         gatesDone = true;
@@ -76,7 +83,7 @@ export function ProjectProvider({ children }) {
     );
 
     const unsubBrainstorm = onSnapshot(
-      collection(db, BRAINSTORM_COL),
+      query(collection(db, BRAINSTORM_COL), limit(MAX_BRAINSTORM)),
       (snap) => {
         const ideas = snap.docs
           .map((d) => ({ _docId: d.id, ...d.data() }))

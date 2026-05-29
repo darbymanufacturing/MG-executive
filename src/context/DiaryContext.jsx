@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   collection, addDoc, updateDoc, deleteDoc, doc,
-  onSnapshot, orderBy, query, serverTimestamp,
+  onSnapshot, orderBy, query, limit, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -27,7 +27,7 @@ export function DiaryProvider({ children }) {
 
   /* ── Real-time listener ── */
   useEffect(() => {
-    const q = query(collection(db, 'diary'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'diary'), orderBy('createdAt', 'desc'), limit(1000));
     const unsub = onSnapshot(q, (snap) => {
       setEntries(snap.docs.map((d) => ({ ...d.data(), _docId: d.id })));
       setLoading(false);

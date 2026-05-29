@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
-  collection, query, orderBy, onSnapshot, addDoc, updateDoc,
+  collection, query, orderBy, limit, onSnapshot, addDoc, updateDoc,
   doc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
@@ -24,7 +24,7 @@ export function IssueProvider({ children }) {
       setLoading(true);
       return;
     }
-    const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(1000));
     const unsub = onSnapshot(
       q,
       (snap) => {

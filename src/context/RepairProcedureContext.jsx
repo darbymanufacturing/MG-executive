@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
-  serverTimestamp, query, orderBy,
+  serverTimestamp, query, orderBy, limit,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -16,7 +16,7 @@ export function RepairProcedureProvider({ children }) {
   const [snapshotError, setSnapshotError] = useState(null);
 
   useEffect(() => {
-    const q = query(collection(db, COL), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, COL), orderBy('createdAt', 'desc'), limit(500));
     const unsub = onSnapshot(
       q,
       (snap) => {
