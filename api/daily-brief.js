@@ -94,7 +94,10 @@ export default async function handler(req, res) {
 
   try {
     const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      // Opus 4.8 for sharper "needs attention today" judgment — at one brief/day this is ~€37/yr per client (negligible).
+      // CORRECTNESS INVARIANT: every number is pre-computed in buildPrompt(); the model only narrates. Never hand it raw
+      // rows to total up — that's where hallucinated figures come from. See docs/SCALING.md §13.
+      model: 'claude-opus-4-8',
       max_tokens: 1024,
       messages: [{ role: 'user', content: buildPrompt(date, data) }],
     });
