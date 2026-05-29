@@ -74,10 +74,11 @@
 
 .issueRow {
   display: grid;
-  grid-template-columns: 3px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 14px;
   align-items: center;
-  padding: 14px 16px;
+  /* padding-left leaves room for the absolutely-positioned urgency bar */
+  padding: 14px 16px 14px 10px;
   border-bottom: 1px solid var(--divider);
   cursor: pointer;
   position: relative;
