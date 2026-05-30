@@ -1,55 +1,46 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import {
-  collection, addDoc, updateDoc, deleteDoc, doc,
-  onSnapshot, orderBy, query, limit, serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { createContext, useContext, useMemo, useCallback } from 'react';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 
-// --- peer contexts (DiaryProvider must be mounted inside these providers in App.jsx)
+// --- peer contexts (DiaryProvider must be mounted inside these providers in App.jsx).
+// These are now org-aware (Phase 2 / ADR-0003), so applyEntry's writes are automatically
+// scoped to the active org — no extra work needed here beyond converting diary's own reads/writes.
 import { useCosts } from './CostContext.jsx';
 import { useRevenue } from './RevenueContext.jsx';
 import { useMaintenance } from './MaintenanceContext.jsx';
 import { useProjects } from './ProjectContext.jsx';
 
+const DIARY_COL = 'diary';
+const MAX_DIARY = 1000;
+
 const DiaryContext = createContext(null);
 
 export function DiaryProvider({ children }) {
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Phase 2 (ADR-0003): org-scoped read of the diary collection (auto-id docs → collision-safe).
+  const { items, loading } = useOrgCollection(DIARY_COL, {
+    orderBy: ['createdAt', 'desc'],
+    limit: MAX_DIARY,
+  });
+  // Preserve the public shape: consumers read `_docId`.
+  const entries = items;
 
-  // Peer context functions
+  // Peer context functions (already org-aware after B3).
   const { addCost } = useCosts();
   const { importRevenueDays } = useRevenue();
   const { addTicket, addPart, addScooter } = useMaintenance();
   // BUG #20 — addMilestone and addGate don't exist on ProjectContext; removed from destructure
   const { addProject, addBlocker, addUpdate, activeProjects } = useProjects();
 
-  /* ── Real-time listener ── */
-  useEffect(() => {
-    const q = query(collection(db, 'diary'), orderBy('createdAt', 'desc'), limit(1000));
-    const unsub = onSnapshot(q, (snap) => {
-      setEntries(snap.docs.map((d) => ({ ...d.data(), _docId: d.id })));
-      setLoading(false);
-    }, () => setLoading(false));
-    return unsub;
-  }, []);
-
   /* ── Save raw entry (before applying) ── */
   const saveDraftEntry = useCallback(async ({ rawText, summary, actions, unresolved }) => {
-    const result = await safeWrite(
-      () => addDoc(collection(db, 'diary'), {
-        rawText,
-        summary,
-        actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
-        unresolved: unresolved || [],
-        status: 'pending',
-        history: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to save diary draft' },
-    );
+    const result = await orgWrite(DIARY_COL, {
+      rawText,
+      summary,
+      actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
+      unresolved: unresolved || [],
+      status: 'pending',
+      history: [],
+    }, { rethrow: true, errorMessage: 'Failed to save diary draft' });
     return result.data.id;
   }, []);
 
@@ -123,26 +114,17 @@ export function DiaryProvider({ children }) {
     }
 
     const status = anyFailed ? 'partial' : 'applied';
-    await safeWrite(
-      () => updateDoc(doc(db, 'diary', docId), {
-        actions: updatedActions,
-        status,
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to save diary apply result' },
-    );
+    await orgUpdate(DIARY_COL, docId, { actions: updatedActions, status }, {
+      rethrow: true, errorMessage: 'Failed to save diary apply result',
+    });
   }, [entries, addCost, importRevenueDays, addTicket, addPart, addScooter,
       addProject, addBlocker, addUpdate, activeProjects]);
 
   /* ── Reject / discard entry ── */
   const rejectEntry = useCallback(async (docId) => {
-    await safeWrite(
-      () => updateDoc(doc(db, 'diary', docId), {
-        status: 'rejected',
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to reject diary entry' },
-    );
+    await orgUpdate(DIARY_COL, docId, { status: 'rejected' }, {
+      rethrow: true, errorMessage: 'Failed to reject diary entry',
+    });
   }, []);
 
   /* ── Edit raw text (re-parse done in DiaryBubble, then call this) ── */
@@ -154,33 +136,28 @@ export function DiaryProvider({ children }) {
       previousRaw: entry.rawText,
       previousSummary: entry.summary,
     };
-    await safeWrite(
-      () => updateDoc(doc(db, 'diary', docId), {
-        rawText,
-        summary,
-        actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
-        unresolved: unresolved || [],
-        status: 'pending',
-        history: [...(entry.history || []), histEntry],
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to update diary entry' },
-    );
+    await orgUpdate(DIARY_COL, docId, {
+      rawText,
+      summary,
+      actions: actions.map((a) => ({ ...a, executed: false, docId: null })),
+      unresolved: unresolved || [],
+      status: 'pending',
+      history: [...(entry.history || []), histEntry],
+    }, { rethrow: true, errorMessage: 'Failed to update diary entry' });
   }, [entries]);
 
   /* ── Delete ── */
   const deleteEntry = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, 'diary', docId)),
-      { rethrow: true, errorMessage: 'Failed to delete diary entry' },
-    );
+    await orgDelete(DIARY_COL, docId, { rethrow: true, errorMessage: 'Failed to delete diary entry' });
   }, []);
 
+  const value = useMemo(() => ({
+    entries, loading,
+    saveDraftEntry, applyEntry, rejectEntry, editEntry, deleteEntry,
+  }), [entries, loading, saveDraftEntry, applyEntry, rejectEntry, editEntry, deleteEntry]);
+
   return (
-    <DiaryContext.Provider value={{
-      entries, loading,
-      saveDraftEntry, applyEntry, rejectEntry, editEntry, deleteEntry,
-    }}>
+    <DiaryContext.Provider value={value}>
       {children}
     </DiaryContext.Provider>
   );
