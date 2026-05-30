@@ -1,18 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  collection, doc, onSnapshot, query, limit,
-  addDoc, updateDoc, deleteDoc, serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { createContext, useContext, useCallback, useMemo } from 'react';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 
 const PROJECTS_COL   = 'projects';
 const GATES_COL      = 'decisionGates';
 const BRAINSTORM_COL = 'brainstormIdeas';
 
-// Phase 1.6b — safety caps on listener reads. These collections stay small;
-// the limit just prevents runaway reads if they ever grow. Client-side sort
-// is preserved (no orderBy added, to avoid excluding docs missing createdAt).
+// Phase 1.6b caps — these collections stay small; the limit just prevents runaway reads.
 const MAX_PROJECTS   = 500;
 const MAX_GATES      = 500;
 const MAX_BRAINSTORM = 1000;
@@ -27,122 +21,68 @@ function effectiveStatus(project) {
   return hasExternalBlocker ? 'blocked' : (project.status || 'onTrack');
 }
 
-/** Patch a project doc with safeWrite + auto-updatedAt. Re-throws after toasting. */
-function patchProject(docId, changes, errorMessage) {
-  return safeWrite(
-    () => updateDoc(doc(db, PROJECTS_COL, docId), { ...changes, updatedAt: serverTimestamp() }),
-    { rethrow: true, errorMessage },
-  );
-}
-
 export function ProjectProvider({ children }) {
-  const [projects, setProjects]               = useState([]);
-  const [gates, setGates]                     = useState([]);
-  const [brainstormIdeas, setBrainstormIdeas]  = useState([]);
-  const [loading, setLoading]                 = useState(true);
-  const [snapshotError, setSnapshotError]     = useState(null);
+  // ── Real-time listeners (ADR-0003 org-scoped) ──────────────────────────────
+  // All three collections use auto-generated doc ids (addDoc), so they are
+  // naturally collision-safe across orgs — only the orgId field + filter is needed.
+  const { items: rawProjects, loading: projectsLoading, error } = useOrgCollection(PROJECTS_COL, { limit: MAX_PROJECTS });
+  const { items: rawGates, loading: gatesLoading } = useOrgCollection(GATES_COL, { limit: MAX_GATES });
+  const { items: rawBrainstorm, loading: brainstormLoading } = useOrgCollection(BRAINSTORM_COL, { limit: MAX_BRAINSTORM });
 
-  // ── Real-time listeners ───────────────────────────────────────────────────
-  useEffect(() => {
-    let projectsDone   = false;
-    let gatesDone      = false;
-    let brainstormDone = false;
+  const loading = projectsLoading || gatesLoading || brainstormLoading;
 
-    const checkDone = () => {
-      if (projectsDone && gatesDone && brainstormDone) setLoading(false);
-    };
-
-    const unsubProjects = onSnapshot(
-      query(collection(db, PROJECTS_COL), limit(MAX_PROJECTS)),
-      (snap) => {
-        const raw = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-        const sorted = raw.sort((a, b) =>
-          (b.createdAt || '') > (a.createdAt || '') ? 1 : -1
-        );
-        setProjects(sorted.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) })));
-        projectsDone = true;
-        checkDone();
-      },
-      (err) => {
-        console.error('[ProjectContext] projects snapshot error:', err);
-        setSnapshotError(err.message);
-      },
+  const projects = useMemo(() => {
+    const sorted = [...rawProjects].sort((a, b) =>
+      (b.createdAt || '') > (a.createdAt || '') ? 1 : -1,
     );
+    return sorted.map((p) => ({ ...p, effectiveStatus: effectiveStatus(p) }));
+  }, [rawProjects]);
 
-    const unsubGates = onSnapshot(
-      query(collection(db, GATES_COL), limit(MAX_GATES)),
-      (snap) => {
-        setGates(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-        gatesDone = true;
-        checkDone();
-      },
-      (err) => {
-        console.error('[ProjectContext] gates snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
+  const gates = rawGates;
+  const brainstormIdeas = useMemo(
+    () => [...rawBrainstorm].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [rawBrainstorm],
+  );
 
-    const unsubBrainstorm = onSnapshot(
-      query(collection(db, BRAINSTORM_COL), limit(MAX_BRAINSTORM)),
-      (snap) => {
-        const ideas = snap.docs
-          .map((d) => ({ _docId: d.id, ...d.data() }))
-          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setBrainstormIdeas(ideas);
-        brainstormDone = true;
-        checkDone();
-      },
-      (err) => {
-        console.error('[ProjectContext] brainstorm snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-
-    return () => { unsubProjects(); unsubGates(); unsubBrainstorm(); };
-  }, []);
+  /** Patch a project doc via the org layer (adds updatedAt: serverTimestamp). */
+  const patchProject = useCallback((docId, changes, errorMessage) =>
+    orgUpdate(PROJECTS_COL, docId, changes, { rethrow: true, errorMessage }),
+  []);
 
   // ── Project CRUD ──────────────────────────────────────────────────────────
   const addProject = useCallback(async (data) => {
-    await safeWrite(
-      () => addDoc(collection(db, PROJECTS_COL), {
-        ...data,
-        phases:        data.phases        || [],
-        blockers:      data.blockers      || [],
-        updates:       data.updates       || [],
-        decisions:     data.decisions     || [],
-        powEntries:    data.powEntries    || [],
-        linkedProjectIds: data.linkedProjectIds || [],
-        archived:      false,
-        createdAt:     serverTimestamp(),
-        updatedAt:     serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to create project' },
-    );
+    await orgWrite(PROJECTS_COL, {
+      ...data,
+      phases:        data.phases        || [],
+      blockers:      data.blockers      || [],
+      updates:       data.updates       || [],
+      decisions:     data.decisions     || [],
+      powEntries:    data.powEntries    || [],
+      linkedProjectIds: data.linkedProjectIds || [],
+      archived:      false,
+    }, { rethrow: true, errorMessage: 'Failed to create project' });
   }, []);
 
-  const updateProject = useCallback(async (docId, changes) =>
+  const updateProject = useCallback((docId, changes) =>
     patchProject(docId, changes, 'Failed to update project'),
-  []);
+  [patchProject]);
 
   const deleteProject = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, PROJECTS_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete project' },
-    );
+    await orgDelete(PROJECTS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete project' });
   }, []);
 
-  const archiveProject = useCallback(async (docId) =>
+  const archiveProject = useCallback((docId) =>
     patchProject(docId, { archived: true }, 'Failed to archive project'),
-  []);
+  [patchProject]);
 
-  const unarchiveProject = useCallback(async (docId) =>
+  const unarchiveProject = useCallback((docId) =>
     patchProject(docId, { archived: false }, 'Failed to unarchive project'),
-  []);
+  [patchProject]);
 
   // ── Status ────────────────────────────────────────────────────────────────
-  const setStatus = useCallback(async (docId, status) =>
+  const setStatus = useCallback((docId, status) =>
     patchProject(docId, { status }, 'Failed to set project status'),
-  []);
+  [patchProject]);
 
   // ── Phase helpers ─────────────────────────────────────────────────────────
   const addPhase = useCallback(async (docId, phase) => {
@@ -166,7 +106,7 @@ export function ProjectProvider({ children }) {
       },
     ];
     await patchProject(docId, { phases }, 'Failed to add phase');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const updatePhase = useCallback(async (docId, phaseId, changes) => {
     const project = projects.find((p) => p._docId === docId);
@@ -175,7 +115,7 @@ export function ProjectProvider({ children }) {
       ph.id === phaseId ? { ...ph, ...changes } : ph,
     );
     await patchProject(docId, { phases }, 'Failed to update phase');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const deletePhase = useCallback(async (docId, phaseId) => {
     const project = projects.find((p) => p._docId === docId);
@@ -184,7 +124,7 @@ export function ProjectProvider({ children }) {
       .filter((ph) => ph.id !== phaseId)
       .map((ph, i) => ({ ...ph, number: i + 1 }));
     await patchProject(docId, { phases }, 'Failed to delete phase');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const reorderPhases = useCallback(async (docId, fromIndex, toIndex) => {
     const project = projects.find((p) => p._docId === docId);
@@ -194,18 +134,17 @@ export function ProjectProvider({ children }) {
     phases.splice(toIndex, 0, moved);
     const renumbered = phases.map((ph, i) => ({ ...ph, number: i + 1 }));
     await patchProject(docId, { phases: renumbered }, 'Failed to reorder phases');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Next Action helpers ───────────────────────────────────────────────────
-  const setNextAction = useCallback(async (docId, nextAction) =>
+  const setNextAction = useCallback((docId, nextAction) =>
     patchProject(
       docId,
       { nextAction: { ...nextAction, updatedAt: new Date().toISOString() } },
       'Failed to set next action',
     ),
-  []);
+  [patchProject]);
 
-  /** Complete current next action, auto-log it to updates[], clear nextAction. */
   const completeNextAction = useCallback(async (docId) => {
     const project = projects.find((p) => p._docId === docId);
     if (!project?.nextAction) return;
@@ -216,7 +155,7 @@ export function ProjectProvider({ children }) {
     };
     const updates = [completedEntry, ...(project.updates || [])];
     await patchProject(docId, { nextAction: null, updates }, 'Failed to complete next action');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Blocker helpers ───────────────────────────────────────────────────────
   const addBlocker = useCallback(async (docId, { text, type = 'internal', escalation = '' }) => {
@@ -224,9 +163,7 @@ export function ProjectProvider({ children }) {
     if (!project) return;
     const blocker = {
       id:         crypto.randomUUID(),
-      text,
-      type,
-      escalation,
+      text, type, escalation,
       resolved:   false,
       addedAt:    new Date().toISOString().slice(0, 10),
       resolvedAt: null,
@@ -234,7 +171,7 @@ export function ProjectProvider({ children }) {
     const blockers = [...(project.blockers || []), blocker];
     const statusUpdate = type === 'external' ? { status: 'blocked' } : {};
     await patchProject(docId, { blockers, ...statusUpdate }, 'Failed to add blocker');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const resolveBlocker = useCallback(async (docId, blockerId) => {
     const project = projects.find((p) => p._docId === docId);
@@ -245,16 +182,15 @@ export function ProjectProvider({ children }) {
         : b,
     );
     await patchProject(docId, { blockers }, 'Failed to resolve blocker');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const deleteBlocker = useCallback(async (docId, blockerId) => {
     const project = projects.find((p) => p._docId === docId);
     if (!project) return;
     const blockers = (project.blockers || []).filter((b) => b.id !== blockerId);
     await patchProject(docId, { blockers }, 'Failed to delete blocker');
-  }, [projects]);
+  }, [projects, patchProject]);
 
-  // Kept for War Room backward compat
   const toggleBlocker = useCallback(async (docId, blockerId) => {
     const project = projects.find((p) => p._docId === docId);
     if (!project) return;
@@ -262,7 +198,7 @@ export function ProjectProvider({ children }) {
       b.id === blockerId ? { ...b, resolved: !b.resolved } : b,
     );
     await patchProject(docId, { blockers }, 'Failed to toggle blocker');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Activity log (updates[]) ──────────────────────────────────────────────
   const addUpdate = useCallback(async (docId, text) => {
@@ -273,7 +209,7 @@ export function ProjectProvider({ children }) {
       ...(project.updates || []),
     ];
     await patchProject(docId, { updates }, 'Failed to add update');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Decision Log ──────────────────────────────────────────────────────────
   const addDecision = useCallback(async (docId, decision) => {
@@ -290,7 +226,7 @@ export function ProjectProvider({ children }) {
     };
     const decisions = [entry, ...(project.decisions || [])];
     await patchProject(docId, { decisions }, 'Failed to add decision');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── POW Entries (append-only) ─────────────────────────────────────────────
   const addPowEntry = useCallback(async (docId, entry) => {
@@ -308,32 +244,21 @@ export function ProjectProvider({ children }) {
     };
     const powEntries = [powEntry, ...(project.powEntries || [])];
     await patchProject(docId, { powEntries }, 'Failed to add POW entry');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Brainstorm Ideas (global) ─────────────────────────────────────────────
   const addBrainstormIdea = useCallback(async ({ text, tag = '' }) => {
-    await safeWrite(
-      () => addDoc(collection(db, BRAINSTORM_COL), {
-        text,
-        tag,
-        createdAt: new Date().toISOString(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to add brainstorm idea' },
-    );
+    // Keep ISO-string createdAt — the brainstorm sort uses localeCompare.
+    await orgWrite(BRAINSTORM_COL, { text, tag, createdAt: new Date().toISOString() },
+      { rethrow: true, errorMessage: 'Failed to add brainstorm idea' });
   }, []);
 
   const deleteBrainstormIdea = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, BRAINSTORM_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete brainstorm idea' },
-    );
+    await orgDelete(BRAINSTORM_COL, docId, { rethrow: true, errorMessage: 'Failed to delete brainstorm idea' });
   }, []);
 
   const updateBrainstormIdea = useCallback(async (docId, changes) => {
-    await safeWrite(
-      () => updateDoc(doc(db, BRAINSTORM_COL, docId), changes),
-      { rethrow: true, errorMessage: 'Failed to update brainstorm idea' },
-    );
+    await orgUpdate(BRAINSTORM_COL, docId, changes, { rethrow: true, errorMessage: 'Failed to update brainstorm idea' });
   }, []);
 
   // ── Milestone helpers (kept for War Room backward compat) ────────────────
@@ -344,7 +269,7 @@ export function ProjectProvider({ children }) {
       m.id === milestoneId ? { ...m, done: !m.done } : m,
     );
     await patchProject(docId, { milestones }, 'Failed to toggle milestone');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const addMilestone = useCallback(async (docId, milestone) => {
     const project = projects.find((p) => p._docId === docId);
@@ -356,14 +281,14 @@ export function ProjectProvider({ children }) {
       done:    false,
     }];
     await patchProject(docId, { milestones }, 'Failed to add milestone');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const deleteMilestone = useCallback(async (docId, milestoneId) => {
     const project = projects.find((p) => p._docId === docId);
     if (!project) return;
     const milestones = (project.milestones || []).filter((m) => m.id !== milestoneId);
     await patchProject(docId, { milestones }, 'Failed to delete milestone');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const updateMilestone = useCallback(async (docId, milestoneId, changes) => {
     const project = projects.find((p) => p._docId === docId);
@@ -372,7 +297,7 @@ export function ProjectProvider({ children }) {
       m.id === milestoneId ? { ...m, ...changes } : m,
     );
     await patchProject(docId, { milestones }, 'Failed to update milestone');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Task assignee ─────────────────────────────────────────────────────────
   const setTaskAssignee = useCallback(async (docId, phaseId, taskId, assignee) => {
@@ -386,7 +311,7 @@ export function ProjectProvider({ children }) {
       return { ...ph, tasks };
     });
     await patchProject(docId, { phases }, 'Failed to set task assignee');
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Project interconnection ───────────────────────────────────────────────
   const promotePhaseToProject = useCallback(async (docId, phaseId) => {
@@ -395,32 +320,26 @@ export function ProjectProvider({ children }) {
     const phase = (project.phases || []).find((ph) => ph.id === phaseId);
     if (!phase) return null;
 
-    const addResult = await safeWrite(
-      () => addDoc(collection(db, PROJECTS_COL), {
-        name:             `${project.name} — ${phase.name}`,
-        tagline:          `Promoted from phase ${phase.number} of "${project.name}"`,
-        owner:            project.owner || 'Kostas',
-        projectType:      project.projectType || '',
-        category:         project.category || '',
-        status:           'onTrack',
-        startDate:        phase.targetDate || new Date().toISOString().slice(0, 10),
-        targetDate:       phase.targetDate || null,
-        parentProjectId:  docId,
-        phases:           [],
-        blockers:         [],
-        updates:          [],
-        decisions:        [],
-        powEntries:       [],
-        linkedProjectIds: [docId],
-        archived:         false,
-        createdAt:        serverTimestamp(),
-        updatedAt:        serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to promote phase to project' },
-    );
+    const addResult = await orgWrite(PROJECTS_COL, {
+      name:             `${project.name} — ${phase.name}`,
+      tagline:          `Promoted from phase ${phase.number} of "${project.name}"`,
+      owner:            project.owner || 'Kostas',
+      projectType:      project.projectType || '',
+      category:         project.category || '',
+      status:           'onTrack',
+      startDate:        phase.targetDate || new Date().toISOString().slice(0, 10),
+      targetDate:       phase.targetDate || null,
+      parentProjectId:  docId,
+      phases:           [],
+      blockers:         [],
+      updates:          [],
+      decisions:        [],
+      powEntries:       [],
+      linkedProjectIds: [docId],
+      archived:         false,
+    }, { rethrow: true, errorMessage: 'Failed to promote phase to project' });
     const newProjectRef = addResult.data;
 
-    // Write childProjectId back onto the source phase + link parent → new
     const phases = (project.phases || []).map((ph) =>
       ph.id === phaseId ? { ...ph, childProjectId: newProjectRef.id } : ph,
     );
@@ -432,120 +351,74 @@ export function ProjectProvider({ children }) {
     );
 
     return newProjectRef.id;
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const linkProjects = useCallback(async (aId, bId) => {
     const a = projects.find((p) => p._docId === aId);
     const b = projects.find((p) => p._docId === bId);
     if (!a || !b) return;
     if (!(a.linkedProjectIds || []).includes(bId)) {
-      await patchProject(
-        aId,
-        { linkedProjectIds: [...(a.linkedProjectIds || []), bId] },
-        'Failed to link projects',
-      );
+      await patchProject(aId, { linkedProjectIds: [...(a.linkedProjectIds || []), bId] }, 'Failed to link projects');
     }
     if (!(b.linkedProjectIds || []).includes(aId)) {
-      await patchProject(
-        bId,
-        { linkedProjectIds: [...(b.linkedProjectIds || []), aId] },
-        'Failed to link projects',
-      );
+      await patchProject(bId, { linkedProjectIds: [...(b.linkedProjectIds || []), aId] }, 'Failed to link projects');
     }
-  }, [projects]);
+  }, [projects, patchProject]);
 
   const unlinkProjects = useCallback(async (aId, bId) => {
     const a = projects.find((p) => p._docId === aId);
     const b = projects.find((p) => p._docId === bId);
     if (a) {
-      await patchProject(
-        aId,
-        { linkedProjectIds: (a.linkedProjectIds || []).filter((id) => id !== bId) },
-        'Failed to unlink projects',
-      );
+      await patchProject(aId, { linkedProjectIds: (a.linkedProjectIds || []).filter((id) => id !== bId) }, 'Failed to unlink projects');
     }
     if (b) {
-      await patchProject(
-        bId,
-        { linkedProjectIds: (b.linkedProjectIds || []).filter((id) => id !== aId) },
-        'Failed to unlink projects',
-      );
+      await patchProject(bId, { linkedProjectIds: (b.linkedProjectIds || []).filter((id) => id !== aId) }, 'Failed to unlink projects');
     }
-  }, [projects]);
+  }, [projects, patchProject]);
 
   // ── Decision Gates CRUD ───────────────────────────────────────────────────
   const addGate = useCallback(async (data) => {
-    await safeWrite(
-      () => addDoc(collection(db, GATES_COL), {
-        ...data,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to add decision gate' },
-    );
+    await orgWrite(GATES_COL, data, { rethrow: true, errorMessage: 'Failed to add decision gate' });
   }, []);
 
   const updateGate = useCallback(async (docId, changes) => {
-    await safeWrite(
-      () => updateDoc(doc(db, GATES_COL, docId), {
-        ...changes,
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to update decision gate' },
-    );
+    await orgUpdate(GATES_COL, docId, changes, { rethrow: true, errorMessage: 'Failed to update decision gate' });
   }, []);
 
   const deleteGate = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, GATES_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete decision gate' },
-    );
+    await orgDelete(GATES_COL, docId, { rethrow: true, errorMessage: 'Failed to delete decision gate' });
   }, []);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const activeProjects   = projects.filter((p) => !p.archived);
-  const archivedProjects = projects.filter((p) => p.archived);
+  const activeProjects   = useMemo(() => projects.filter((p) => !p.archived), [projects]);
+  const archivedProjects = useMemo(() => projects.filter((p) => p.archived), [projects]);
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({
     projects, activeProjects, archivedProjects,
-    gates, brainstormIdeas, loading, snapshotError,
-    // Project CRUD
+    gates, brainstormIdeas, loading, snapshotError: error ? error.message : null,
     addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
     setStatus,
-    // Phases
     addPhase, updatePhase, deletePhase, reorderPhases,
-    // Next Action
     setNextAction, completeNextAction,
-    // Blockers
     addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
-    // Activity log
     addUpdate,
-    // Decisions
     addDecision,
-    // POW
     addPowEntry,
-    // Brainstorm (global)
     addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
-    // Task assignee
     setTaskAssignee,
-    // Interconnection
     promotePhaseToProject, linkProjects, unlinkProjects,
-    // Milestones (War Room compat)
     toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
-    // Decision Gates (War Room compat)
     addGate, updateGate, deleteGate,
   }), [
     projects, activeProjects, archivedProjects,
-    gates, brainstormIdeas, loading, snapshotError,
+    gates, brainstormIdeas, loading, error,
     addProject, updateProject, deleteProject, archiveProject, unarchiveProject,
     setStatus,
     addPhase, updatePhase, deletePhase, reorderPhases,
     setNextAction, completeNextAction,
     addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
-    addUpdate,
-    addDecision,
-    addPowEntry,
+    addUpdate, addDecision, addPowEntry,
     addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
     setTaskAssignee,
     promotePhaseToProject, linkProjects, unlinkProjects,

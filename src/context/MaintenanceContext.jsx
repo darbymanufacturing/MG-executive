@@ -1,22 +1,29 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  collection, doc, onSnapshot,
-  setDoc, updateDoc, deleteDoc, writeBatch, query, limit,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
+import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { SEED_TICKETS, SEED_PARTS, SEED_CONFIG } from '../utils/maintenanceSeedData.js';
+import { useOrg } from './OrgContext.jsx';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgDoc } from '../hooks/useOrgDoc.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 
-// ── Firestore paths ───────────────────────────────────────────────────────────
+// ── Firestore paths (Phase 2 / ADR-0002+0003) ─────────────────────────────────
 const TICKETS_COL  = 'maintenanceTickets';
 const PARTS_COL    = 'maintenanceParts';
 const SCOOTERS_COL = 'scooters';
-const CONFIG_DOC   = 'config/maintenance';
+const CONFIG_COL   = 'config';          // org-scoped singleton: config/${orgId}_maintenance
 const BATCH_SIZE   = 450;
-// Hard caps on snapshot reads — Phase 1 free-tier defense.
 const MAX_TICKETS  = 2000;
 const MAX_PARTS    = 2000;
 const MAX_SCOOTERS = 1000;
+
+// Deterministic doc IDs are org-PREFIXED to prevent cross-org collisions (two orgs
+// can both own scooter "70055"). The business fields (scooterId/sku/dateEntered)
+// stay unchanged inside the doc; only the Firestore doc id carries the org prefix.
+// Consumers navigate/look up by the scooterId FIELD, never _docId (verified), so
+// this is transparent to the UI. See ADR-0002 + the B3 collision note.
+const orgKey = (orgId, ...parts) => `${orgId}_${parts.join('_')}`;
 
 const DEFAULT_CONFIG = {
   revenueRatePerDay: 3.67,
@@ -115,7 +122,6 @@ const SKU_MODEL_MAP = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
 const MONTH_KEYS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
 export function computeDaysOpen(ticket) {
@@ -131,88 +137,40 @@ export function computeDaysOpen(ticket) {
 // ── Context ───────────────────────────────────────────────────────────────────
 const MaintenanceContext = createContext(null);
 
-// Module-level flag: prevents StrictMode double-invoke from writing bootstrap defaults twice
-let maintenanceConfigBootstrapped = false;
+// Per-org bootstrap guard.
+const bootstrappedConfigs = new Set();
 
 export function MaintenanceProvider({ children }) {
-  const [tickets,       setTickets]       = useState([]);
-  const [parts,         setParts]         = useState([]);
-  const [scooters,      setScooters]      = useState([]);
-  const [config,        setConfig]        = useState(DEFAULT_CONFIG);
-  const [loading,       setLoading]       = useState(true);
-  const [snapshotError, setSnapshotError] = useState(null);
+  const { orgId } = useOrg();
+  const configDocId = orgId ? `${orgId}_maintenance` : null;
 
-  // Track which listeners have fired at least once
-  const [loaded, setLoaded] = useState({ tickets: false, parts: false, config: false, scooters: false });
-  const markLoaded = (key) => setLoaded((prev) => ({ ...prev, [key]: true }));
+  // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
+  const { items: tickets, loading: ticketsLoading, error } = useOrgCollection(TICKETS_COL, { limit: MAX_TICKETS });
+  const { items: parts, loading: partsLoading } = useOrgCollection(PARTS_COL, { limit: MAX_PARTS });
+  const { items: scooters, loading: scootersLoading } = useOrgCollection(SCOOTERS_COL, { limit: MAX_SCOOTERS });
+  const { item: configItem, loading: configLoading } = useOrgDoc(CONFIG_COL, configDocId);
 
-  // ── Real-time listeners ───────────────────────────────────────────────────
+  const config = useMemo(() => {
+    if (!configItem) return DEFAULT_CONFIG;
+    const { _docId, ...rest } = configItem;
+    return { ...DEFAULT_CONFIG, ...rest };
+  }, [configItem]);
+
+  const loading = ticketsLoading || partsLoading || scootersLoading || configLoading;
+
+  // Bootstrap config defaults once per org.
   useEffect(() => {
-    const unsubTickets = onSnapshot(
-      query(collection(db, TICKETS_COL), limit(MAX_TICKETS)),
-      (snap) => {
-        setTickets(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-        markLoaded('tickets');
-      },
-      (err) => {
-        console.error('[MaintenanceContext] tickets snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    const unsubParts = onSnapshot(
-      query(collection(db, PARTS_COL), limit(MAX_PARTS)),
-      (snap) => {
-        setParts(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-        markLoaded('parts');
-      },
-      (err) => {
-        console.error('[MaintenanceContext] parts snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    const unsubScooters = onSnapshot(
-      query(collection(db, SCOOTERS_COL), limit(MAX_SCOOTERS)),
-      (snap) => {
-        setScooters(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-        markLoaded('scooters');
-      },
-      (err) => {
-        console.error('[MaintenanceContext] scooters snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    const unsubConfig = onSnapshot(
-      doc(db, CONFIG_DOC),
-      (snap) => {
-        if (snap.exists()) {
-          setConfig({ ...DEFAULT_CONFIG, ...snap.data() });
-        } else {
-          // Bootstrap defaults once — guarded against StrictMode double-fire
-          if (!maintenanceConfigBootstrapped) {
-            maintenanceConfigBootstrapped = true;
-            safeWrite(() => setDoc(doc(db, CONFIG_DOC), DEFAULT_CONFIG), { silent: true });
-          }
-        }
-        markLoaded('config');
-      },
-      (err) => {
-        console.error('[MaintenanceContext] config snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    return () => { unsubTickets(); unsubParts(); unsubScooters(); unsubConfig(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (loaded.tickets && loaded.parts && loaded.config && loaded.scooters) setLoading(false);
-  }, [loaded]);
+    if (configLoading || !configDocId) return;
+    if (!configItem && !bootstrappedConfigs.has(configDocId)) {
+      bootstrappedConfigs.add(configDocId);
+      orgWrite(CONFIG_COL, DEFAULT_CONFIG, { id: configDocId, silent: true });
+    }
+  }, [configItem, configLoading, configDocId]);
 
   // ── Computed ──────────────────────────────────────────────────────────────
   const ticketsWithCalc = useMemo(() =>
     tickets.map((t) => {
       const daysOpen  = computeDaysOpen(t);
-      // Use the per-month seasonality rate for the ticket's entry month,
-      // falling back to the flat revenueRatePerDay if not configured.
       const entryDate = t.dateEntered ? new Date(t.dateEntered) : new Date();
       const monthKey  = MONTH_KEYS[entryDate.getMonth()];
       const dailyRate = config.seasonalityIndex?.[monthKey] ?? config.revenueRatePerDay ?? 3.67;
@@ -232,148 +190,110 @@ export function MaintenanceProvider({ children }) {
   // ── Ticket CRUD ───────────────────────────────────────────────────────────
   const addTicket = useCallback(async (data) => {
     if (!data.scooterId) throw new Error('scooterId is required');
+    if (!orgId) throw new Error('addTicket: no active org');
     const dateStr = data.dateEntered || new Date().toISOString().slice(0, 10);
     const scooterId = String(data.scooterId || '').trim();
-    const baseId  = `${scooterId}_${dateStr}`;
-    // Collision avoidance
+    const baseId  = orgKey(orgId, scooterId, dateStr);
+    // Collision avoidance within the org (multiple tickets same scooter+day).
     const existing = tickets.filter((t) => t._docId === baseId || t._docId?.startsWith(`${baseId}_`));
     const docId   = existing.length === 0 ? baseId : `${baseId}_${existing.length + 1}`;
-    const now     = new Date().toISOString();
-    await safeWrite(
-      () => setDoc(doc(db, TICKETS_COL, docId), { ...data, createdAt: now, updatedAt: now }),
-      { rethrow: true, errorMessage: 'Failed to create ticket' },
-    );
+    await orgWrite(TICKETS_COL, data, { id: docId, rethrow: true, errorMessage: 'Failed to create ticket' });
     return docId;
-  }, [tickets]);
+  }, [tickets, orgId]);
 
   const updateTicket = useCallback(async (docId, data) => {
-    await safeWrite(
-      () => updateDoc(doc(db, TICKETS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
-      { rethrow: true, errorMessage: 'Failed to update ticket' },
-    );
+    await orgUpdate(TICKETS_COL, docId, data, { rethrow: true, errorMessage: 'Failed to update ticket' });
   }, []);
 
   const deleteTicket = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, TICKETS_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete ticket' },
-    );
+    await orgDelete(TICKETS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete ticket' });
   }, []);
 
   const completeTicket = useCallback(async (docId) => {
-    await safeWrite(
-      () => updateDoc(doc(db, TICKETS_COL, docId), {
-        status: 'Completed',
-        dateCompleted: new Date().toISOString().slice(0, 10),
-        updatedAt: new Date().toISOString(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to complete ticket' },
-    );
+    await orgUpdate(TICKETS_COL, docId, {
+      status: 'Completed',
+      dateCompleted: new Date().toISOString().slice(0, 10),
+    }, { rethrow: true, errorMessage: 'Failed to complete ticket' });
   }, []);
 
   const assignTicket = useCallback(async (docId, uid, displayName) => {
-    await safeWrite(
-      () => updateDoc(doc(db, TICKETS_COL, docId), {
-        assignedTo:     uid        || null,
-        assignedToName: displayName || null,
-        updatedAt: new Date().toISOString(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to assign ticket' },
-    );
+    await orgUpdate(TICKETS_COL, docId, {
+      assignedTo:     uid        || null,
+      assignedToName: displayName || null,
+    }, { rethrow: true, errorMessage: 'Failed to assign ticket' });
   }, []);
 
   // ── Parts CRUD ────────────────────────────────────────────────────────────
   const addPart = useCallback(async (data) => {
     if (!data.sku) throw new Error('sku is required');
-    const docId = String(data.sku).trim();
-    const now   = new Date().toISOString();
-    await safeWrite(
-      () => setDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: now }),
-      { rethrow: true, errorMessage: 'Failed to save part' },
-    );
-  }, []);
+    if (!orgId) throw new Error('addPart: no active org');
+    const docId = orgKey(orgId, String(data.sku).trim());
+    await orgWrite(PARTS_COL, data, { id: docId, rethrow: true, errorMessage: 'Failed to save part' });
+  }, [orgId]);
 
   const updatePart = useCallback(async (docId, data) => {
-    await safeWrite(
-      () => updateDoc(doc(db, PARTS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
-      { rethrow: true, errorMessage: 'Failed to update part' },
-    );
+    await orgUpdate(PARTS_COL, docId, data, { rethrow: true, errorMessage: 'Failed to update part' });
   }, []);
 
   const deletePart = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, PARTS_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete part' },
-    );
+    await orgDelete(PARTS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete part' });
   }, []);
 
   // ── Config ────────────────────────────────────────────────────────────────
   const updateConfig = useCallback(async (updates) => {
-    const prev = config;
-    const next = { ...config, ...updates };
-    setConfig(next);
-    await safeWrite(
-      () => setDoc(doc(db, CONFIG_DOC), next),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to save maintenance config — change reverted',
-        optimisticRollback: () => setConfig(prev),
-      },
-    );
-  }, [config]);
+    if (!configDocId) return;
+    await orgWrite(CONFIG_COL, { ...config, ...updates }, {
+      id: configDocId, rethrow: true, errorMessage: 'Failed to save maintenance config — change reverted',
+    });
+  }, [config, configDocId]);
 
   // ── Batch import ──────────────────────────────────────────────────────────
   const importTickets = useCallback(async (rows) => {
+    if (!orgId) throw new Error('importTickets: no active org');
+    const uid = auth.currentUser?.uid ?? null;
     const existingIds = new Set(tickets.map((t) => t._docId));
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       rows.slice(i, i + BATCH_SIZE).forEach((row) => {
         const scooterId = String(row.scooterId || '').trim();
         const dateStr   = row.dateEntered || new Date().toISOString().slice(0, 10);
-        let docId = `${scooterId}_${dateStr}`;
+        let docId = orgKey(orgId, scooterId, dateStr);
         let suffix = 1;
-        while (existingIds.has(docId)) { docId = `${scooterId}_${dateStr}_${++suffix}`; }
+        while (existingIds.has(docId)) { docId = `${orgKey(orgId, scooterId, dateStr)}_${++suffix}`; }
         existingIds.add(docId);
-        batch.set(doc(db, TICKETS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
+        batch.set(doc(db, TICKETS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Ticket import failed mid-batch' });
     }
-  }, [tickets]);
+  }, [tickets, orgId]);
 
   const importParts = useCallback(async (rows) => {
+    if (!orgId) throw new Error('importParts: no active org');
+    const uid = auth.currentUser?.uid ?? null;
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       rows.slice(i, i + BATCH_SIZE).forEach((row) => {
-        const docId = String(row.sku).trim();
-        batch.set(doc(db, PARTS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
+        const docId = orgKey(orgId, String(row.sku).trim());
+        batch.set(doc(db, PARTS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Parts import failed mid-batch' });
     }
-  }, []);
+  }, [orgId]);
 
   // ── Scooter CRUD ─────────────────────────────────────────────────────────────
   const addScooter = useCallback(async (data) => {
     if (!data.scooterId) throw new Error('scooterId is required');
-    const docId = String(data.scooterId).trim();
-    const now   = new Date().toISOString();
-    await safeWrite(
-      () => setDoc(doc(db, SCOOTERS_COL, docId), { ...data, createdAt: now, updatedAt: now }),
-      { rethrow: true, errorMessage: 'Failed to save scooter' },
-    );
-  }, []);
+    if (!orgId) throw new Error('addScooter: no active org');
+    const docId = orgKey(orgId, String(data.scooterId).trim());
+    await orgWrite(SCOOTERS_COL, data, { id: docId, rethrow: true, errorMessage: 'Failed to save scooter' });
+  }, [orgId]);
 
   const updateScooter = useCallback(async (docId, data) => {
-    await safeWrite(
-      () => updateDoc(doc(db, SCOOTERS_COL, docId), { ...data, updatedAt: new Date().toISOString() }),
-      { rethrow: true, errorMessage: 'Failed to update scooter' },
-    );
+    await orgUpdate(SCOOTERS_COL, docId, data, { rethrow: true, errorMessage: 'Failed to update scooter' });
   }, []);
 
   const deleteScooter = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, SCOOTERS_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete scooter' },
-    );
+    await orgDelete(SCOOTERS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete scooter' });
   }, []);
 
   // ── Custom tags ───────────────────────────────────────────────────────────────
@@ -381,27 +301,15 @@ export function MaintenanceProvider({ children }) {
     const key = type === 'primary' ? 'customPrimaryTags' : 'customSecondaryTags';
     const current = config[key] || [];
     if (current.includes(tag)) return;
-    const updated = [...current, tag];
-    const prev = config;
-    const next = { ...config, [key]: updated };
-    setConfig(next);
-    await safeWrite(
-      () => updateDoc(doc(db, CONFIG_DOC), { [key]: updated }),
-      {
-        rethrow: true,
-        errorMessage: 'Failed to save tag — change reverted',
-        optimisticRollback: () => setConfig(prev),
-      },
-    );
-  }, [config]);
+    await updateConfig({ [key]: [...current, tag] });
+  }, [config, updateConfig]);
 
   // ── Patch part models from SKU_MODEL_MAP ─────────────────────────────────────
   const patchPartModels = useCallback(async () => {
-    const allParts = parts; // live snapshot from Firestore listener
-    for (let i = 0; i < allParts.length; i += BATCH_SIZE) {
+    for (let i = 0; i < parts.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
-      allParts.slice(i, i + BATCH_SIZE).forEach((p) => {
-        const sku = String(p.sku || p._docId || '').replace(/\.0$/, '').trim();
+      parts.slice(i, i + BATCH_SIZE).forEach((p) => {
+        const sku = String(p.sku || '').replace(/\.0$/, '').trim();
         const model = SKU_MODEL_MAP[sku] ?? 'Shared';
         batch.update(doc(db, PARTS_COL, p._docId), { model });
       });
@@ -411,34 +319,31 @@ export function MaintenanceProvider({ children }) {
 
   // ── Seed data loader ──────────────────────────────────────────────────────────
   const loadSeedData = useCallback(async () => {
-    // Write config first
-    await safeWrite(
-      () => setDoc(doc(db, CONFIG_DOC), SEED_CONFIG),
-      { rethrow: true, errorMessage: 'Seed: config write failed' },
-    );
+    if (!orgId || !configDocId) throw new Error('loadSeedData: no active org');
+    const uid = auth.currentUser?.uid ?? null;
 
-    // Batch-write tickets
+    await orgWrite(CONFIG_COL, SEED_CONFIG, { id: configDocId, rethrow: true, errorMessage: 'Seed: config write failed' });
+
     for (let i = 0; i < SEED_TICKETS.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       SEED_TICKETS.slice(i, i + BATCH_SIZE).forEach((row) => {
         const scooterId = String(row.scooterId || '').trim();
         const dateStr   = row.dateEntered || new Date().toISOString().slice(0, 10);
-        const docId     = `${scooterId}_${dateStr}`;
-        batch.set(doc(db, TICKETS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
+        const docId     = orgKey(orgId, scooterId, dateStr);
+        batch.set(doc(db, TICKETS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Seed: tickets batch failed' });
     }
 
-    // Batch-write parts
     for (let i = 0; i < SEED_PARTS.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       SEED_PARTS.slice(i, i + BATCH_SIZE).forEach((row) => {
-        const docId = String(row.sku).trim();
-        batch.set(doc(db, PARTS_COL, docId), { ...row, updatedAt: new Date().toISOString() });
+        const docId = orgKey(orgId, String(row.sku).trim());
+        batch.set(doc(db, PARTS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Seed: parts batch failed' });
     }
-  }, []);
+  }, [orgId, configDocId]);
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({
@@ -447,7 +352,7 @@ export function MaintenanceProvider({ children }) {
     scooters,
     config,
     loading,
-    snapshotError,
+    snapshotError: error ? error.message : null,
     // Computed
     activeTickets,
     activeCount,
@@ -479,7 +384,7 @@ export function MaintenanceProvider({ children }) {
     loadSeedData,
     patchPartModels,
   }), [
-    ticketsWithCalc, parts, scooters, config, loading, snapshotError,
+    ticketsWithCalc, parts, scooters, config, loading, error,
     activeTickets, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
     addScooter, updateScooter, deleteScooter,
