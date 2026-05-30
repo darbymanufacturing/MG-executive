@@ -1,80 +1,53 @@
-/**
- * ScooterConfigContext.jsx
- * Manages the `config/scooters` Firestore doc.
- * Stores tab configuration (order, enabled state) for the /scooters/:id page.
- *
- * Default config is written on first load if the doc doesn't exist.
- */
-
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
-
-const CONFIG_DOC = 'config/scooters';
-
-const DEFAULT_TABS = [
-  { id: 'details',   label: 'Details',   enabled: true,  order: 0 },
-  { id: 'trips',     label: 'Trips',     enabled: true,  order: 1 },
-  { id: 'events',    label: 'Events',    enabled: true,  order: 2 },
-  { id: 'repairs',   label: 'Repairs',   enabled: true,  order: 3 },
-  { id: 'finance',   label: 'Finance',   enabled: true,  order: 4 },
-  { id: 'analytics', label: 'Analytics', enabled: false, order: 5 },
-];
+import { createContext, useContext, useMemo, useCallback } from 'react';
+import { useOrg } from './OrgContext.jsx';
+import { useOrgDoc } from '../hooks/useOrgDoc.js';
+import { orgWrite } from '../hooks/orgWrite.js';
+import { DEFAULT_SCOOTER_TABS } from '../utils/scooterTabsConfig.js';
 
 const ScooterConfigContext = createContext(null);
+// Phase 2 (ADR-0002): org-scoped singleton — was config/scooters.
+const CONFIG_COL = 'config';
 
 export function ScooterConfigProvider({ children }) {
-  const [tabs,    setTabs]    = useState(DEFAULT_TABS);
-  const [loading, setLoading] = useState(true);
+  const { orgId } = useOrg();
+  const docId = orgId ? `${orgId}_scooters` : null;
+  const { item, loading } = useOrgDoc(CONFIG_COL, docId);
 
-  useEffect(() => {
-    const ref = doc(db, CONFIG_DOC);
-    const unsub = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        // Merge Firestore tabs with DEFAULT_TABS so new tabs added in code appear
-        const stored  = data.tabs || [];
-        const storedById = Object.fromEntries(stored.map((t) => [t.id, t]));
-        const merged = DEFAULT_TABS.map((d) => ({
-          ...d,
-          ...(storedById[d.id] || {}),
-        }));
-        // Sort by saved order
-        merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-        setTabs(merged);
-      } else {
-        // First load — write defaults (silent fire-and-forget; not actionable to user)
-        safeWrite(() => setDoc(ref, { tabs: DEFAULT_TABS }), { silent: true });
-        setTabs(DEFAULT_TABS);
-      }
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
+  const tabs = useMemo(
+    () => (item && Array.isArray(item.tabs) ? item.tabs : DEFAULT_SCOOTER_TABS),
+    [item],
+  );
 
   const saveTabs = useCallback(async (newTabs) => {
-    const ref = doc(db, CONFIG_DOC);
-    await safeWrite(
-      () => setDoc(ref, { tabs: newTabs }, { merge: true }),
-      { rethrow: true, errorMessage: 'Failed to save scooter tab settings' },
-    );
-  }, []);
+    await orgWrite(CONFIG_COL, { tabs: newTabs }, {
+      id: docId, merge: true, rethrow: true, errorMessage: 'Failed to save tab settings',
+    });
+  }, [docId]);
 
-  /** Returns only enabled tabs, sorted by order */
-  const enabledTabs = tabs
-    .filter((t) => t.enabled)
-    .sort((a, b) => a.order - b.order);
+  const value = useMemo(() => ({
+    tabs,
+    enabledTabs: tabs.filter((t) => t.enabled),
+    saveTabs,
+    loading,
+  }), [tabs, loading, saveTabs]);
 
   return (
-    <ScooterConfigContext.Provider value={{ tabs, enabledTabs, saveTabs, loading }}>
+    <ScooterConfigContext.Provider value={value}>
       {children}
     </ScooterConfigContext.Provider>
   );
 }
 
 export function useScooterConfig() {
-  const ctx = useContext(ScooterConfigContext);
-  if (!ctx) throw new Error('useScooterConfig must be used inside ScooterConfigProvider');
+  return useContext(ScooterConfigContext);
+}
+
+export function useSafeScooterConfig() {
+  let ctx;
+  try {
+    ctx = useScooterConfig();
+  } catch {
+    return { tabs: DEFAULT_SCOOTER_TABS, enabledTabs: DEFAULT_SCOOTER_TABS.filter(t => t.enabled), loading: false };
+  }
   return ctx;
 }

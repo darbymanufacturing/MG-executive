@@ -1,106 +1,71 @@
-/**
- * TripContext.jsx
- * Manages the `scooterTrips` Firestore collection.
- *
- * SCAFFOLD — trip import CSV schema is TBD. This context loads all trips into
- * memory and exposes importTrips() for batch upsert via CSV.
- *
- * DocId pattern: `${scooterId}_${startedAt}` (idempotent — re-uploading same CSV
- * is safe).
- *
- * Collection will remain empty until the user imports a trip CSV.
- */
-
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import {
-  collection, onSnapshot, writeBatch, doc, serverTimestamp, query, where, getDocs, limit,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { createContext, useContext, useCallback, useMemo } from 'react';
+import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
+import { useOrg } from './OrgContext.jsx';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
 
-const TRIPS_COL  = 'scooterTrips';
+const TRIPS_COL = 'scooterTrips';
 const BATCH_SIZE = 450;
-const MAX_TRIPS  = 10000;
+const MAX_TRIPS = 10000;
 
-const TripContext = createContext(null);
+export const TripContext = createContext(null);
 
 export function TripProvider({ children }) {
-  const [trips,   setTrips]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [count,   setCount]   = useState(0);
+  const { orgId } = useOrg();
+  // Phase 2 (ADR-0003): org-scoped read. No orderBy (matches pre-Phase-2 behaviour).
+  const { items: trips, loading } = useOrgCollection(TRIPS_COL, { limit: MAX_TRIPS });
 
-  // Real-time listener
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, TRIPS_COL), limit(MAX_TRIPS)),
-      (snap) => {
-        setTrips(snap.docs.map((d) => ({ _docId: d.id, ...d.data() })));
-        setCount(snap.size);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-    return unsub;
-  }, []);
-
-  /**
-   * Batch-upsert trip rows from parseTripLogCsv output.
-   * Returns { written, skipped } counts.
-   */
-  const importTrips = useCallback(async (rows) => {
-    let written = 0;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+  const importTrips = useCallback(async (tripRows) => {
+    if (!orgId) throw new Error('importTrips: no active org');
+    const uid = auth.currentUser?.uid ?? null;
+    for (let i = 0; i < tripRows.length; i += BATCH_SIZE) {
+      const chunk = tripRows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
-      rows.slice(i, i + BATCH_SIZE).forEach((row) => {
-        // #115 — Date objects produce strings with spaces/parens (invalid Firestore IDs).
-        // Normalise startedAt to an ISO string, then strip all non-alphanumeric chars.
-        const safeStartedAt = row.startedAt instanceof Date
-          ? row.startedAt.toISOString()
-          : typeof row.startedAt === 'string'
-            ? row.startedAt
-            : String(row.startedAt ?? '');
-        const docId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[^0-9TZ]/g, '').slice(0, 19));
-        batch.set(
-          doc(db, TRIPS_COL, docId),
-          { ...row, _importedAt: serverTimestamp() },
-          { merge: true },
-        );
-        written++;
+      chunk.forEach((trip) => {
+        const docId = `${trip.scooterId}_${trip.startedAt}`.replace(/[/.#$[\]]/g, '_');
+        const ref = doc(db, TRIPS_COL, docId);
+        batch.set(ref, { ...trip, orgId, createdByUid: uid });
       });
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Trip import failed mid-batch' },
       );
     }
-    return { written };
-  }, []);
+  }, [orgId]);
 
-  /**
-   * Delete all trips for a specific scooter (so re-import is clean).
-   */
   const clearTripsForScooter = useCallback(async (scooterId) => {
-    const q    = query(collection(db, TRIPS_COL), where('scooterId', '==', String(scooterId)));
+    if (!orgId) throw new Error('clearTripsForScooter: no active org');
+    // Two equality filters (orgId + scooterId) need no composite index.
+    const q = query(
+      collection(db, TRIPS_COL),
+      where('orgId', '==', orgId),
+      where('scooterId', '==', String(scooterId)),
+    );
     const snap = await getDocs(q);
-    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db);
-      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await safeWrite(
-        () => batch.commit(),
-        { rethrow: true, errorMessage: 'Failed to clear trips for scooter' },
-      );
-    }
-    return snap.docs.length;
-  }, []);
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await safeWrite(
+      () => batch.commit(),
+      { rethrow: true, errorMessage: 'Failed to clear trips' },
+    );
+  }, [orgId]);
+
+  const value = useMemo(() => ({
+    trips,
+    loading,
+    count: trips.length,
+    importTrips,
+    clearTripsForScooter,
+  }), [trips, loading, importTrips, clearTripsForScooter]);
 
   return (
-    <TripContext.Provider value={{ trips, loading, count, importTrips, clearTripsForScooter }}>
+    <TripContext.Provider value={value}>
       {children}
     </TripContext.Provider>
   );
 }
 
 export function useTrips() {
-  const ctx = useContext(TripContext);
-  if (!ctx) throw new Error('useTrips must be used inside TripProvider');
-  return ctx;
+  return useContext(TripContext);
 }
