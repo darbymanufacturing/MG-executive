@@ -343,13 +343,15 @@ export default function App() {
                 path="/crew/*"
                 element={
                   <ProtectedRoute>
-                    <MaintenanceProvider>
-                      <RepairProcedureProvider>
-                        <ErrorBoundary>
-                          <CrewShell />
-                        </ErrorBoundary>
-                      </RepairProcedureProvider>
-                    </MaintenanceProvider>
+                    <OrgProvider>
+                      <MaintenanceProvider>
+                        <RepairProcedureProvider>
+                          <ErrorBoundary>
+                            <CrewShell />
+                          </ErrorBoundary>
+                        </RepairProcedureProvider>
+                      </MaintenanceProvider>
+                    </OrgProvider>
                   </ProtectedRoute>
                 }
               />

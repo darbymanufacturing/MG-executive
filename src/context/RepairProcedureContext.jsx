@@ -1,65 +1,40 @@
-import { createContext, useContext, useEffect, useState, useMemo } from 'react';
-import {
-  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
-  serverTimestamp, query, orderBy, limit,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { createContext, useContext, useMemo } from 'react';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 
 const RepairProcedureContext = createContext(null);
 
 const COL = 'repairProcedures';
 
 export function RepairProcedureProvider({ children }) {
-  const [procedures,    setProcedures]    = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [snapshotError, setSnapshotError] = useState(null);
+  // Phase 2 (ADR-0003): org-scoped read + writes.
+  const { items, loading, error } = useOrgCollection(COL, {
+    orderBy: ['createdAt', 'desc'],
+    limit: 500,
+  });
 
-  useEffect(() => {
-    const q = query(collection(db, COL), orderBy('createdAt', 'desc'), limit(500));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setProcedures(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[RepairProcedureContext] snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    return unsub;
-  }, []);
+  // Preserve the public shape: consumers read `.id` (was the Firestore doc id).
+  const procedures = useMemo(
+    () => items.map(({ _docId, ...rest }) => ({ id: _docId, ...rest })),
+    [items],
+  );
 
   const addProcedure = async (data) => {
-    await safeWrite(
-      () => addDoc(collection(db, COL), {
-        ...data,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to save repair procedure' },
-    );
+    await orgWrite(COL, data, { rethrow: true, errorMessage: 'Failed to save repair procedure' });
   };
 
   const updateProcedure = async (id, data) => {
-    await safeWrite(
-      () => updateDoc(doc(db, COL, id), { ...data, updatedAt: serverTimestamp() }),
-      { rethrow: true, errorMessage: 'Failed to update repair procedure' },
-    );
+    await orgUpdate(COL, id, data, { rethrow: true, errorMessage: 'Failed to update repair procedure' });
   };
 
   const deleteProcedure = async (id) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, COL, id)),
-      { rethrow: true, errorMessage: 'Failed to delete repair procedure' },
-    );
+    await orgDelete(COL, id, { rethrow: true, errorMessage: 'Failed to delete repair procedure' });
   };
 
   const value = useMemo(() => ({
-    procedures, loading, snapshotError,
+    procedures, loading, snapshotError: error ? error.message : null,
     addProcedure, updateProcedure, deleteProcedure,
-  }), [procedures, loading, snapshotError, addProcedure, updateProcedure, deleteProcedure]);
+  }), [procedures, loading, error]);
 
   return (
     <RepairProcedureContext.Provider value={value}>

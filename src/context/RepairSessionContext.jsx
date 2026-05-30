@@ -1,35 +1,26 @@
-import { createContext, useContext, useEffect, useState, useMemo } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { createContext, useContext, useMemo } from 'react';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
 
 const RepairSessionContext = createContext(null);
 
 export function RepairSessionProvider({ children }) {
-  const [sessions,      setSessions]      = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [snapshotError, setSnapshotError] = useState(null);
+  // Phase 2 (ADR-0003): org-scoped read. useOrgCollection injects
+  // where('orgId','==',orgId) and throws if the org resolved but is absent.
+  const { items, loading, error } = useOrgCollection('repairSessions', {
+    orderBy: ['completedAt', 'desc'],
+    limit: 100,
+  });
 
-  useEffect(() => {
-    const q = query(
-      collection(db, 'repairSessions'),
-      orderBy('completedAt', 'desc'),
-      limit(100),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[RepairSessionContext] snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    return unsub;
-  }, []);
+  // Preserve the public shape: consumers read `.id` (was the Firestore doc id).
+  const sessions = useMemo(
+    () => items.map(({ _docId, ...rest }) => ({ id: _docId, ...rest })),
+    [items],
+  );
 
-  const value = useMemo(() => ({ sessions, loading, snapshotError }), [sessions, loading, snapshotError]);
+  const value = useMemo(
+    () => ({ sessions, loading, snapshotError: error ? error.message : null }),
+    [sessions, loading, error],
+  );
 
   return (
     <RepairSessionContext.Provider value={value}>

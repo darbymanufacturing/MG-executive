@@ -1,11 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useCallback, useMemo } from 'react';
 import {
-  collection, doc, onSnapshot,
-  writeBatch, deleteDoc, getDocs, query, orderBy, limit,
+  collection, doc, writeBatch, getDocs, query, where,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
-import { useAuth } from './AuthContext.jsx';
+import { useOrg } from './OrgContext.jsx';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgDelete } from '../hooks/orgWrite.js';
 
 const REVENUE_COL = 'revenue';
 const BATCH_SIZE  = 450; // Firestore batch limit is 500; stay safe
@@ -15,49 +16,25 @@ const MAX_REVENUE_ROWS = 2000;
 const RevenueContext = createContext(null);
 
 export function RevenueProvider({ children }) {
-  const { user } = useAuth();
-  const [revenueData,    setRevenueData]    = useState([]);
-  const [revenueLoading, setRevenueLoading] = useState(true);
-  const [snapshotError,  setSnapshotError]  = useState(null);
+  const { orgId } = useOrg();
 
-  // ── Real-time listener ────────────────────────────────────────────────────
+  // ── Real-time listener (ADR-0003 org-scoped) ──────────────────────────────
+  const { items, loading: revenueLoading, error } = useOrgCollection(REVENUE_COL, {
+    orderBy: ['date', 'desc'],
+    limit: MAX_REVENUE_ROWS,
+  });
 
-  useEffect(() => {
-    // Reset state when user changes (e.g. different user signs in)
-    setRevenueData([]);
-    setRevenueLoading(true);
-
-    // BUG #220 — guard: do not start listener before auth resolves
-    if (!user) return;
-
-    // orderBy 'date' desc + limit — Firestore enforces the cap server-side so big collections
-    // don't blow the free-tier read quota. Client still sorts to handle any same-date rows.
-    const q = query(
-      collection(db, REVENUE_COL),
-      orderBy('date', 'desc'),
-      limit(MAX_REVENUE_ROWS),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const rows = snap.docs
-          .map((d) => ({ _docId: d.id, ...d.data() }))
-          .sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
-        setRevenueData(rows);
-        setRevenueLoading(false);
-      },
-      (err) => {
-        console.error('[RevenueContext] snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    return unsub;
-  }, [user]);
+  // Preserve the public shape: consumers read `_docId`. Client re-sort keeps
+  // same-date rows stable (matches the pre-Phase-2 behaviour).
+  const revenueData = useMemo(
+    () => [...items].sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [items],
+  );
 
   // ── Import (batch, chunked, date-as-doc-ID for dedup) ────────────────────
-
   const importRevenueDays = useCallback(async (days) => {
-    // Chunk into groups of BATCH_SIZE
+    if (!orgId) throw new Error('importRevenueDays: no active org');
+    const uid = auth.currentUser?.uid ?? null;
     for (let i = 0; i < days.length; i += BATCH_SIZE) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
@@ -65,28 +42,24 @@ export function RevenueProvider({ children }) {
         const rawId = `${day.date}_${day.location || 'global'}`;
         const docId = rawId.replace(/[/.#$[\]]/g, '_');
         const ref = doc(db, REVENUE_COL, docId);
-        batch.set(ref, day); // setDoc via batch → overwrites existing doc
+        batch.set(ref, { ...day, orgId, createdByUid: uid }); // setDoc via batch → overwrites existing doc
       });
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Revenue import failed mid-batch' },
       );
     }
-  }, []);
+  }, [orgId]);
 
   // ── Delete a single day ───────────────────────────────────────────────────
-
   const deleteRevenueDay = useCallback(async (docId) => {
-    await safeWrite(
-      () => deleteDoc(doc(db, REVENUE_COL, docId)),
-      { rethrow: true, errorMessage: 'Failed to delete revenue entry' },
-    );
+    await orgDelete(REVENUE_COL, docId, { rethrow: true, errorMessage: 'Failed to delete revenue entry' });
   }, []);
 
-  // ── Clear all revenue data ────────────────────────────────────────────────
-
+  // ── Clear all revenue data (THIS org only) ────────────────────────────────
   const clearAllRevenue = useCallback(async () => {
-    const snap = await getDocs(collection(db, REVENUE_COL));
+    if (!orgId) throw new Error('clearAllRevenue: no active org');
+    const snap = await getDocs(query(collection(db, REVENUE_COL), where('orgId', '==', orgId)));
     for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
@@ -95,17 +68,17 @@ export function RevenueProvider({ children }) {
         { rethrow: true, errorMessage: 'Failed to clear revenue data' },
       );
     }
-  }, []);
+  }, [orgId]);
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({
     revenueData,
     revenueLoading,
-    snapshotError,
+    snapshotError: error ? error.message : null,
     importRevenueDays,
     deleteRevenueDay,
     clearAllRevenue,
-  }), [revenueData, revenueLoading, snapshotError, importRevenueDays, deleteRevenueDay, clearAllRevenue]);
+  }), [revenueData, revenueLoading, error, importRevenueDays, deleteRevenueDay, clearAllRevenue]);
 
   return (
     <RevenueContext.Provider value={value}>

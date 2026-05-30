@@ -1,10 +1,7 @@
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import {
-  collection, query, orderBy, limit, onSnapshot, addDoc, updateDoc,
-  doc, serverTimestamp, arrayUnion,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { createContext, useContext, useMemo } from 'react';
+import { arrayUnion } from 'firebase/firestore';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgWrite, orgUpdate } from '../hooks/orgWrite.js';
 import { useAuth } from './AuthContext.jsx';
 
 const IssueContext = createContext(null);
@@ -13,31 +10,20 @@ const COLLECTION = 'issues';
 
 export function IssueProvider({ children }) {
   const { user } = useAuth();
-  const [issues,        setIssues]        = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [snapshotError, setSnapshotError] = useState(null);
 
-  useEffect(() => {
-    // BUG #220 — guard: do not start listener before auth resolves
-    if (!user) {
-      setIssues([]);
-      setLoading(true);
-      return;
-    }
-    const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(1000));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[IssueContext] snapshot error:', err);
-        setSnapshotError(err.message);
-      },
-    );
-    return unsub;
-  }, [user]);
+  // Phase 2 (ADR-0003): org-scoped read. The pre-Phase-2 `if (!user)` listener
+  // guard is now handled inside useOrgCollection (it returns loading while the org
+  // resolves, and the org only resolves for a signed-in user).
+  const { items, loading, error } = useOrgCollection(COLLECTION, {
+    orderBy: ['createdAt', 'desc'],
+    limit: 1000,
+  });
+
+  // Preserve the public shape: consumers read `.id` (was the Firestore doc id).
+  const issues = useMemo(
+    () => items.map(({ _docId, ...rest }) => ({ id: _docId, ...rest })),
+    [items],
+  );
 
   async function createIssue(fields) {
     if (!user) throw new Error('Not authenticated');
@@ -57,26 +43,18 @@ export function IssueProvider({ children }) {
       dueDate: null,
       snoozeUntil: null,
       ...fields,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     };
-    // #214: safeWrite wraps addDoc and returns { data: DocumentReference }.
-    // Return the constructed payload + the new doc id, not the raw DocumentReference.
-    const result = await safeWrite(
-      () => addDoc(collection(db, COLLECTION), issueData),
-      { rethrow: true, errorMessage: 'Failed to create issue' },
-    );
+    // orgWrite stamps orgId + createdByUid + createdAt/updatedAt (serverTimestamp).
+    const result = await orgWrite(COLLECTION, issueData, {
+      rethrow: true, errorMessage: 'Failed to create issue',
+    });
     return { ...issueData, id: result.data?.id };
   }
 
   async function updateIssue(id, fields) {
-    const result = await safeWrite(
-      () => updateDoc(doc(db, COLLECTION, id), {
-        ...fields,
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to update issue' },
-    );
+    const result = await orgUpdate(COLLECTION, id, fields, {
+      rethrow: true, errorMessage: 'Failed to update issue',
+    });
     return result.data;
   }
 
@@ -90,13 +68,9 @@ export function IssueProvider({ children }) {
 
   async function addNote(id, text) {
     if (!user) throw new Error('Not authenticated');
-    const result = await safeWrite(
-      () => updateDoc(doc(db, COLLECTION, id), {
-        notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
-        updatedAt: serverTimestamp(),
-      }),
-      { rethrow: true, errorMessage: 'Failed to add note' },
-    );
+    const result = await orgUpdate(COLLECTION, id, {
+      notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
+    }, { rethrow: true, errorMessage: 'Failed to add note' });
     return result.data;
   }
 
@@ -108,10 +82,10 @@ export function IssueProvider({ children }) {
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({
-    issues, activeIssues, loading, snapshotError,
+    issues, activeIssues, loading, snapshotError: error ? error.message : null,
     createIssue, updateIssue, snoozeIssue, resolveIssue, addNote,
-  }), [issues, activeIssues, loading, snapshotError,
-      createIssue, updateIssue, snoozeIssue, resolveIssue, addNote]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [issues, activeIssues, loading, error]);
 
   return (
     <IssueContext.Provider value={value}>
