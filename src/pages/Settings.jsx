@@ -8,10 +8,12 @@ import useHoppSync from '../hooks/useHoppSync.js';
 import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
+import { authedFetch } from '../utils/apiClient.js';
 import { CATEGORIES } from '../utils/constants.js';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
+import Modal from '../components/Shared/Modal.jsx';
 import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
@@ -92,7 +94,7 @@ function MoneyField({ label, value, onCommit, styles: s, placeholder, step = '0.
 
 export default function Settings() {
   const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
-  const { createTechnicianAccount } = useAuth();
+  const { createTechnicianAccount, signOut, userProfile } = useAuth();
   const [clearConfirm, setClearConfirm] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const [projFleet, setProjFleet] = useState(config.fleetSize);
@@ -168,6 +170,75 @@ export default function Settings() {
   const handleRemoveTechnician = async (uid) => {
     await deleteDoc(doc(db, 'users', uid));
     setRemoveConfirm(null);
+  };
+
+  // ── Account deletion (B5 / ROADMAP 2.6) ──────────────────────────────────
+  // Server decides the outcome from the caller's own role (api/delete-account.js);
+  // we just preview, collect a typed confirmation, POST, then sign out.
+  const [acctPreview, setAcctPreview] = useState(null);   // server 'preview' result
+  const [acctOpen, setAcctOpen] = useState(false);        // danger-zone dialog open
+  const [acctConfirmText, setAcctConfirmText] = useState('');
+  const [acctSuccessor, setAcctSuccessor] = useState('');
+  const [acctBusy, setAcctBusy] = useState(false);
+  const [acctError, setAcctError] = useState(null);
+
+  const isOwner = userProfile?.role === 'owner';
+
+  const openAccountDialog = async () => {
+    setAcctError(null);
+    setAcctConfirmText('');
+    setAcctSuccessor('');
+    setAcctBusy(true);
+    setAcctOpen(true);
+    try {
+      const res = await authedFetch('/api/delete-account', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'preview' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load account details.');
+      setAcctPreview(data);
+    } catch (err) {
+      setAcctError(err.message);
+    } finally {
+      setAcctBusy(false);
+    }
+  };
+
+  const submitAccountDeletion = async () => {
+    setAcctError(null);
+    setAcctBusy(true);
+    try {
+      // Choose the action from the previewed outcome.
+      let body;
+      if (!acctPreview?.isOwner) {
+        body = { action: 'leave' };
+      } else if (acctSuccessor) {
+        body = { action: 'transfer', successorUid: acctSuccessor };
+      } else {
+        body = { action: 'delete-org', confirm: acctConfirmText.trim() };
+      }
+      const res = await authedFetch('/api/delete-account', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Account deletion failed.');
+      // For 'leave' and 'transfer' the account is gone → sign out. For 'delete-org'
+      // the org is only SCHEDULED (30-day grace) → the owner stays signed in so they
+      // can still cancel; just close the dialog and show nothing destructive yet.
+      if (body.action === 'delete-org') {
+        setAcctOpen(false);
+        setAcctPreview(null);
+        alert(data.message); // simple confirmation; org now has a deleteAt
+      } else {
+        await signOut();
+      }
+    } catch (err) {
+      setAcctError(err.message);
+    } finally {
+      setAcctBusy(false);
+    }
   };
 
   const locations = config.locations || [];
@@ -760,6 +831,22 @@ git checkout main`}
             spot per-scooter errors. See docs/runbooks/hopp-sync-troubleshooting.md. */}
         <HoppSyncSection />
 
+        {/* ─── Danger Zone: delete account / organization (B5 / ROADMAP 2.6) ─── */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Trash2 size={18} className={styles.sectionIcon} style={{ color: 'var(--color-danger)' }} />
+            <h2 className={styles.sectionTitle} style={{ color: 'var(--color-danger)' }}>Danger Zone</h2>
+          </div>
+          <p className={styles.sectionDesc}>
+            {isOwner
+              ? 'Delete your organization (30-day grace period) or transfer ownership to an admin.'
+              : 'Permanently remove your own account from this organization.'}
+          </p>
+          <Button variant="danger" onClick={openAccountDialog}>
+            {isOwner ? 'Delete organization…' : 'Delete my account…'}
+          </Button>
+        </section>
+
       </div>
 
       <ConfirmDialog
@@ -779,6 +866,89 @@ git checkout main`}
         message="This will remove the technician's access. Their Firebase Auth account remains — contact Firebase console to fully delete it."
         confirmLabel="Remove Access"
       />
+
+      {/* ─── Account / org deletion dialog (B5) — preview-driven ─── */}
+      <Modal
+        isOpen={acctOpen}
+        onClose={() => { if (!acctBusy) { setAcctOpen(false); setAcctPreview(null); } }}
+        title={acctPreview?.isOwner ? 'Delete organization' : 'Delete my account'}
+        width={460}
+      >
+        {acctBusy && !acctPreview ? (
+          <p style={{ color: 'var(--fg-muted)' }}>Loading account details…</p>
+        ) : acctError && !acctPreview ? (
+          <p style={{ color: 'var(--color-danger)' }}>{acctError}</p>
+        ) : acctPreview ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {!acctPreview.isOwner ? (
+              <p>
+                This permanently removes <strong>your account</strong> from{' '}
+                <strong>{acctPreview.orgName}</strong> and signs you out. This cannot be undone.
+              </p>
+            ) : acctPreview.otherAdmins.length > 0 ? (
+              <>
+                <p>
+                  You own <strong>{acctPreview.orgName}</strong> ({acctPreview.memberCount} member
+                  {acctPreview.memberCount === 1 ? '' : 's'}). Choose one:
+                </p>
+                <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                  Transfer ownership to an admin, then leave:
+                  <select
+                    value={acctSuccessor}
+                    onChange={(e) => setAcctSuccessor(e.target.value)}
+                    style={{ display: 'block', width: '100%', marginTop: 6, padding: '8px' }}
+                  >
+                    <option value="">— select successor (optional) —</option>
+                    {acctPreview.otherAdmins.map((a) => (
+                      <option key={a.uid} value={a.uid}>{a.displayName || a.email}</option>
+                    ))}
+                  </select>
+                </label>
+                {!acctSuccessor && (
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)' }}>
+                    Or leave the dropdown empty to <strong>delete the whole organization</strong>{' '}
+                    (30-day grace period). To confirm deletion, type the org name below.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>
+                Deleting <strong>{acctPreview.orgName}</strong> schedules permanent removal of all its
+                data in <strong>{acctPreview.graceDays} days</strong>. You can cancel any time before then.
+                Type the org name to confirm.
+              </p>
+            )}
+
+            {acctPreview.isOwner && !acctSuccessor && (
+              <input
+                type="text"
+                placeholder={acctPreview.orgName}
+                value={acctConfirmText}
+                onChange={(e) => setAcctConfirmText(e.target.value)}
+                style={{ width: '100%', padding: '8px' }}
+              />
+            )}
+
+            {acctError && <p style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>{acctError}</p>}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => { setAcctOpen(false); setAcctPreview(null); }} disabled={acctBusy}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={submitAccountDeletion}
+                disabled={acctBusy || (acctPreview.isOwner && !acctSuccessor && acctConfirmText.trim() !== acctPreview.orgName)}
+              >
+                {acctBusy ? 'Please wait…'
+                  : !acctPreview.isOwner ? 'Delete my account'
+                  : acctSuccessor ? 'Transfer & leave'
+                  : 'Schedule deletion'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }
