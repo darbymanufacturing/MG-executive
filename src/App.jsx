@@ -33,6 +33,8 @@ import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
+import Signup from './pages/Signup.jsx';
+import Onboarding from './pages/Onboarding.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
