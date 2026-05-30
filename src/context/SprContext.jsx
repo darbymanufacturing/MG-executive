@@ -12,6 +12,7 @@ import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite } from '../hooks/orgWrite.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 const EVENTS_COL   = 'sprEvents';
 const WEATHER_COL  = 'sprWeather';
@@ -102,7 +103,7 @@ export function SprProvider({ children }) {
       const chunk = rows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((row) => {
-        const docId = `${row.scooterId}_${row.datetime.replace(/[^0-9]/g, '')}`;
+        const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
         batch.set(doc(db, EVENTS_COL, docId), { ...row, city: city || row.city || null, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
@@ -129,7 +130,7 @@ export function SprProvider({ children }) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        const docId = `${day.date}_${city}`;
+        const docId = orgDocId(orgId, day.date, city);
         batch.set(doc(db, WEATHER_COL, docId), { ...day, city, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
@@ -166,7 +167,7 @@ export function SprProvider({ children }) {
       const chunk = NAFPLIO_WEATHER.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        batch.set(doc(db, WEATHER_COL, `${day.date}_Nafplio`), { ...day, city: 'Nafplio', orgId, createdByUid: uid });
+        batch.set(doc(db, WEATHER_COL, orgDocId(orgId, day.date, 'Nafplio')), { ...day, city: 'Nafplio', orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Nafplio seed: weather batch failed' });
     }
@@ -176,7 +177,7 @@ export function SprProvider({ children }) {
       const chunk = NAFPLIO_EVENTS.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((row) => {
-        const docId = `${row.scooterId}_${row.datetime.replace(/[^0-9]/g, '')}`;
+        const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
         batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio', orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });

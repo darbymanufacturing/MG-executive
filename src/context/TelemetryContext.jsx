@@ -14,6 +14,7 @@ import { classifyEventType } from '../utils/classifyEventType.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 const EVENTS_COL = 'telemetryEvents';
 const BATCH_SIZE = 450;
@@ -46,8 +47,11 @@ export function TelemetryProvider({ children }) {
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
 
+    // Dedup must compare like-for-like: stored events carry the ORG-PREFIXED doc id
+    // (`_docId` from useOrgCollection), while the parser emits the RAW fingerprint.
+    // Prefix the parser's id before comparing + writing so re-uploads still dedup.
     const existingIds = new Set(events.map((e) => e._docId));
-    const newRows = parsedEvents.filter((e) => !existingIds.has(e._docId));
+    const newRows = parsedEvents.filter((e) => !existingIds.has(orgDocId(orgId, e._docId)));
     const duplicates = parsedEvents.length - newRows.length;
 
     let written = 0;
@@ -57,7 +61,9 @@ export function TelemetryProvider({ children }) {
       const batch = writeBatch(db);
       chunk.forEach((ev) => {
         const { _docId, ...data } = ev;
-        const ref = doc(db, EVENTS_COL, _docId);
+        // Org-prefix the parser's fingerprint id (ADR-0002): future non-Hopp imports
+        // can't assume globally-unique scooter ids, so prefix unconditionally.
+        const ref = doc(db, EVENTS_COL, orgDocId(orgId, _docId));
         batch.set(ref, { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp() });
       });
       await safeWrite(

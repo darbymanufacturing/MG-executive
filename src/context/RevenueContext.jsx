@@ -7,6 +7,7 @@ import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { orgDelete } from '../hooks/orgWrite.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 const REVENUE_COL = 'revenue';
 const BATCH_SIZE  = 450; // Firestore batch limit is 500; stay safe
@@ -39,8 +40,9 @@ export function RevenueProvider({ children }) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        const rawId = `${day.date}_${day.location || 'global'}`;
-        const docId = rawId.replace(/[/.#$[\]]/g, '_');
+        // Org-prefixed deterministic id (ADR-0002): every org has the same dates,
+        // so the date alone would collide across orgs.
+        const docId = orgDocId(orgId, day.date, day.location || 'global');
         const ref = doc(db, REVENUE_COL, docId);
         batch.set(ref, { ...day, orgId, createdByUid: uid }); // setDoc via batch → overwrites existing doc
       });

@@ -10,6 +10,7 @@ import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 const TRIPS_COL  = 'scooterTrips';
 const BATCH_SIZE = 450;
@@ -35,7 +36,10 @@ export function TripProvider({ children }) {
           : typeof row.startedAt === 'string'
             ? row.startedAt
             : String(row.startedAt ?? '');
-        const docId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[^0-9TZ]/g, '').slice(0, 19));
+        // Org-prefix the deterministic id (ADR-0002). row._docId is the parser's
+        // un-prefixed fingerprint; prefix it (or the built scooterId_startedAt id).
+        const baseId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[^0-9TZ]/g, '').slice(0, 19));
+        const docId = orgDocId(orgId, baseId);
         batch.set(
           doc(db, TRIPS_COL, docId),
           { ...row, orgId, createdByUid: uid, _importedAt: serverTimestamp() },
@@ -51,6 +55,8 @@ export function TripProvider({ children }) {
     return { written };
   }, [orgId]);
 
+  /* NOTE: trips are queried/deleted by the scooterId FIELD (+ orgId), never by doc id,
+     so the doc-id prefixing above is transparent to clearTripsForScooter below. */
   /** Delete all trips for a specific scooter (so re-import is clean). Returns count. */
   const clearTripsForScooter = useCallback(async (scooterId) => {
     if (!orgId) throw new Error('clearTripsForScooter: no active org');

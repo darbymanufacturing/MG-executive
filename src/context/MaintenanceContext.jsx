@@ -7,6 +7,7 @@ import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 // ── Firestore paths (Phase 2 / ADR-0002+0003) ─────────────────────────────────
 const TICKETS_COL  = 'maintenanceTickets';
@@ -23,7 +24,8 @@ const MAX_SCOOTERS = 1000;
 // stay unchanged inside the doc; only the Firestore doc id carries the org prefix.
 // Consumers navigate/look up by the scooterId FIELD, never _docId (verified), so
 // this is transparent to the UI. See ADR-0002 + the B3 collision note.
-const orgKey = (orgId, ...parts) => `${orgId}_${parts.join('_')}`;
+// Uses the shared orgDocId helper (single source of truth; also sanitizes forbidden chars).
+const orgKey = orgDocId;
 
 const DEFAULT_CONFIG = {
   revenueRatePerDay: 3.67,
