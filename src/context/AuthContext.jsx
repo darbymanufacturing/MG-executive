@@ -8,6 +8,7 @@ import {
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
+import { authedFetch } from '../utils/apiClient.js';
 
 const AuthContext = createContext(null);
 
@@ -93,12 +94,39 @@ export function AuthProvider({ children }) {
     await firebaseSignOut(auth);
   };
 
+  // ADR-0004: after a custom-claim change, force-refresh the ID token so the new
+  // orgId/role reach the token the Firestore rules read. Without this the rules keep
+  // seeing the old (or absent) claims until the token naturally rotates (~1h).
+  const refreshClaims = async () => {
+    if (auth.currentUser) await auth.currentUser.getIdToken(true);
+  };
+
+  // Mirror {orgId, role} from the users/{uid} doc into custom claims (server-side,
+  // Admin SDK via /api/sync-claim), then refresh the local token if it was our own.
+  // Call after signup/onboarding, or after an admin creates/changes a user.
+  const syncClaims = async (targetUid) => {
+    const uid = targetUid ?? auth.currentUser?.uid ?? null;
+    const res = await authedFetch('/api/sync-claim', {
+      method: 'POST',
+      body: JSON.stringify(uid ? { uid } : {}),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to sync account permissions.');
+    }
+    // Only the current user's own token needs refreshing to pick up the new claims.
+    if (uid && uid === auth.currentUser?.uid) await refreshClaims();
+    return res.json();
+  };
+
   // Admin-only: create a crew/staff account without signing out the current admin.
   // Uses the Firebase Auth REST API so the current session is unaffected.
   // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
   const createTechnicianAccount = async (email, password, displayName, role = 'crew') => {
     // BUG #19 — client-side admin guard (server-side enforcement is Phase 2)
     if (userProfile?.role !== 'admin') throw new Error('Only admins can create accounts');
+    // Phase 2 (ADR-0002): new accounts join the creating admin's org.
+    if (!userProfile?.orgId) throw new Error("Your account isn't linked to an organization yet.");
     const apiKey = import.meta.env.VITE_FIREBASE_WEB_API_KEY;
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
@@ -120,12 +148,16 @@ export function AuthProvider({ children }) {
     await safeWrite(
       () => setDoc(doc(db, 'users', data.localId), {
         role: assignedRole,
+        orgId: userProfile.orgId,
         displayName: displayName.trim() || email.split('@')[0],
         email,
         createdAt: serverTimestamp(),
       }),
       { rethrow: true, errorMessage: 'Account created, but saving its profile failed — check Firestore.' },
     );
+    // Mirror the new user's role+org into custom claims so the B4 Firestore rules admit
+    // them. We're an owner/admin of the same org, so sync-claim authorizes this.
+    await syncClaims(data.localId);
     return data.localId;
   };
 
@@ -135,6 +167,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, authLoading, userRole, userProfile,
       signIn, signUp, signOut, createTechnicianAccount,
+      refreshClaims, syncClaims,
     }}>
       {children}
     </AuthContext.Provider>
