@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -128,9 +128,13 @@ export default function Login() {
           </div>
         )}
 
-        {/* #15 — no public sign-up. Accounts are provisioned by an admin. */}
-        <p className={styles.toggle} style={{ color: 'var(--fg-muted)' }}>
-          Need access? Ask your administrator to create your account.
+        {/* Phase 2: public "create your own org" signup (re-enabled after Milestone A). */}
+        <p className={styles.toggle}>
+          New to Omni?{' '}
+          <Link to="/signup" className={styles.toggleBtn}>Create your organization</Link>
+        </p>
+        <p className={styles.toggle} style={{ color: 'var(--fg-muted)', fontSize: '12px' }}>
+          Joining a team? Ask your admin to create your account.
         </p>
       </div>
 

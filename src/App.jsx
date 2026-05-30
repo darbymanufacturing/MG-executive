@@ -334,6 +334,7 @@ export default function App() {
             <Routes>
               {/* Public */}
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
 
               {/* Crew routes — lightweight shell, no heavy admin contexts */}
               <Route
@@ -352,6 +353,22 @@ export default function App() {
               />
               {/* Legacy /technician/* redirect */}
               <Route path="/technician/*" element={<Navigate to="/crew" replace />} />
+
+              {/* Post-signup onboarding wizard — needs org + cost context */}
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <OrgProvider>
+                      <CostProvider>
+                        <ErrorBoundary>
+                          <Onboarding />
+                        </ErrorBoundary>
+                      </CostProvider>
+                    </OrgProvider>
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Admin routes — always-on providers at root.
                   Phase 1.6a: Telemetry / Trip / ScooterConfig / Spr moved into route-scoped
