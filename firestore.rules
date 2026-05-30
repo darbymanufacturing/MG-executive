@@ -1,25 +1,214 @@
 rules_version = '2';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Single-tenant rules (current). Phase 2.4 of the roadmap will replace this
-// with per-collection org isolation + role gating — see docs/SECURITY.md for
-// the target shape.
+// Phase 2 multi-tenancy rules (ADR-0002/0003/0004).
 //
-// These rules ship with the local Firebase Emulator (`npm run emulator`).
-// Production Firestore uses whatever was last set in the Firebase Console;
-// keep that in sync with this file or — better — deploy from here once Phase
-// 2.4 lands and the rule set is hardened.
+// Org isolation: every org-scoped doc carries an `orgId` field; a request may only
+// touch docs whose orgId matches the caller's OWN org. The org + role are read from
+// CUSTOM CLAIMS on the ID token (request.auth.token.orgId / .role) — set server-side
+// by api/sync-claim.js, so a client can never forge them.
+//
+// Role model (mirrors the current app, per product decision):
+//   owner / admin / staff  → full read+write on all org data
+//   crew / technician       → read org data; write only repair sessions + tickets
+//
+// ⚠️ EMULATOR + cutover only. This file governs the local emulator now; it deploys
+// to prod ONLY at the B6 cutover (after the orgId backfill), never before — landing
+// it on un-stamped prod data would lock everyone out. See ADR-0011.
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isSignedIn() {
       return request.auth != null;
     }
+    function claims() {
+      return request.auth.token;
+    }
+    // Caller belongs to org `oid` (claim-based — free, no doc read).
+    function inOrg(oid) {
+      return isSignedIn() && claims().orgId == oid;
+    }
+    function hasRole(roles) {
+      return isSignedIn() && (claims().role in roles);
+    }
+    // A new/updated doc must carry the caller's own orgId (no writing into another org).
+    function writingOwnOrg() {
+      return isSignedIn() && request.resource.data.orgId == claims().orgId;
+    }
+    // Existing doc belongs to the caller's org.
+    function ownOrgDoc() {
+      return isSignedIn() && resource.data.orgId == claims().orgId;
+    }
 
-    // Default: any signed-in user can read/write any doc (trusted single-tenant).
+    // Full-access org roles (owner/admin/staff mirror the admin shell).
+    function isOrgManager() {
+      return hasRole(['owner', 'admin', 'staff']);
+    }
+    // Crew/technician (the /crew shell).
+    function isCrew() {
+      return hasRole(['crew', 'technician']);
+    }
+
+    // ── Standard org-scoped collection: manager full access; crew read-only ──
+    // read: any member of the doc's org. write: managers of that org only.
+    function orgRead()  { return ownOrgDoc(); }
+    function orgManagerCreate() { return writingOwnOrg() && isOrgManager(); }
+    function orgManagerWrite()  { return ownOrgDoc()   && isOrgManager(); }
+
+    match /costs/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /revenue/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /maintenanceParts/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /scooters/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /projects/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /decisionGates/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /brainstormIdeas/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /diary/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /telemetryEvents/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /scooterTrips/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /sprEvents/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /sprWeather/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /issues/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /repairProcedures/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /notifications/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /briefs/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /syncLogs/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+
+    // ── Crew-writable: tickets + repair sessions ──
+    // Crew may read org data and create/update these two; managers retain full access.
+    match /maintenanceTickets/{id} {
+      allow read:   if orgRead();
+      allow create: if writingOwnOrg() && (isOrgManager() || isCrew());
+      allow update: if ownOrgDoc()   && (isOrgManager() || isCrew());
+      allow delete: if orgManagerWrite();
+    }
+    match /repairSessions/{id} {
+      allow read:   if orgRead();
+      allow create: if writingOwnOrg() && (isOrgManager() || isCrew());
+      allow update: if ownOrgDoc()   && (isOrgManager() || isCrew());
+      allow delete: if orgManagerWrite();
+    }
+
+    // ── Org-scoped singleton config docs (composite ids: ${orgId}_fleet etc.) ──
+    // config/{orgId}_fleet|scooters|maintenance|spr  — managers write, members read.
+    match /config/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    // pow/{orgId}_config + pow_tasks
+    match /pow/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+    match /pow_tasks/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
+
+    // ── users/{uid} — profile + role/org (UI source of truth; sync-claim mirrors → claims) ──
+    // A user reads their own profile. A same-org owner/admin may read/write org members'
+    // profiles (to manage roles). A brand-new signup writes its OWN profile once
+    // (request.auth.uid == uid) — that bootstraps the first owner before claims exist.
+    match /users/{uid} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid ||
+        (hasRole(['owner','admin']) && resource.data.orgId == claims().orgId)
+      );
+      // Self-create at signup (no claims yet) — the doc must be for the caller.
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      // Self-update OWN profile, or an org owner/admin updating a member of their org.
+      allow update: if isSignedIn() && (
+        request.auth.uid == uid ||
+        (hasRole(['owner','admin']) && resource.data.orgId == claims().orgId)
+      );
+      allow delete: if hasRole(['owner','admin']) && resource.data.orgId == claims().orgId;
+    }
+
+    // ── organizations/{orgId} — the tenant doc ──
+    // Members read their own org. The owner (by claim) may update it. Create is allowed
+    // at signup for a signed-in user naming themselves ownerUid (no claims yet).
+    match /organizations/{orgId} {
+      allow read: if isSignedIn() && claims().orgId == orgId;
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn() && claims().orgId == orgId && hasRole(['owner','admin']);
+      allow delete: if isSignedIn() && claims().orgId == orgId && hasRole(['owner']);
+    }
+
+    // Default deny — anything not matched above is closed (no catch-all allow).
     match /{document=**} {
-      allow read, write: if isSignedIn();
+      allow read, write: if false;
     }
   }
 }

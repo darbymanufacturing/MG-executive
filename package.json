@@ -11,7 +11,10 @@
     "test": "vitest",
     "test:run": "vitest run",
     "emulator": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
-    "emulator:clean": "firebase emulators:start"
+    "emulator:clean": "firebase emulators:start",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.js\"",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:indexes": "firebase deploy --only firestore:indexes"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -32,6 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
