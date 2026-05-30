@@ -1,8 +1,17 @@
+/**
+ * TelemetryContext.jsx
+ * Manages the org-scoped `telemetryEvents` collection (Phase 2 / ADR-0003).
+ *
+ * Design: "store raw, derive on demand". Events are never pre-aggregated.
+ * Fingerprint-based dedup: each event's docId = `${scooterId}_${timestamp}_${afterState}`
+ * so re-uploading the same CSV writes 0 new docs.
+ */
+
 import { createContext, useContext, useCallback, useMemo } from 'react';
-import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
+import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 
@@ -17,37 +26,57 @@ export function TelemetryProvider({ children }) {
   // Phase 2 (ADR-0003): org-scoped read. Kept route-scoped to /scooters + /pme.
   const { items, loading } = useOrgCollection(EVENTS_COL, { limit: MAX_EVENTS });
 
-  // Re-classify each event on load (preserves the pre-Phase-2 `_type` field).
+  // Re-classify on load so data ingested under older classifier rules picks up the
+  // latest logic without re-upload. Preserves the `_docId` + `eventType` shape.
   const events = useMemo(
-    () => items.map((d) => ({ ...d, _type: classifyEventType(d) })),
+    () => items.map((data) => ({
+      ...data,
+      eventType: classifyEventType(data.beforeState, data.afterState, data.reason),
+    })),
     [items],
   );
 
-  const importEvents = useCallback(async (eventRows) => {
+  /**
+   * Idempotent batch import. Returns { written, duplicates }.
+   * @param {object[]} parsedEvents - output of parseStatusLogCsv().events (each has _docId)
+   * @param {function} onProgress   - optional (pct 0-100) => void
+   */
+  const importEvents = useCallback(async (parsedEvents, onProgress) => {
+    if (!parsedEvents.length) return { written: 0, duplicates: 0 };
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
-    for (let i = 0; i < eventRows.length; i += BATCH_SIZE) {
-      const chunk = eventRows.slice(i, i + BATCH_SIZE);
+
+    const existingIds = new Set(events.map((e) => e._docId));
+    const newRows = parsedEvents.filter((e) => !existingIds.has(e._docId));
+    const duplicates = parsedEvents.length - newRows.length;
+
+    let written = 0;
+    const total = newRows.length;
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+      const chunk = newRows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
-      chunk.forEach((evt) => {
-        const docId = `${evt.scooterId}_${evt.timestamp}_${evt.afterState || evt.eventType || ''}`
-          .replace(/[/.#$[\]]/g, '_');
-        const ref = doc(db, EVENTS_COL, docId);
-        batch.set(ref, { ...evt, orgId, createdByUid: uid });
+      chunk.forEach((ev) => {
+        const { _docId, ...data } = ev;
+        const ref = doc(db, EVENTS_COL, _docId);
+        batch.set(ref, { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp() });
       });
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Telemetry import failed mid-batch' },
       );
+      written += chunk.length;
+      if (onProgress) onProgress(Math.round((written / total) * 100));
     }
-  }, [orgId]);
+    return { written, duplicates };
+  }, [events, orgId]);
 
   const clearAllEvents = useCallback(async () => {
     if (!orgId) throw new Error('clearAllEvents: no active org');
-    const snap = await getDocs(query(collection(db, EVENTS_COL), where('orgId', '==', orgId)));
-    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    const allDocs = await getDocs(query(collection(db, EVENTS_COL), where('orgId', '==', orgId)));
+    for (let i = 0; i < allDocs.docs.length; i += BATCH_SIZE) {
+      const chunk = allDocs.docs.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
-      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      chunk.forEach((d) => batch.delete(d.ref));
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Failed to clear telemetry events' },
@@ -72,5 +101,7 @@ export function TelemetryProvider({ children }) {
 }
 
 export function useTelemetry() {
-  return useContext(TelemetryContext);
+  const ctx = useContext(TelemetryContext);
+  if (!ctx) throw new Error('useTelemetry must be used inside <TelemetryProvider>');
+  return ctx;
 }

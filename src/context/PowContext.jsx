@@ -3,13 +3,24 @@ import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
-import { POW_CATEGORIES, CURRENT_WEEK } from '../utils/powConstants.js';
 
 const PowContext = createContext(null);
 
-const TASKS_COL = 'pow_tasks';
-const CONFIG_COL = 'pow';        // org-scoped singleton: pow/${orgId}_config (was pow/config)
-const MAX_POW_TASKS = 1000;      // Phase 2: bound the previously-unbounded listener (#365 family)
+const TASKS_COL  = 'pow_tasks';
+const CONFIG_COL = 'pow';            // org-scoped singleton: pow/${orgId}_config (was pow/config)
+const MAX_POW_TASKS = 1000;          // Phase 2: bound the previously-unbounded listener (#365 family)
+
+const DEFAULT_CATEGORIES = [
+  { id: 'cat-tech',   name: 'Tech / Dev',   order: 0 },
+  { id: 'cat-ops',    name: 'Operations',   order: 1 },
+  { id: 'cat-biz',    name: 'Business',     order: 2 },
+];
+
+// Week 1 = Nov 3, 2025 (Monday) — must match Pow.jsx
+const WEEK1_START_MS = new Date('2025-11-03T00:00:00').getTime();
+function computeCurrentWeek() {
+  return Math.max(1, Math.ceil((Date.now() - WEEK1_START_MS) / (7 * 24 * 60 * 60 * 1000)));
+}
 
 export function PowProvider({ children }) {
   const { orgId } = useOrg();
@@ -17,134 +28,164 @@ export function PowProvider({ children }) {
   const [showDone, setShowDone] = useState(false);
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
-  const { items, loading, error } = useOrgCollection(TASKS_COL, {
-    orderBy: ['createdAt', 'desc'],
-    limit: MAX_POW_TASKS,
-  });
+  const { items, loading, error } = useOrgCollection(TASKS_COL, { limit: MAX_POW_TASKS });
   const { item: configItem } = useOrgDoc(CONFIG_COL, configDocId);
 
-  // Optimistic local state is dropped — onSnapshot latency-compensation makes local
-  // writes appear instantly, and categories/currentWeek fall back to defaults when the
-  // org has no config doc yet.
-  const tasks = useMemo(
-    () => items.map(({ _docId, ...rest }) => ({ id: _docId, ...rest })),
-    [items],
-  );
   const categories = useMemo(
-    () => (configItem && Array.isArray(configItem.categories) ? configItem.categories : POW_CATEGORIES),
+    () => (configItem?.categories?.length ? configItem.categories : DEFAULT_CATEGORIES),
     [configItem],
   );
-  const currentWeek = configItem?.currentWeek || CURRENT_WEEK;
+  const currentWeek = configItem?.currentWeek || computeCurrentWeek();
 
-  const persistConfig = useCallback(async (partial) => {
-    await orgWrite(CONFIG_COL, partial, {
+  // Normalize each task (back-compat for old assignee/summary/todo-status docs).
+  const tasks = useMemo(() => {
+    const list = items.map((data) => {
+      const assignees = data.assignees ?? (data.assignee ? [data.assignee] : []);
+      let status = data.status;
+      if (status === 'todo') status = assignees.length > 0 ? 'pow' : 'backlog';
+      let steps = data.steps;
+      if (!steps) {
+        steps = (data.summary ?? '')
+          .split('\n')
+          .map((l) => l.replace(/^(\d+[.)]|[-•])\s+/, '').trim())
+          .filter(Boolean);
+      }
+      return {
+        id: data._docId,
+        ...data,
+        assignees,
+        steps,
+        checkedSteps: data.checkedSteps ?? [],
+        powSteps: data.powSteps ?? {},
+        powWeeks: data.powWeeks ?? {},
+        status,
+      };
+    });
+    list.sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
+    return list;
+  }, [items]);
+
+  // ── Config ───────────────────────────────────────────────────────────────
+  const saveConfig = useCallback(async (patch) => {
+    await orgWrite(CONFIG_COL, patch, {
       id: configDocId, merge: true, rethrow: true, errorMessage: 'Failed to save POW config',
     });
   }, [configDocId]);
 
-  const setCurrentWeekAndPersist = useCallback(async (week) => {
-    await persistConfig({ currentWeek: week });
-  }, [persistConfig]);
+  const setCurrentWeek = useCallback((week) => { saveConfig({ currentWeek: week }); }, [saveConfig]);
 
-  const addCategory = useCallback(async (cat) => {
-    await persistConfig({ categories: [...categories, cat] });
-  }, [categories, persistConfig]);
+  const addCategory = useCallback((name) => {
+    const newCat = { id: `cat-${crypto.randomUUID()}`, name, order: categories.length };
+    saveConfig({ categories: [...categories, newCat] });
+  }, [categories, saveConfig]);
 
-  const removeCategory = useCallback(async (catId) => {
-    await persistConfig({ categories: categories.filter((c) => c.id !== catId) });
-  }, [categories, persistConfig]);
+  const removeCategory = useCallback((catId) => {
+    const updated = categories.filter((c) => c.id !== catId).map((c, i) => ({ ...c, order: i }));
+    saveConfig({ categories: updated });
+  }, [categories, saveConfig]);
 
-  const renameCategory = useCallback(async (catId, label) => {
-    await persistConfig({ categories: categories.map((c) => (c.id === catId ? { ...c, label } : c)) });
-  }, [categories, persistConfig]);
+  const renameCategory = useCallback((catId, name) => {
+    saveConfig({ categories: categories.map((c) => (c.id === catId ? { ...c, name } : c)) });
+  }, [categories, saveConfig]);
 
-  const addTask = useCallback(async (task) => {
-    const id = task.id || crypto.randomUUID();
-    const newTask = { ...task, id, createdAt: task.createdAt || new Date().toISOString() };
-    await orgWrite(TASKS_COL, newTask, { id, rethrow: true, errorMessage: 'Failed to add task' });
+  // ── Tasks ─────────────────────────────────────────────────────────────────
+  const addTask = useCallback(async ({ title, description, steps, categoryId }) => {
+    const id = `task-${crypto.randomUUID()}`;
+    await orgWrite(TASKS_COL, {
+      title, description, steps, categoryId,
+      assignees: [], checkedSteps: [], powSteps: {},
+      status: 'backlog', createdWeek: currentWeek, doneWeek: null,
+    }, { id, rethrow: true, errorMessage: 'Failed to create POW task' });
+  }, [currentWeek]);
+
+  const updateTask = useCallback(async (id, patch) => {
+    await orgUpdate(TASKS_COL, id, patch, { rethrow: true, errorMessage: 'Failed to update POW task' });
   }, []);
 
-  const updateTask = useCallback(async (id, updates) => {
-    await orgUpdate(TASKS_COL, id, updates, { rethrow: true, errorMessage: 'Failed to update task' });
-  }, []);
-
-  const toggleAssignee = useCallback(async (taskId, person) => {
-    const task = tasks.find((t) => t.id === taskId);
+  /** Assign a person with specific step indices for POW. Pass stepIndices=null to remove. */
+  const toggleAssignee = useCallback(async (id, person, stepIndices = null) => {
+    const task = tasks.find((t) => t.id === id);
     if (!task) return;
-    const assignees = task.assignees || [];
-    const next = assignees.includes(person)
-      ? assignees.filter((p) => p !== person)
-      : [...assignees, person];
-    await updateTask(taskId, { assignees: next });
-  }, [tasks, updateTask]);
+    const current = task.assignees ?? [];
+    const isRemoving = current.includes(person) && stepIndices === null;
 
-  const toggleStep = useCallback(async (taskId, stepIdx) => {
-    const task = tasks.find((t) => t.id === taskId);
+    let assignees = current;
+    const powSteps = { ...(task.powSteps ?? {}) };
+    const powWeeks = { ...(task.powWeeks ?? {}) };
+
+    if (isRemoving) {
+      assignees = current.filter((a) => a !== person);
+      delete powSteps[person];
+      delete powWeeks[person];
+    } else {
+      if (!current.includes(person)) assignees = [...current, person];
+      powSteps[person] = stepIndices ?? [];
+      powWeeks[person] = currentWeek;
+    }
+
+    await orgUpdate(TASKS_COL, id, {
+      assignees, powSteps, powWeeks,
+      status: assignees.length > 0 ? 'pow' : 'backlog',
+    }, { rethrow: true, errorMessage: 'Failed to update POW assignees' });
+  }, [tasks, currentWeek]);
+
+  /** Toggle a step checkbox by its index */
+  const toggleStep = useCallback(async (id, stepIndex) => {
+    const task = tasks.find((t) => t.id === id);
     if (!task) return;
-    const steps = [...(task.powSteps || [])];
-    steps[stepIdx] = { ...steps[stepIdx], done: !steps[stepIdx]?.done };
-    await updateTask(taskId, { powSteps: steps });
-  }, [tasks, updateTask]);
+    const checked = task.checkedSteps ?? [];
+    const checkedSteps = checked.includes(stepIndex)
+      ? checked.filter((i) => i !== stepIndex)
+      : [...checked, stepIndex];
+    await orgUpdate(TASKS_COL, id, { checkedSteps }, { rethrow: true, errorMessage: 'Failed to update POW step' });
+  }, [tasks]);
 
-  const markDone = useCallback(async (taskId) => {
-    await updateTask(taskId, { status: 'done', doneAt: new Date().toISOString() });
-  }, [updateTask]);
+  const markDone = useCallback(async (id) => {
+    await orgUpdate(TASKS_COL, id, { status: 'done', doneWeek: currentWeek }, {
+      rethrow: true, errorMessage: 'Failed to mark POW task done',
+    });
+  }, [currentWeek]);
 
-  const markBacklog = useCallback(async (taskId) => {
-    await updateTask(taskId, { status: 'backlog' });
-  }, [updateTask]);
-
-  const deleteTask = useCallback(async (taskId) => {
-    await orgDelete(TASKS_COL, taskId, { rethrow: true, errorMessage: 'Failed to delete task' });
+  const markBacklog = useCallback(async (id) => {
+    await orgUpdate(TASKS_COL, id, { status: 'backlog', assignees: [], doneWeek: null }, {
+      rethrow: true, errorMessage: 'Failed to move POW task back to backlog',
+    });
   }, []);
 
-  const normalizedTasks = useMemo(() => tasks.map((t) => ({
-    ...t,
-    assignees: t.assignees || (t.assignee ? [t.assignee] : []),
-    powSteps: t.powSteps || [],
-    powWeeks: t.powWeeks || {},
-    status: t.status || 'todo',
-  })), [tasks]);
+  const deleteTask = useCallback(async (id) => {
+    await orgDelete(TASKS_COL, id, { rethrow: true, errorMessage: 'Failed to delete POW task' });
+  }, []);
 
-  const backlogTasks = useMemo(
-    () => normalizedTasks.filter((t) => t.status === 'backlog'),
-    [normalizedTasks],
-  );
-  const powTasks = useMemo(
-    () => normalizedTasks.filter((t) => t.status !== 'backlog' && t.status !== 'done'),
-    [normalizedTasks],
-  );
-  const doneTasks = useMemo(
-    () => normalizedTasks.filter((t) => t.status === 'done'),
-    [normalizedTasks],
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const backlogTasks = useMemo(() => tasks.filter((t) => t.status === 'backlog'), [tasks]);
+  const powTasks     = useMemo(() => tasks.filter((t) => t.status === 'pow'), [tasks]);
+  const doneTasks    = useMemo(
+    () => tasks.filter((t) => t.status === 'done' && t.doneWeek === currentWeek),
+    [tasks, currentWeek],
   );
   const allTodoTasks = useMemo(
-    () => normalizedTasks.filter((t) => t.status !== 'done'),
-    [normalizedTasks],
+    () => [...tasks.filter((t) => t.status !== 'done'), ...(showDone ? doneTasks : [])],
+    [tasks, showDone, doneTasks],
   );
 
   const value = useMemo(() => ({
     categories, currentWeek, showDone, loading, snapshotError: error ? error.message : null,
-    tasks: powTasks,
-    backlogTasks,
-    powTasks,
-    doneTasks,
-    allTodoTasks,
-    showDoneToggle: setShowDone,
-    setCurrentWeek: setCurrentWeekAndPersist,
-    setShowDone,
+    tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
+    setCurrentWeek, setShowDone,
     addCategory, removeCategory, renameCategory,
     addTask, updateTask, toggleAssignee, toggleStep, markDone, markBacklog, deleteTask,
-  }), [categories, currentWeek, showDone, loading, error,
-      powTasks, backlogTasks, doneTasks, allTodoTasks,
-      setCurrentWeekAndPersist, addCategory, removeCategory, renameCategory,
-      addTask, updateTask, toggleAssignee, toggleStep, markDone, markBacklog, deleteTask]);
+  }), [
+    categories, currentWeek, showDone, loading, error,
+    tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
+    setCurrentWeek, addCategory, removeCategory, renameCategory,
+    addTask, updateTask, toggleAssignee, toggleStep, markDone, markBacklog, deleteTask,
+  ]);
 
   return <PowContext.Provider value={value}>{children}</PowContext.Provider>;
 }
 
-export function usePow() {
+export const usePow = () => {
   const ctx = useContext(PowContext);
-  if (!ctx) throw new Error('usePow must be used within PowProvider');
+  if (!ctx) throw new Error('usePow must be used inside PowProvider');
   return ctx;
-}
+};
