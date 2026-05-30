@@ -1,5 +1,5 @@
 import { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
-import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { SEED_TICKETS, SEED_PARTS, SEED_CONFIG } from '../utils/maintenanceSeedData.js';
