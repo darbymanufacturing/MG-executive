@@ -44,3 +44,4 @@ backups/
 
 # Local plaintext secrets — never commit (canonical copies live in Vercel env)
 secrets/
+*.orig
