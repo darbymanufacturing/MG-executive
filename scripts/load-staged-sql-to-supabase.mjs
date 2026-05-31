@@ -71,7 +71,7 @@ async function main() {
     let upserted = 0;
     for (let i = 0; i < rows.length; i += 500) {
       const batch = rows.slice(i, i + 500);
-      const { error } = await sb.from(table).upsert(batch, { onConflict: 'source_doc_id' });
+      const { error } = await sb.from(table).upsert(batch, { onConflict: 'source_doc_id', ignoreDuplicates: true });
       if (error) { console.error(`  ✗ ${table}: ${error.message}`); process.exit(1); }
       upserted += batch.length;
       process.stdout.write(`\r  ${table}: ${upserted}/${rows.length}`);

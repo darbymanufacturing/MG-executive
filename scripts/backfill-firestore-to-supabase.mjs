@@ -134,10 +134,10 @@ function clean(value) {
 
 async function backfillCollection(db, sb, name) {
   const { table, map } = PLAN[name];
-  const snap = await db.collection(name).get(); // one read/doc against Spark quota
-  const total = snap.size;
+  let total = 0;
   let written = 0;
   let buffer = [];
+  let last = null;
 
   const flush = async () => {
     if (!buffer.length) return;
@@ -152,16 +152,31 @@ async function backfillCollection(db, sb, name) {
     buffer = [];
   };
 
-  for (const doc of snap.docs) {
-    const d = clean(doc.data()) ?? {};
-    const row = {
-      org_id: d.orgId || DEFAULT_ORG_ID,
-      source_doc_id: doc.id,
-      ...map(d),
-      data: d,
-    };
-    buffer.push(row);
-    if (buffer.length >= PAGE) await flush();
+  // Paginated reads — avoids loading the entire collection into memory at once
+  // and stays under the Spark 50K/day read quota per run. Each page is PAGE docs.
+  for (;;) {
+    let q = db.collection(name)
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(PAGE);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    if (snap.empty) break;
+    last = snap.docs[snap.docs.length - 1].id;
+    total += snap.size;
+
+    for (const docSnap of snap.docs) {
+      const d = clean(docSnap.data()) ?? {};
+      const row = {
+        org_id: d.orgId || DEFAULT_ORG_ID,
+        source_doc_id: docSnap.id,
+        ...map(d),
+        data: d,
+      };
+      buffer.push(row);
+      if (buffer.length >= PAGE) await flush();
+    }
+
+    if (snap.size < PAGE) break; // last page
   }
   await flush();
   return { name, table, total, written };

@@ -19,6 +19,7 @@
  *   errorMessage       — override the toast text for this specific call
  *   silent             — true → don't toast even on failure (caller will handle)
  *   rethrow            — true → re-throw the original error after toasting
+ *   onError            — (err) => void called with the raw error (runs before rethrow)
  *
  * Contexts can't easily call useToast() at module level, so this module exposes a
  * setToastErrorHandler() singleton that ToastProvider populates on mount.
@@ -36,6 +37,7 @@ export async function safeWrite(operation, options = {}) {
     errorMessage,
     silent = false,
     rethrow = false,
+    onError,
   } = options;
 
   try {
@@ -52,6 +54,11 @@ export async function safeWrite(operation, options = {}) {
     if (!silent) {
       const friendly = errorMessage || friendlyFirestoreError(err);
       if (_toastError) _toastError(friendly);
+    }
+    // #363 — onError callback: called with raw error before rethrow
+    if (onError) {
+      try { onError(err); }
+      catch (cbErr) { console.error('[safeWrite] onError callback threw', cbErr); }
     }
     if (rethrow) throw err;
     return { ok: false, error: err };

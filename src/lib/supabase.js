@@ -71,7 +71,9 @@ export async function dualWriteSupabase(collectionName, orgId, entries) {
         .slice(i, i + 500)
         .map((e) => toSupabaseRow(collectionName, orgId, e.id, e.data));
       const { error } = await supabase.from(table).upsert(rows, { onConflict: 'source_doc_id' });
-      if (error) { console.warn(`[supabase dual-write] ${table}: ${error.message}`); break; }
+      // #379 — continue (not break) so a transient chunk failure doesn't silently drop
+      // all subsequent chunks; best-effort per-chunk during the 4-week parity window.
+      if (error) { console.warn(`[supabase dual-write] ${table} chunk ${i}: ${error.message}`); continue; }
     }
   } catch (e) {
     console.warn(`[supabase dual-write] ${table} failed: ${e?.message ?? e}`);

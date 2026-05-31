@@ -3,6 +3,7 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import reactPlugin from 'eslint-plugin-react'
+import a11y from 'eslint-plugin-jsx-a11y'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -11,11 +12,13 @@ export default defineConfig([
     files: ['**/*.{js,jsx}'],
     plugins: {
       react: reactPlugin,
+      'jsx-a11y': a11y,
     },
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
+      a11y.flatConfigs.recommended,
     ],
     languageOptions: {
       // #259 — removed duplicate top-level ecmaVersion: 2020; only parserOptions.ecmaVersion: 'latest' is used
@@ -31,7 +34,7 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
       // #312 — mark JSX-referenced imports as used so no-unused-vars doesn't flag them
       'react/jsx-uses-vars': 'error',
-      // TODO: install and enable eslint-plugin-jsx-a11y for accessibility linting (#257)
+      // #257 — jsx-a11y rules enabled via a11y.flatConfigs.recommended above
     },
   },
   // Node.js globals override for serverless API files and Vite config (#312)

@@ -4,6 +4,8 @@ import Button from '../Shared/Button.jsx';
 import { CATEGORIES, FREQUENCIES, CATEGORY_KEYS, FREQUENCY_KEYS } from '../../utils/constants.js';
 import { formatEUR, todayISO } from '../../utils/formatters.js';
 import { normalizeToMonthly } from '../../utils/calculations.js';
+import { validate } from '../../utils/validateForm.js';
+import { costSchema } from '../../utils/schemas/costSchema.js';
 import styles from './CostFormModal.module.css';
 
 const EMPTY = {
@@ -42,23 +44,10 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const validate = () => {
-    const e = {};
-    if (!form.name.trim()) e.name = 'Name is required';
-    const amt = Number(form.amount);
-    if (!form.amount || isNaN(amt) || amt <= 0) e.amount = 'Enter a valid positive amount';
-    if (amt > 999999999) e.amount = 'Amount exceeds maximum allowed value';
-    if (!form.category) e.category = 'Category is required';
-    if (!form.frequency) e.frequency = 'Frequency is required';
-    if (form.endDate && form.startDate && form.endDate < form.startDate) {
-      e.endDate = 'End date must be after start date';
-    }
-    return e;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validate();
+    // #364 — use shared schema validator instead of inline ad-hoc validation
+    const { errors: errs } = validate(form, costSchema);
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setSaving(true);
     try {

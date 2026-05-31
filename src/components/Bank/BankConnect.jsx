@@ -4,31 +4,35 @@ import { doc, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { mapTransactionToCost } from '../../utils/bankTransactionMapper.js';
 import { authedFetch } from '../../utils/apiClient.js';
+import { useOrg } from '../../context/OrgContext.jsx';
+import { orgDocId } from '../../utils/orgDocId.js';
 import Button from '../Shared/Button.jsx';
 import styles from './BankConnect.module.css';
 
-const BANK_TX_COL  = 'bankTransactions';
-const BANK_CFG_DOC = 'config/bank';
-const BATCH_SIZE   = 450;
+const BANK_TX_COL = 'bankTransactions';
+const BATCH_SIZE  = 450;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function writeTransactions(rawTxs) {
+async function writeTransactions(rawTxs, orgId) {
   // Only import debits (negative amount from Salt Edge)
   const debits = rawTxs.filter((tx) => (tx.amount ?? 0) < 0 && tx.id);
   if (debits.length === 0) return 0;
 
   // #166: Salt Edge returns deterministic transaction IDs and batch.set is idempotent —
   // no need to fetch existing IDs for dedup. setDoc with same data is a no-op.
+  // #397: stamp orgId + use org-scoped doc IDs to prevent cross-tenant data leaks.
   for (let i = 0; i < debits.length; i += BATCH_SIZE) {
     const batch = writeBatch(db);
     debits.slice(i, i + BATCH_SIZE).forEach((tx) => {
       // #211: sanitize Salt Edge tx.id to remove Firestore-invalid path characters
       const safeId = String(tx.id).replace(/[/.#$[\]]/g, '_');
+      const scopedId = orgId ? orgDocId(orgId, safeId) : safeId;
       const mapped = mapTransactionToCost(tx);
-      batch.set(doc(db, BANK_TX_COL, safeId), {
+      batch.set(doc(db, BANK_TX_COL, scopedId), {
         ...tx,
         ...mapped,
+        orgId:    orgId ?? null,
         status:   'pending',
         stagedAt: new Date().toISOString(),
       });
@@ -52,6 +56,7 @@ async function pollForConnection(customerId, maxAttempts = 6, intervalMs = 3000)
 // ── component ──────────────────────────────────────────────────────────────────
 
 export default function BankConnect({ onNewTransactions }) {
+  const { orgId } = useOrg();
   const [status,       setStatus]       = useState('idle'); // idle | connecting | polling | syncing | done | error
   const [message,      setMessage]      = useState('');
   const [connectionId, setConnectionId] = useState(() => localStorage.getItem('se_connection_id') || '');
@@ -83,8 +88,11 @@ export default function BankConnect({ onNewTransactions }) {
       }
       localStorage.setItem('se_connection_id', connId);
       setConnectionId(connId);
-      await setDoc(doc(db, BANK_CFG_DOC), {
+      // #399: use org-scoped config doc id instead of global 'config/bank' singleton
+      const bankCfgDocId = orgId ? orgDocId(orgId, 'bank') : 'bank';
+      await setDoc(doc(db, 'config', bankCfgDocId), {
         connectionId: connId, customerId: storedCustomerId, connectedAt: new Date().toISOString(),
+        orgId: orgId ?? null,
       });
       if (!mountedRef.current) return; // #167: guard after async setDoc
       await fetchTransactions(connId);
@@ -104,7 +112,7 @@ export default function BankConnect({ onNewTransactions }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
 
-      const count = await writeTransactions(data.transactions || []);
+      const count = await writeTransactions(data.transactions || [], orgId);
       setStatus('done');
       setMessage(`${count} new transaction${count !== 1 ? 's' : ''} staged for review.`);
       onNewTransactions?.(count);
@@ -112,7 +120,7 @@ export default function BankConnect({ onNewTransactions }) {
       setStatus('error');
       setMessage(err.message);
     }
-  }, [onNewTransactions]);
+  }, [onNewTransactions, orgId]);
 
   const handleConnect = async () => {
     setStatus('connecting');
@@ -152,7 +160,7 @@ export default function BankConnect({ onNewTransactions }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
 
-      const count = await writeTransactions(data.transactions || []);
+      const count = await writeTransactions(data.transactions || [], orgId);
       setStatus('done');
       setMessage(`${count} new transaction${count !== 1 ? 's' : ''} staged.`);
       onNewTransactions?.(count);

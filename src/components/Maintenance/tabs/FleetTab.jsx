@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, AlertTriangle, FileX, FileCheck } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
-import { useTelemetry } from '../../../context/TelemetryContext.jsx';
+import { useTelemetrySafe } from '../../../context/TelemetryContext.jsx';
 import { useCosts } from '../../../context/CostContext.jsx';
 import ScooterForm from '../fleet/ScooterForm.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
@@ -19,7 +19,9 @@ const STATUS_COLOR = {
 export default function FleetTab() {
   const navigate = useNavigate();
   const { scooters, tickets, addScooter, updateScooter, deleteScooter } = useMaintenance();
-  const { events: telemetryEvents } = useTelemetry();
+  // #376 — useTelemetrySafe: /maintenance is outside ScooterScopedRoutes, so TelemetryProvider
+  // is not mounted here. The safe shim returns empty events → "No CSV" for all scooters.
+  const { events: telemetryEvents } = useTelemetrySafe();
   const { config } = useCosts();
   const cities = config.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
 

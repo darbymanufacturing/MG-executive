@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from
 import { CheckSquare, Square, EyeOff, Download, Inbox } from 'lucide-react';
 import { db } from '../../lib/firebase.js';
 import { useCosts } from '../../context/CostContext.jsx';
+import { useOrg } from '../../context/OrgContext.jsx';
 import { CATEGORY_KEYS } from '../../utils/constants.js';
 import { formatEUR } from '../../utils/formatters.js';
 import Button from '../Shared/Button.jsx';
@@ -13,6 +14,7 @@ const BATCH_SIZE  = 450;
 
 export default function BankTransactionReview() {
   const { addCost } = useCosts();
+  const { orgId } = useOrg();
   const [pending,   setPending]   = useState([]);
   const [selected,  setSelected]  = useState(new Set());
   const [importing, setImporting] = useState(false);
@@ -25,8 +27,13 @@ export default function BankTransactionReview() {
 
   // ── Real-time listener for pending bank transactions ──────────────────────
   useEffect(() => {
-    // #168: add where('status','==','pending') to only fetch pending — avoids pulling every transaction
-    const q = query(collection(db, BANK_TX_COL), where('status', '==', 'pending'));
+    if (!orgId) return;
+    // #168: only fetch pending; #397: scope to caller's org to prevent cross-tenant leaks
+    const q = query(
+      collection(db, BANK_TX_COL),
+      where('status', '==', 'pending'),
+      where('orgId', '==', orgId),
+    );
     const unsub = onSnapshot(q, (snap) => {
       const rows = snap.docs
         .map((d) => ({ _docId: d.id, ...d.data() }))

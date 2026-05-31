@@ -198,7 +198,16 @@ export default function RepairSession() {
     return procedures.find((p) => p.category === ticket.category) ?? FALLBACK_PROCEDURE;
   }, [ticket, procedures]);
 
-  const [sessionId]    = useState(() => sessionIdFor(ticketId));
+  // #403 — persist sessionId in sessionStorage so navigate-away + return reuses the same
+  // session ID rather than generating a new one (which would duplicate stock decrements).
+  const [sessionId] = useState(() => {
+    const key = `omni_repair_session_${ticketId}`;
+    const stored = sessionStorage.getItem(key);
+    if (stored) return stored;
+    const id = sessionIdFor(ticketId);
+    sessionStorage.setItem(key, id);
+    return id;
+  });
   const [startedAt]    = useState(() => new Date());
   const [currentStep,  setCurrentStep]  = useState(0);
   const [showSummary,  setShowSummary]  = useState(false);
@@ -261,6 +270,9 @@ export default function RepairSession() {
         completedAt:    new Date(),
         steps:          stepData,
       });
+      // #403 — clear the persisted session ID on success so re-opening this ticket
+      // (if ever re-opened) gets a fresh session rather than the completed one.
+      sessionStorage.removeItem(`omni_repair_session_${ticketId}`);
       navigate('/technician');
     } catch (err) {
       console.error('Failed to complete repair session:', err);

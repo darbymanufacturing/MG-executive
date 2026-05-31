@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase.js';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
+import { useOrg } from '../../../context/OrgContext.jsx';
 import Button from '../../Shared/Button.jsx';
 import ActiveTicketsBanner from '../tickets/ActiveTicketsBanner.jsx';
 import TicketFilters from '../tickets/TicketFilters.jsx';
@@ -19,6 +20,7 @@ export default function RepairLogTab({ filteredTickets }) {
     config, isAtMaxActive, activeCount, loading,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
   } = useMaintenance();
+  const { orgId } = useOrg();
 
   const [filters,       setFilters]       = useState(EMPTY_FILTERS);
   const [showForm,      setShowForm]      = useState(false);
@@ -26,12 +28,18 @@ export default function RepairLogTab({ filteredTickets }) {
   const [technicians,   setTechnicians]   = useState([]);
 
   useEffect(() => {
+    if (!orgId) return;
     // #165: include 'crew' role — crew members can be assigned to tickets
-    const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'crew']));
+    // #401: scope to caller's org to prevent cross-tenant user list leaks
+    const q = query(
+      collection(db, 'users'),
+      where('role', 'in', ['technician', 'crew']),
+      where('orgId', '==', orgId),
+    );
     return onSnapshot(q, (snap) => {
       setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
     });
-  }, []);
+  }, [orgId]);
 
   function handleSearch(val) {
     setFilters((prev) => ({ ...prev, search: val }));

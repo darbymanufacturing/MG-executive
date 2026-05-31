@@ -3,8 +3,9 @@
  * Called once from Settings page if Firestore projects collection is empty.
  */
 
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { orgWrite } from '../hooks/orgWrite.js';
 
 const SEED_PROJECTS = [
   {
@@ -373,19 +374,21 @@ const SEED_PROJECTS = [
 ];
 
 /**
- * Seeds the 7 launch projects into Firestore if the collection is empty.
- * Returns true if seeded, false if collection already had data.
+ * Seeds the 7 launch projects into Firestore if this org has no projects yet.
+ * Requires an orgId — uses org-scoped write so every seed doc carries orgId.
+ * Returns true if seeded, false if org already had projects.
  */
-export async function seedProjectsIfEmpty() {
-  const snap = await getDocs(collection(db, 'projects'));
+export async function seedProjectsIfEmpty(orgId) {
+  if (!orgId) throw new Error('seedProjectsIfEmpty: orgId is required');
+  const snap = await getDocs(query(collection(db, 'projects'), where('orgId', '==', orgId)));
   if (!snap.empty) return false;
 
   for (const project of SEED_PROJECTS) {
-    await addDoc(collection(db, 'projects'), {
+    await orgWrite('projects', {
       ...project,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }, { rethrow: true });
   }
   return true;
 }

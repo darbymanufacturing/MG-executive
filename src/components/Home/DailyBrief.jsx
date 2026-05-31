@@ -3,11 +3,13 @@ import { Sparkles, Check, ArrowRight, X } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useOrg } from '../../context/OrgContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { orgDocId } from '../../utils/orgDocId.js';
 import { authedFetch } from '../../utils/apiClient.js';
 import styles from './DailyBrief.module.css';
 
@@ -67,6 +69,7 @@ function BriefUnavailable({ onRetry }) {
 
 export default function DailyBrief() {
   const { user } = useAuth();
+  const { orgId } = useOrgSafe() ?? {};
 
   /* Pull real data from contexts for the brief payload */
   const issueCtx       = useIssuesSafe();
@@ -93,7 +96,9 @@ export default function DailyBrief() {
     if (!user || dismissed || hasFetched.current) return;
     hasFetched.current = true;
 
-    const briefKey = `${todayKey()}_${user.uid}`;
+    const rawBriefKey = `${todayKey()}_${user.uid}`;
+    // #400: use org-scoped doc ID so cron-purge can query by orgId on org deletion
+    const briefKey = orgId ? orgDocId(orgId, rawBriefKey) : rawBriefKey;
 
     /* ── Build real payload from contexts (BUG #159) ── */
     const now = new Date();
@@ -156,8 +161,10 @@ export default function DailyBrief() {
         if (res.ok) {
           const generated = await res.json();
           /* Save to Firestore so it's there on next open */
+          // #400: stamp orgId so cron-purge can clean up after org deletion (GDPR)
           await setDoc(doc(db, 'briefs', briefKey), {
             userId: user.uid,
+            orgId: orgId ?? null,
             date: todayKey(),
             narrative: generated.narrative,
             sections: generated.sections,
@@ -254,6 +261,9 @@ export default function DailyBrief() {
 }
 
 /* Safe hooks — return null if context not mounted */
+function useOrgSafe() {
+  try { return useOrg(); } catch { return null; }
+}
 function useIssuesSafe() {
   try { return useIssues(); } catch { return null; }
 }

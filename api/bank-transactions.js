@@ -3,6 +3,7 @@
 // Returns: { transactions: [...], accounts: [...] }
 
 import { requireUser } from './_lib/require-auth.js';
+import { getDb } from './_lib/firebase-admin.js';
 
 const BASE = 'https://www.saltedge.com/api/v6';
 const SAFE_ID = /^[A-Za-z0-9_-]+$/; // #17 — keep user-supplied IDs out of the request URL
@@ -17,6 +18,19 @@ export default async function handler(req, res) {
   const { connection_id } = req.body || {};
   if (!connection_id) return res.status(400).json({ error: 'connection_id required' });
   if (!SAFE_ID.test(String(connection_id))) return res.status(400).json({ error: 'Invalid connection_id' });
+
+  // #30 — verify connection_id belongs to this deployment's stored bank config
+  try {
+    const bankCfg = await getDb().doc('config/bank').get();
+    if (!bankCfg.exists) return res.status(403).json({ error: 'No bank connection configured' });
+    const stored = bankCfg.data().connectionId;
+    if (stored && stored !== connection_id) {
+      return res.status(403).json({ error: 'connection_id does not match stored connection' });
+    }
+  } catch (err) {
+    console.error('[bank-transactions] config/bank read failed', err.message);
+    return res.status(500).json({ error: 'Could not verify bank connection' });
+  }
 
   const { SALTEDGE_APP_ID, SALTEDGE_SECRET } = process.env;
   if (!SALTEDGE_APP_ID || !SALTEDGE_SECRET) {

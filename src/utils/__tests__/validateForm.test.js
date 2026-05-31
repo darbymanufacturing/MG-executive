@@ -222,9 +222,10 @@ describe('ticketSchema, scooterSchema, partSchema — sanity', () => {
     }, scooterSchema).isValid).toBe(true);
   });
 
-  test('partSchema requires name + stockOnHand ≥ 0', () => {
+  test('partSchema requires partName + stockOnHand ≥ 0', () => {
     expect(validate({}, partSchema).isValid).toBe(false);
-    expect(validate({ name: 'Tire', stockOnHand: 0 }, partSchema).isValid).toBe(true);
-    expect(validate({ name: 'Tire', stockOnHand: -1 }, partSchema).isValid).toBe(false);
+    // #364 — field renamed from `name` to `partName` to match PartForm.jsx state
+    expect(validate({ partName: 'Tire', stockOnHand: 0 }, partSchema).isValid).toBe(true);
+    expect(validate({ partName: 'Tire', stockOnHand: -1 }, partSchema).isValid).toBe(false);
   });
 });

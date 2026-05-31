@@ -5,7 +5,7 @@
  * as a side effect. Writes a `syncLogs` summary doc per run.
  *
  * Dual-trigger:
- *   1. Vercel cron (top of every hour) — auth via `Authorization: Bearer ${CRON_SECRET}`
+ *   1. Vercel cron (daily 05:30 UTC, `"30 5 * * *"` in vercel.json) — auth via `Authorization: Bearer ${CRON_SECRET}`
  *   2. User-triggered Refresh button in TopBar — auth via Firebase ID token of an admin/owner
  *
  * See docs/runbooks/hopp-sync-troubleshooting.md for failure-mode recovery.
@@ -120,8 +120,11 @@ export default async function handler(req, res) {
     });
   }
 
+  // #369 — drop the 'Unknown' fallback: a scooter with no city/location maps to null
+  // so the rollup's `if (!city) continue;` guard skips it instead of emitting a phantom
+  // `${date}_Unknown` revenue doc (which #172 fixed for the absent-from-map path).
   const scooterCityMap = new Map(
-    scooters.map((s) => [String(s.scooterId || s._docId), s.city || s.location || 'Unknown']),
+    scooters.map((s) => [String(s.scooterId || s._docId), s.city || s.location || null]),
   );
 
   // ── Bulk pull: ONE call per tool (no scooterId), SEQUENTIAL ──────
@@ -273,7 +276,8 @@ async function upsertSupabase(supa, table, rows) {
   if (!rows || !rows.length) return;
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await supa.from(table).upsert(rows.slice(i, i + 500), { onConflict: 'source_doc_id' });
-    if (error) { console.warn(`[cron-hopp-sync] supabase ${table}: ${error.message}`); break; }
+    // #379 — continue (not break) so a transient chunk failure doesn't drop subsequent chunks
+    if (error) { console.warn(`[cron-hopp-sync] supabase ${table} chunk ${i}: ${error.message}`); continue; }
   }
 }
 

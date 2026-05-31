@@ -23,6 +23,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
 import { projectedCostPerScooterSimple } from '../utils/calculations.js';
 import { formatEUR } from '../utils/formatters.js';
+import { useToast } from '../context/ToastContext.jsx';
 import styles from './Settings.module.css';
 
 // #221, #223: Proper component so useState is valid (field() helper can't call hooks directly)
@@ -95,21 +96,11 @@ function MoneyField({ label, value, onCommit, styles: s, placeholder, step = '0.
 export default function Settings() {
   const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
   const { createTechnicianAccount, signOut, userProfile } = useAuth();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [clearConfirm, setClearConfirm] = useState(false);
-  const [importMsg, setImportMsg] = useState(null);
   const [projFleet, setProjFleet] = useState(config.fleetSize);
   const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
-  // #206, #270: track timers in refs to clear them on unmount
-  const inviteTimerRef = useRef(null);
-  const importTimerRef = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      if (inviteTimerRef.current) clearTimeout(inviteTimerRef.current);
-      if (importTimerRef.current) clearTimeout(importTimerRef.current);
-    };
-  }, []);
 
   // Team management state
   const [technicians, setTechnicians] = useState([]);
@@ -117,7 +108,6 @@ export default function Settings() {
   const [invitePassword, setInvitePassword] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('crew'); // crew | staff | admin
-  const [inviteStatus, setInviteStatus] = useState(null); // { type: 'success'|'error', text }
   const [inviteLoading, setInviteLoading] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
   // Accountant email config — #88: no hardcoded email fallback
@@ -125,8 +115,14 @@ export default function Settings() {
   const [accountantSaved, setAccountantSaved] = useState(false);
 
   // Load crew accounts in real time (crew + technician roles)
+  // #401: scope to caller's org to prevent cross-tenant user list leaks
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'crew', 'staff']));
+    if (!userProfile?.orgId) return;
+    const q = query(
+      collection(db, 'users'),
+      where('role', 'in', ['technician', 'crew', 'staff']),
+      where('orgId', '==', userProfile.orgId),
+    );
     // #210: add onError callback so listener failures surface rather than silently dying
     const unsub = onSnapshot(
       q,
@@ -138,7 +134,7 @@ export default function Settings() {
       },
     );
     return unsub;
-  }, []);
+  }, [userProfile?.orgId]);
 
   const handleSaveAccountant = () => {
     localStorage.setItem('omni_accountant_email', accountantEmail.trim());
@@ -149,25 +145,34 @@ export default function Settings() {
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !invitePassword.trim()) return;
     setInviteLoading(true);
-    setInviteStatus(null);
     try {
       await createTechnicianAccount(inviteEmail.trim(), invitePassword, inviteName.trim(), inviteRole);
       const roleLabel = inviteRole === 'crew' ? 'Crew' : inviteRole === 'staff' ? 'Staff' : 'Admin';
-      setInviteStatus({ type: 'success', text: `${roleLabel} account created for ${inviteEmail.trim()}.` });
+      // #361 — use toast instead of inline status state
+      toastSuccess(`${roleLabel} account created for ${inviteEmail.trim()}.`);
       setInviteEmail('');
       setInvitePassword('');
       setInviteName('');
       setInviteRole('crew');
     } catch (err) {
-      setInviteStatus({ type: 'error', text: err.message });
+      toastError(err.message);
     } finally {
       setInviteLoading(false);
-      // #206: store timer ref so it can be cleared on unmount
-      inviteTimerRef.current = setTimeout(() => setInviteStatus(null), 6000);
     }
   };
 
   const handleRemoveTechnician = async (uid) => {
+    // #185 — only admins and owners may remove team members
+    if (!['admin', 'owner'].includes(userProfile?.role)) {
+      toastError('Only admins and owners can remove team members.');
+      return;
+    }
+    // #401 — cross-org delete guard: target must belong to same org as caller
+    const target = technicians.find((t) => t.uid === uid);
+    if (target?.orgId && target.orgId !== userProfile?.orgId) {
+      toastError('Cannot remove a user from another organisation.');
+      return;
+    }
     await deleteDoc(doc(db, 'users', uid));
     setRemoveConfirm(null);
   };
@@ -275,14 +280,12 @@ export default function Settings() {
       const data = await importFromJSON(file);
       // #222: await importData so failures are caught; previously fire-and-forget
       await importData(data, 'replace');
-      setImportMsg({ type: 'success', text: `Imported ${data.costs.length} cost items successfully.` });
+      // #361 — use toast instead of inline importMsg state
+      toastSuccess(`Imported ${data.costs.length} cost items successfully.`);
     } catch (err) {
-      setImportMsg({ type: 'error', text: err.message });
+      toastError(err.message);
     }
     e.target.value = '';
-    // #270: store timer in ref to clear on unmount
-    if (importTimerRef.current) clearTimeout(importTimerRef.current);
-    importTimerRef.current = setTimeout(() => setImportMsg(null), 5000);
   };
 
   const projectedCPS = projectedCostPerScooterSimple(costs, config.fleetSize, projFleet);
@@ -622,16 +625,6 @@ export default function Settings() {
                   : <><UserPlus size={14} /> Create Account</>
                 }
               </Button>
-              {inviteStatus && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)',
-                  color: inviteStatus.type === 'success' ? '#00C896' : 'var(--color-danger)' }}>
-                  {inviteStatus.type === 'success'
-                    ? <CheckCircle size={14} />
-                    : <AlertCircle size={14} />
-                  }
-                  {inviteStatus.text}
-                </div>
-              )}
             </div>
           </div>
         </section>
@@ -734,11 +727,6 @@ export default function Settings() {
               <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
                 <Upload size={14} /> Import JSON
               </Button>
-              {importMsg && (
-                <div className={`${styles.importMsg} ${importMsg.type === 'error' ? styles.importError : styles.importSuccess}`}>
-                  {importMsg.text}
-                </div>
-              )}
             </div>
 
             <div className={styles.dataCard}>
@@ -748,7 +736,7 @@ export default function Settings() {
               </div>
               <p className={styles.dataCardDesc}>Load the 7 launch projects into the Projects module (skips if projects already exist).</p>
               <Button variant="secondary" size="sm" onClick={async () => {
-                const seeded = await seedProjectsIfEmpty();
+                const seeded = await seedProjectsIfEmpty(userProfile?.orgId);
                 alert(seeded ? '✓ 7 projects seeded.' : 'Projects already exist — nothing changed.');
               }}>Seed Launch Projects</Button>
             </div>

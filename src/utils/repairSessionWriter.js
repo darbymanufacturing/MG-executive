@@ -1,7 +1,5 @@
-import { doc, writeBatch, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { doc, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
-
-const _BATCH_SIZE = 450; // reserved for future batching; currently writes fit in one batch
 
 /**
  * Writes back a completed repair session in one atomic batch:
@@ -41,15 +39,14 @@ export async function completeRepairSession({
     (sum, p) => sum + p.quantity * (p.unitCost ?? 0), 0
   );
 
-  // #23 — Use a transaction to read each part's current stock, validate it is
-  // sufficient before decrementing, and reject the whole session atomically if any
-  // part has insufficient stock.
-  //
-  // #24 — After the transaction validates stock, write the ticket update + audit doc
-  // in the first batch, then split part decrements into BATCH_SIZE chunks to stay
-  // safely under Firestore's 500-op-per-batch limit (relevant if > 400 distinct parts).
+  // #402/#23/#24 — All writes happen in ONE transaction so the entire operation is
+  // atomic. If the ticket update or session doc write fails, the stock decrements are
+  // automatically rolled back. The previous split (transaction for stock + writeBatch
+  // for ticket/session) left a window where stock could be decremented but the ticket
+  // remain "In Progress". At typical repair part counts (< 50 distinct parts) total
+  // ops are well under the 500 transaction limit.
   await runTransaction(db, async (transaction) => {
-    // Read all part docs inside the transaction to get current stock
+    // Read all part docs first (all reads must precede writes in a transaction)
     const partRefs = aggregatedPartsUsed.map(({ partId }) =>
       doc(db, 'maintenanceParts', partId)
     );
@@ -64,55 +61,48 @@ export async function completeRepairSession({
       }
     });
 
-    // All stock checks passed — decrement each part inside the transaction
+    // All stock checks passed — decrement each part
     partSnaps.forEach((snap, idx) => {
       const { quantity } = aggregatedPartsUsed[idx];
       transaction.update(snap.ref, { stockOnHand: increment(-quantity) });
     });
+
+    // Update ticket in the same transaction
+    transaction.update(doc(db, 'maintenanceTickets', ticketDocId), {
+      status:         'Completed',
+      dateCompleted:  completedAt.toISOString().slice(0, 10),
+      completedBy:    technicianUid,
+      partsUsed:      aggregatedPartsUsed,
+      labourMinutes,
+      sessionId,
+      updatedAt:      completedAt.toISOString(),
+      activityLog:    arrayUnion({
+        timestamp: completedAt.toISOString(),
+        action:    'Repair completed by technician',
+        by:        technicianName,
+      }),
+    });
+
+    // Create audit doc in the same transaction
+    transaction.set(doc(db, 'repairSessions', sessionId), {
+      ticketId:          ticketDocId,
+      scooterId,
+      procedureId:       procedureId ?? null,
+      technicianUid,
+      technicianName,
+      startedAt:         startedAt.toISOString(),
+      completedAt:       completedAt.toISOString(),
+      labourMinutes,
+      steps:             steps.map((s) => ({
+        stepNumber:  s.stepNumber,
+        completedAt: s.completedAt ?? completedAt.toISOString(),
+        partsUsed:   s.partsUsed ?? [],
+        notes:       s.notes ?? '',
+        photoUrls:   s.photoUrls ?? [],
+      })),
+      aggregatedPartsUsed,
+      totalPartsCost,
+      createdAt: serverTimestamp(),
+    });
   });
-
-  // #24 — Ticket update + audit doc go in the first batch; part decrements already
-  // handled by the transaction above, so here we only write ticket + session docs.
-  // Split into batches if somehow we exceed BATCH_SIZE (defensive).
-  const firstBatch = writeBatch(db);
-
-  // 1. Update ticket
-  firstBatch.update(doc(db, 'maintenanceTickets', ticketDocId), {
-    status:         'Completed',
-    dateCompleted:  completedAt.toISOString().slice(0, 10),
-    completedBy:    technicianUid,
-    partsUsed:      aggregatedPartsUsed,
-    labourMinutes,
-    sessionId,
-    updatedAt:      completedAt.toISOString(),
-    activityLog:    arrayUnion({
-      timestamp: completedAt.toISOString(),
-      action:    'Repair completed by technician',
-      by:        technicianName,
-    }),
-  });
-
-  // 2. Create audit doc
-  firstBatch.set(doc(db, 'repairSessions', sessionId), {
-    ticketId:          ticketDocId,
-    scooterId,
-    procedureId:       procedureId ?? null,
-    technicianUid,
-    technicianName,
-    startedAt:         startedAt.toISOString(),
-    completedAt:       completedAt.toISOString(),
-    labourMinutes,
-    steps:             steps.map((s) => ({
-      stepNumber:  s.stepNumber,
-      completedAt: s.completedAt ?? completedAt.toISOString(),
-      partsUsed:   s.partsUsed ?? [],
-      notes:       s.notes ?? '',
-      photoUrls:   s.photoUrls ?? [],
-    })),
-    aggregatedPartsUsed,
-    totalPartsCost,
-    createdAt: serverTimestamp(),
-  });
-
-  await firstBatch.commit();
 }

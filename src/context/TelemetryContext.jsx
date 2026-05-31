@@ -121,3 +121,11 @@ export function useTelemetry() {
   if (!ctx) throw new Error('useTelemetry must be used inside <TelemetryProvider>');
   return ctx;
 }
+
+// #376 — safe shim for consumers outside ScooterScopedRoutes (e.g. Maintenance → FleetTab).
+// Returns an empty-events stub so the component degrades gracefully ("No CSV" for all
+// scooters) rather than throwing and crashing the page via ErrorBoundary.
+export function useTelemetrySafe() {
+  const ctx = useContext(TelemetryContext);
+  return ctx ?? { events: [], loading: false, count: 0, hasData: false, importEvents: async () => ({ written: 0, duplicates: 0 }), clearAllEvents: async () => {} };
+}

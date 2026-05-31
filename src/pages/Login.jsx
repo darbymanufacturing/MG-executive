@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { auth } from '../lib/firebase.js';
 import AsterismMark from '../components/Shared/AsterismMark.jsx';
 import styles from './Login.module.css';
@@ -11,6 +12,7 @@ const THEME_KEY = 'omni_theme';
 
 export default function Login() {
   const { signIn } = useAuth();
+  const { success: toastSuccess } = useToast();
   const navigate = useNavigate();
   const currentTheme = localStorage.getItem(THEME_KEY) || 'light';
 
@@ -18,7 +20,6 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetMsg, setResetMsg] = useState('');
 
   // #15 — sign-in only. Public self-sign-up is disabled (it used to auto-grant
   // admin). Accounts are created by an admin in Settings → Team. Phase 2 adds
@@ -39,11 +40,11 @@ export default function Login() {
 
   const handleForgotPassword = async () => {
     setError('');
-    setResetMsg('');
     if (!email) { setError('Enter your email address first.'); return; }
     try {
       await sendPasswordResetEmail(auth, email);
-      setResetMsg('Password reset email sent. Check your inbox.');
+      // #361 — use toast for the success confirmation (transient notification)
+      toastSuccess('Password reset email sent. Check your inbox.');
     } catch (err) {
       setError(err.message);
     }
@@ -122,12 +123,6 @@ export default function Login() {
             Forgot password?
           </button>
         </p>
-        {resetMsg && (
-          <div className={styles.error} style={{ background: 'var(--color-success, #15803D)', borderColor: 'transparent' }}>
-            <span>{resetMsg}</span>
-          </div>
-        )}
-
         {/* Phase 2: public "create your own org" signup (re-enabled after Milestone A). */}
         <p className={styles.toggle}>
           New to Omni?{' '}
