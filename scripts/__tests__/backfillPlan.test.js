@@ -5,7 +5,7 @@
  * collision once a 2nd org exists. These tests make that misclassification fail in CI.
  */
 import { describe, it, expect } from 'vitest';
-import { MIGRATE, STAMP, CONFIG_SINGLETONS, SPECIAL, classifyCollection } from '../backfillPlan.js';
+import { MIGRATE, STAMP, CONFIG_SINGLETONS, SPECIAL, classifyCollection, effectiveTreatment } from '../backfillPlan.js';
 
 // The 20 org-scoped data collections per docs/SCHEMA.md (the universe the backfill must
 // cover). users/organizations are handled specially; the config/pow PARENTS hold the
@@ -62,6 +62,25 @@ describe('classifyCollection()', () => {
   it('flags an unrecognized collection as unknown (script must log + skip, never touch)', () => {
     expect(classifyCollection('some_new_collection')).toBe('unknown');
     expect(classifyCollection('bank_transactions')).toBe('unknown'); // not in plan → must be reviewed before cutover
+  });
+});
+
+describe('effectiveTreatment() — --stamp-only deferral', () => {
+  it('normally returns the base classification (no flag = no change)', () => {
+    expect(effectiveTreatment('telemetryEvents')).toBe('migrate');
+    expect(effectiveTreatment('costs')).toBe('stamp');
+    expect(effectiveTreatment('users')).toBe('special');
+  });
+
+  it('stampOnly downgrades a migrate collection to stamp (field-only, defer id-prefix)', () => {
+    expect(effectiveTreatment('telemetryEvents', { stampOnly: true })).toBe('stamp');
+    expect(effectiveTreatment('revenue', { stampOnly: true })).toBe('stamp');
+  });
+
+  it('stampOnly does NOT change stamp/special/unknown', () => {
+    expect(effectiveTreatment('costs', { stampOnly: true })).toBe('stamp');
+    expect(effectiveTreatment('users', { stampOnly: true })).toBe('special');
+    expect(effectiveTreatment('whatever_new', { stampOnly: true })).toBe('unknown');
   });
 });
 

@@ -50,3 +50,20 @@ export function classifyCollection(name) {
   if (SPECIAL.includes(name)) return 'special';
   return 'unknown';
 }
+
+/**
+ * The treatment to ACTUALLY apply this run, given the run flags. Same return values
+ * as classifyCollection, except:
+ *   - stampOnly=true downgrades 'migrate' → 'stamp' (write only the orgId FIELD, keep
+ *     the doc id). Used to defer the expensive id-prefix migration: the new app finds
+ *     docs by the orgId field-filter, so a field-stamp is enough for it to work; the
+ *     id-prefix can run later as a no-downtime background pass. This is how
+ *     telemetryEvents (10k+ docs, id-migrate = 2 writes/doc > Spark's 20k/day cap) is
+ *     made cheap (1 write/doc) + safe to run as a single throttled command.
+ * 'special'/'unknown' are unaffected (never migrated/stamped as data here).
+ */
+export function effectiveTreatment(name, { stampOnly = false } = {}) {
+  const base = classifyCollection(name);
+  if (stampOnly && base === 'migrate') return 'stamp';
+  return base;
+}

@@ -66,6 +66,7 @@ import {
   STAMP as STAMP_LIST,
   CONFIG_SINGLETONS,
   SPECIAL as SPECIAL_LIST,
+  effectiveTreatment,
 } from './backfillPlan.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -85,14 +86,16 @@ const SPECIAL = new Set(SPECIAL_LIST);
 // ── Args ────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const COMMIT     = args.includes('--commit');
+const STAMP_ONLY = args.includes('--stamp-only');   // treat MIGRATE collections as STAMP (field only; defer id-prefix)
 const ONLY       = (() => { const i = args.indexOf('--only'); return i >= 0 ? new Set(args[i + 1].split(',')) : null; })();
+const EXCLUDE    = (() => { const i = args.indexOf('--exclude'); return i >= 0 ? new Set(args[i + 1].split(',')) : new Set(); })();
 const MAX_WRITES = (() => { const i = args.indexOf('--max-writes'); return i >= 0 ? parseInt(args[i + 1], 10) : 15000; })();
 const OWNER_UID  = (() => { const i = args.indexOf('--owner-uid'); return i >= 0 ? args[i + 1] : null; })();
 
 let writes = 0;                 // writes performed (or, in dry-run, that WOULD be performed)
 const report = {};              // per-collection { migrated|stamped, skipped, would }
 
-function wantCollection(name) { return !ONLY || ONLY.has(name); }
+function wantCollection(name) { return (!ONLY || ONLY.has(name)) && !EXCLUDE.has(name); }
 function budgetLeft() { return writes < MAX_WRITES; }
 
 // ── Firebase admin ──────────────────────────────────────────────────────────
@@ -233,7 +236,10 @@ async function main() {
   const auth = admin.auth();
 
   console.log(`\n${COMMIT ? '🔴 COMMIT' : '🟢 DRY RUN'} — orgId backfill for org "${ORG_ID}" (${ORG_NAME})`);
-  console.log(`   max-writes/run: ${MAX_WRITES}${ONLY ? ` · only: ${[...ONLY].join(',')}` : ''}\n`);
+  console.log(`   mode: ${STAMP_ONLY ? 'STAMP-ONLY (migrate→field-stamp; id-prefix deferred)' : 'FULL (migrate prefixes doc ids)'}` +
+    ` · max-writes/run: ${MAX_WRITES}` +
+    `${ONLY ? ` · only: ${[...ONLY].join(',')}` : ''}` +
+    `${EXCLUDE.size ? ` · exclude: ${[...EXCLUDE].join(',')}` : ''}\n`);
 
   // Discover live collections; warn about anything we don't have a plan for.
   const live = (await db.listCollections()).map((c) => c.id);
@@ -253,11 +259,13 @@ async function main() {
   // 3. config singletons
   await migrateConfigSingletons(db);
 
-  // 4. data collections
+  // 4. data collections — effectiveTreatment() applies --stamp-only (migrate→stamp).
   for (const name of live) {
     if (!wantCollection(name)) continue;
-    if (MIGRATE.has(name)) await migrateCollection(db, name);
-    else if (STAMP.has(name)) await stampCollection(db, name);
+    if (!MIGRATE.has(name) && !STAMP.has(name)) continue; // special/unknown handled elsewhere/skipped
+    const treatment = effectiveTreatment(name, { stampOnly: STAMP_ONLY });
+    if (treatment === 'migrate') await migrateCollection(db, name);
+    else if (treatment === 'stamp') await stampCollection(db, name);
   }
 
   // Report
