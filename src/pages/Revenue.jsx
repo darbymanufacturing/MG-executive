@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, TrendingUp } from 'lucide-react';
+import { Trash2, TrendingUp, Info } from 'lucide-react';
 import RevenueIntroOverlay from '../components/Revenue/RevenueIntroOverlay.jsx';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
@@ -50,6 +50,11 @@ export default function Revenue() {
           </div>
         }
       />
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)', background: 'var(--bg-subtle, #F8F9FA)', borderBottom: '1px solid var(--border-muted, #E5E7EB)', fontSize: '0.78rem', color: 'var(--fg-muted, #6B7280)', lineHeight: 1.4 }}>
+        <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>Revenue figures are <strong>ex-VAT</strong> (24% Greek VAT excluded). Hopp&apos;s web UI shows the same amounts including VAT — divide any Hopp figure by 1.24 to reconcile.</span>
+      </div>
 
       <div className={styles.content}>
         {/* Loading skeleton */}

@@ -24,14 +24,16 @@ import { setActiveOrg } from '../hooks/orgWrite.js';
 const OrgContext = createContext(null);
 
 export function OrgProvider({ children }) {
-  const { userProfile, userRole, authLoading } = useAuth();
+  const { userProfile, userRole, authLoading, user } = useAuth();
   const orgId = userProfile?.orgId ?? null;
+  const uid = user?.uid ?? null;
 
-  // Mirror orgId into the write-layer singleton (cleared on sign-out / org change).
+  // Mirror orgId + uid into the write-layer singleton atomically (cleared on sign-out /
+  // org change). Both are set together so they can never be out of sync (bug #425).
   useEffect(() => {
-    setActiveOrg(orgId);
+    setActiveOrg(orgId, uid);
     return () => setActiveOrg(null);
-  }, [orgId]);
+  }, [orgId, uid]);
 
   const value = useMemo(() => ({
     orgId,

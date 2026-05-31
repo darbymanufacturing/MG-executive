@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useCallback } from 'react';
-import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { createContext, useContext, useEffect, useMemo, useCallback, useRef } from 'react';
+import { collection, doc, writeBatch, getDocs, query, where, limit } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import {
@@ -32,11 +32,11 @@ const DEFAULT_CONFIG = {
 
 const SprContext = createContext(null);
 
-// Per-org bootstrap guard — seed defaults once per org.
-const bootstrappedSprConfigs = new Set();
-
 export function SprProvider({ children }) {
   const { orgId } = useOrg();
+  // Per-org bootstrap guard: scoped to this provider instance (not module-level) so
+  // it resets on unmount/remount (org switch, sign-out). Prevents StrictMode double-write.
+  const bootstrappedRef = useRef(new Set());
   const configDocId = orgId ? `${orgId}_spr` : null;
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
@@ -60,8 +60,8 @@ export function SprProvider({ children }) {
   // Bootstrap defaults once per org (mirrors the pre-Phase-2 onSnapshot bootstrap).
   useEffect(() => {
     if (configLoading || !configDocId) return;
-    if (!configItem && !bootstrappedSprConfigs.has(configDocId)) {
-      bootstrappedSprConfigs.add(configDocId);
+    if (!configItem && !bootstrappedRef.current.has(configDocId)) {
+      bootstrappedRef.current.add(configDocId);
       orgWrite(CONFIG_COL, DEFAULT_CONFIG, { id: configDocId, silent: true });
     }
   }, [configItem, configLoading, configDocId]);
@@ -129,11 +129,17 @@ export function SprProvider({ children }) {
     if (!orgId) throw new Error('clearEvents: no active org');
     const clauses = [where('orgId', '==', orgId)];
     if (city) clauses.push(where('city', '==', city));
-    const snap = await getDocs(query(collection(db, EVENTS_COL), ...clauses));
-    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    // Paginated delete to avoid OOM on large collections (bug-73).
+    let more = true;
+    while (more) {
+      // eslint-disable-next-line no-await-in-loop
+      const snap = await getDocs(query(collection(db, EVENTS_COL), ...clauses, limit(BATCH_SIZE)));
+      if (snap.empty) break;
       const batch = writeBatch(db);
-      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      // eslint-disable-next-line no-await-in-loop
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
+      more = snap.docs.length === BATCH_SIZE;
     }
   }, [orgId]);
 
@@ -161,11 +167,17 @@ export function SprProvider({ children }) {
     if (!orgId) throw new Error('clearWeather: no active org');
     const clauses = [where('orgId', '==', orgId)];
     if (city) clauses.push(where('city', '==', city));
-    const snap = await getDocs(query(collection(db, WEATHER_COL), ...clauses));
-    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    // Paginated delete to avoid OOM on large collections (bug-73).
+    let more = true;
+    while (more) {
+      // eslint-disable-next-line no-await-in-loop
+      const snap = await getDocs(query(collection(db, WEATHER_COL), ...clauses, limit(BATCH_SIZE)));
+      if (snap.empty) break;
       const batch = writeBatch(db);
-      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      // eslint-disable-next-line no-await-in-loop
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
+      more = snap.docs.length === BATCH_SIZE;
     }
   }, [orgId]);
 

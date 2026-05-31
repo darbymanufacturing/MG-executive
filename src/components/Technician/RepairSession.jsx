@@ -57,20 +57,33 @@ function PartPicker({ parts, onAdd }) {
       </div>
       {open && filtered.length > 0 && (
         <ul className={styles.partDropdown}>
-          {filtered.map((p) => (
-            <li
-              key={p._docId}
-              className={styles.partDropdownItem}
-              onMouseDown={() => {
-                onAdd({ partId: p._docId, partName: p.partName, quantity: 1, unitCost: p.unitCost ?? 0 });
-                setQuery('');
-                setOpen(false);
-              }}
-            >
-              <span>{p.partName}</span>
-              <span className={styles.partDropdownSku}>{p.sku}</span>
-            </li>
-          ))}
+          {filtered.map((p) => {
+            const stock = p.stockOnHand ?? 0;
+            const outOfStock = stock <= 0;
+            return (
+              <li
+                key={p._docId}
+                className={outOfStock
+                  ? `${styles.partDropdownItem} ${styles.partDropdownItemOutOfStock}`
+                  : styles.partDropdownItem
+                }
+                aria-disabled={outOfStock || undefined}
+                onMouseDown={() => {
+                  // #421 — block adding zero-stock parts at pick time
+                  if (outOfStock) return;
+                  onAdd({ partId: p._docId, partName: p.partName, quantity: 1, unitCost: p.unitCost ?? 0 });
+                  setQuery('');
+                  setOpen(false);
+                }}
+              >
+                <span>{p.partName}</span>
+                {outOfStock
+                  ? <span className={styles.partStockLabelOos}>(out of stock)</span>
+                  : <span className={styles.partStockLabel}>{p.sku} · {stock} left</span>
+                }
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -79,10 +92,19 @@ function PartPicker({ parts, onAdd }) {
 
 // ── Parts list for a step ─────────────────────────────────────────────────────
 function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
+  // #421 — look up stockOnHand for a given partId from the master parts list
+  function stockFor(partId) {
+    const src = allParts.find((ap) => ap._docId === partId);
+    return src?.stockOnHand ?? Infinity; // Infinity = no stock data → uncapped
+  }
+
   function setQty(idx, delta) {
-    const next = partsUsed.map((p, i) =>
-      i === idx ? { ...p, quantity: Math.max(1, p.quantity + delta) } : p
-    );
+    const next = partsUsed.map((p, i) => {
+      if (i !== idx) return p;
+      // #421 — cap quantity at available stock on the + path
+      const maxStock = stockFor(p.partId);
+      return { ...p, quantity: Math.min(Math.max(1, p.quantity + delta), maxStock) };
+    });
     onUpdate(next);
   }
 
@@ -95,7 +117,12 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
     if (exists >= 0) {
       setQty(exists, 1);
     } else {
-      onUpdate([...partsUsed, part]);
+      // #421 — defence-in-depth: cap initial quantity at available stock (handles
+      // commonParts pre-loaded from a procedure whose stock dropped to zero between
+      // page load and the pick, or a race condition where PartPicker's guard was bypassed).
+      const maxStock = stockFor(part.partId);
+      if (maxStock <= 0) return; // already blocked in PartPicker; skip silently
+      onUpdate([...partsUsed, { ...part, quantity: Math.min(1, maxStock) }]);
     }
   }
 
@@ -104,17 +131,32 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
       <p className={styles.partsLabel}>Parts used this step</p>
       {partsUsed.length > 0 && (
         <div className={styles.partRows}>
-          {partsUsed.map((p, idx) => (
-            <div key={idx} className={styles.partRow}>
-              <span className={styles.partName}>{p.partName}</span>
-              <div className={styles.qtyControl}>
-                <button className={styles.qtyBtn} onClick={() => setQty(idx, -1)}><Minus size={12} /></button>
-                <span className={styles.qtyVal}>{p.quantity}</span>
-                <button className={styles.qtyBtn} onClick={() => setQty(idx, 1)}><Plus size={12} /></button>
+          {partsUsed.map((p, idx) => {
+            const maxStock = stockFor(p.partId);
+            return (
+              <div key={idx} className={styles.partRow}>
+                <span className={styles.partName}>
+                  {p.partName}
+                  {/* #421 — show current stock so technician knows the upper limit */}
+                  {maxStock !== Infinity && (
+                    <span className={styles.partStockLabel}> ({maxStock} left)</span>
+                  )}
+                </span>
+                <div className={styles.qtyControl}>
+                  <button className={styles.qtyBtn} onClick={() => setQty(idx, -1)}><Minus size={12} /></button>
+                  <span className={styles.qtyVal}>{p.quantity}</span>
+                  <button
+                    className={styles.qtyBtn}
+                    onClick={() => setQty(idx, 1)}
+                    disabled={p.quantity >= maxStock}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+                <button className={styles.removePartBtn} onClick={() => remove(idx)}><X size={13} /></button>
               </div>
-              <button className={styles.removePartBtn} onClick={() => remove(idx)}><X size={13} /></button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <PartPicker parts={allParts} onAdd={addPart} />
@@ -208,7 +250,16 @@ export default function RepairSession() {
     sessionStorage.setItem(key, id);
     return id;
   });
-  const [startedAt]    = useState(() => new Date());
+  // #418 — persist startedAt to sessionStorage so navigate-away/return preserves
+  // the original start time and labour-minutes calculation stays correct.
+  const [startedAt] = useState(() => {
+    const key = `omni_repair_started_${ticketId}`;
+    const stored = sessionStorage.getItem(key);
+    if (stored) return new Date(stored);
+    const now = new Date();
+    sessionStorage.setItem(key, now.toISOString());
+    return now;
+  });
   const [currentStep,  setCurrentStep]  = useState(0);
   const [showSummary,  setShowSummary]  = useState(false);
   const [completing,   setCompleting]   = useState(false);
@@ -273,6 +324,8 @@ export default function RepairSession() {
       // #403 — clear the persisted session ID on success so re-opening this ticket
       // (if ever re-opened) gets a fresh session rather than the completed one.
       sessionStorage.removeItem(`omni_repair_session_${ticketId}`);
+      // #418 — clear the persisted startedAt so a re-opened ticket gets a fresh start.
+      sessionStorage.removeItem(`omni_repair_started_${ticketId}`);
       navigate('/technician');
     } catch (err) {
       console.error('Failed to complete repair session:', err);

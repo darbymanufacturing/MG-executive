@@ -1,7 +1,7 @@
-import { createContext, useContext, useCallback, useEffect, useMemo } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  collection, doc, writeBatch, getDocs, query, where,
+  collection, doc, writeBatch, getDocs, query, where, limit,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -27,12 +27,11 @@ const MAX_COSTS = 2000;
 
 const CostContext = createContext(null);
 
-// Per-org bootstrap guard: prevents a StrictMode double-write AND a re-bootstrap
-// when a different org signs in within one session. Holds config doc-ids already seeded.
-const bootstrappedConfigs = new Set();
-
 export function CostProvider({ children }) {
   const { orgId } = useOrg();
+  // Per-org bootstrap guard: scoped to this provider instance (not module-level) so
+  // it resets on unmount/remount (org switch, sign-out). Prevents StrictMode double-write.
+  const bootstrappedRef = useRef(new Set());
   const configDocId = orgId ? fleetConfigId(orgId) : null;
 
   // ── Real-time reads through the locked org layer (ADR-0003) ──────────────────
@@ -56,8 +55,8 @@ export function CostProvider({ children }) {
   // once per org. Mirrors the pre-Phase-2 bootstrap; no setState so it's effect-safe.
   useEffect(() => {
     if (configLoading || !configDocId) return;
-    if (!configItem && !bootstrappedConfigs.has(configDocId)) {
-      bootstrappedConfigs.add(configDocId);
+    if (!configItem && !bootstrappedRef.current.has(configDocId)) {
+      bootstrappedRef.current.add(configDocId);
       orgWrite(CONFIG_COL, DEFAULT_CONFIG, { id: configDocId, silent: true });
     }
   }, [configItem, configLoading, configDocId]);
@@ -113,12 +112,20 @@ export function CostProvider({ children }) {
     if (!orgId || !configDocId) throw new Error('loadSampleData: no active org');
     const uid = auth.currentUser?.uid ?? null;
 
-    // Delete THIS org's existing costs in chunks (org-filtered — never another org's).
-    const existingSnap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId)));
-    for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db);
-      existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while clearing old costs' });
+    // Delete THIS org's existing costs in paginated chunks (org-filtered — never another org's).
+    // Paginated to avoid loading the entire collection into browser memory (bug-73).
+    {
+      let more = true;
+      while (more) {
+        // eslint-disable-next-line no-await-in-loop
+        const snap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId), limit(BATCH_SIZE)));
+        if (snap.empty) break;
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        // eslint-disable-next-line no-await-in-loop
+        await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Sample data load failed while clearing old costs' });
+        more = snap.docs.length === BATCH_SIZE;
+      }
     }
 
     // Add sample costs in chunks, org-stamped.
@@ -138,11 +145,19 @@ export function CostProvider({ children }) {
 
   const clearAllData = useCallback(async () => {
     if (!orgId || !configDocId) throw new Error('clearAllData: no active org');
-    const existingSnap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId)));
-    for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
-      const batch = writeBatch(db);
-      existingSnap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-      await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Failed to clear costs' });
+    // Paginated delete to avoid OOM on large collections (bug-73).
+    {
+      let more = true;
+      while (more) {
+        // eslint-disable-next-line no-await-in-loop
+        const snap = await getDocs(query(collection(db, COSTS_COL), where('orgId', '==', orgId), limit(BATCH_SIZE)));
+        if (snap.empty) break;
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        // eslint-disable-next-line no-await-in-loop
+        await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Failed to clear costs' });
+        more = snap.docs.length === BATCH_SIZE;
+      }
     }
     await orgWrite(CONFIG_COL, DEFAULT_CONFIG, {
       id: configDocId, rethrow: true, errorMessage: 'Failed to reset config to defaults',

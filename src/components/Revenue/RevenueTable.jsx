@@ -76,7 +76,7 @@ export default function RevenueTable({ data }) {
               <th className={`${styles.th} ${styles.right}`}>Distance</th>
               <th className={`${styles.th} ${styles.right}`}>Avg Payment</th>
               <th className={`${styles.th} ${styles.right}`} onClick={() => toggleSort('revenue')}>
-                Paid Revenue <SortIcon field="revenue" />
+                Paid Revenue (ex-VAT) <SortIcon field="revenue" />
               </th>
             </tr>
           </thead>
@@ -100,7 +100,7 @@ export default function RevenueTable({ data }) {
       <div className={styles.footer}>
         <span>Total trips: <strong>{formatTrips(totalTrips(filtered))}</strong></span>
         <span>Total distance: <strong>{formatKm(totalDistanceKm(filtered))}</strong></span>
-        <span>Total revenue: <strong className={styles.totalRev}>{formatEUR(totalRevenue(filtered))}</strong></span>
+        <span>Total revenue (ex-VAT): <strong className={styles.totalRev}>{formatEUR(totalRevenue(filtered))}</strong></span>
       </div>
     </div>
   );

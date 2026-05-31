@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useMemo } from 'react';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
-import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
+import { orgWrite, orgUpdate, orgDelete, orgTransaction } from '../hooks/orgWrite.js';
 
 const PROJECTS_COL   = 'projects';
 const GATES_COL      = 'decisionGates';
@@ -86,55 +86,55 @@ export function ProjectProvider({ children }) {
 
   // ── Phase helpers ─────────────────────────────────────────────────────────
   const addPhase = useCallback(async (docId, phase) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const phases = [
-      ...(project.phases || []),
-      {
-        id:           crypto.randomUUID(),
-        number:       (project.phases || []).length + 1,
-        name:         phase.name || 'New Phase',
-        doneCriteria: phase.doneCriteria || [],
-        status:       'notStarted',
-        targetDate:   phase.targetDate || null,
-        actualDate:   null,
-        scopeCap:     phase.scopeCap || '',
-        parallel:     phase.parallel || false,
-        tasks:        phase.tasks || [],
-        duration:     phase.duration || null,
-        dependencies: phase.dependencies || [],
-      },
-    ];
-    await patchProject(docId, { phases }, 'Failed to add phase');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const existing = data.phases || [];
+      const phases = [
+        ...existing,
+        {
+          id:           crypto.randomUUID(),
+          number:       existing.length + 1,
+          name:         phase.name || 'New Phase',
+          doneCriteria: phase.doneCriteria || [],
+          status:       'notStarted',
+          targetDate:   phase.targetDate || null,
+          actualDate:   null,
+          scopeCap:     phase.scopeCap || '',
+          parallel:     phase.parallel || false,
+          tasks:        phase.tasks || [],
+          duration:     phase.duration || null,
+          dependencies: phase.dependencies || [],
+        },
+      ];
+      return { phases };
+    });
+  }, []);
 
   const updatePhase = useCallback(async (docId, phaseId, changes) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const phases = (project.phases || []).map((ph) =>
-      ph.id === phaseId ? { ...ph, ...changes } : ph,
-    );
-    await patchProject(docId, { phases }, 'Failed to update phase');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const phases = (data.phases || []).map((ph) =>
+        ph.id === phaseId ? { ...ph, ...changes } : ph,
+      );
+      return { phases };
+    });
+  }, []);
 
   const deletePhase = useCallback(async (docId, phaseId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const phases = (project.phases || [])
-      .filter((ph) => ph.id !== phaseId)
-      .map((ph, i) => ({ ...ph, number: i + 1 }));
-    await patchProject(docId, { phases }, 'Failed to delete phase');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const phases = (data.phases || [])
+        .filter((ph) => ph.id !== phaseId)
+        .map((ph, i) => ({ ...ph, number: i + 1 }));
+      return { phases };
+    });
+  }, []);
 
   const reorderPhases = useCallback(async (docId, fromIndex, toIndex) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const phases = [...(project.phases || [])];
-    const [moved] = phases.splice(fromIndex, 1);
-    phases.splice(toIndex, 0, moved);
-    const renumbered = phases.map((ph, i) => ({ ...ph, number: i + 1 }));
-    await patchProject(docId, { phases: renumbered }, 'Failed to reorder phases');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const phases = [...(data.phases || [])];
+      const [moved] = phases.splice(fromIndex, 1);
+      phases.splice(toIndex, 0, moved);
+      return { phases: phases.map((ph, i) => ({ ...ph, number: i + 1 })) };
+    });
+  }, []);
 
   // ── Next Action helpers ───────────────────────────────────────────────────
   const setNextAction = useCallback((docId, nextAction) =>
@@ -146,105 +146,106 @@ export function ProjectProvider({ children }) {
   [patchProject]);
 
   const completeNextAction = useCallback(async (docId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project?.nextAction) return;
-    const completedEntry = {
-      id:   crypto.randomUUID(),
-      date: new Date().toISOString().slice(0, 10),
-      text: `✓ Completed next action: "${project.nextAction.text}"`,
-    };
-    const updates = [completedEntry, ...(project.updates || [])];
-    await patchProject(docId, { nextAction: null, updates }, 'Failed to complete next action');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      if (!data.nextAction) return {};
+      const completedEntry = {
+        id:   crypto.randomUUID(),
+        date: new Date().toISOString().slice(0, 10),
+        text: `✓ Completed next action: "${data.nextAction.text}"`,
+      };
+      const updates = [completedEntry, ...(data.updates || [])];
+      return { nextAction: null, updates };
+    });
+  }, []);
 
   // ── Blocker helpers ───────────────────────────────────────────────────────
   const addBlocker = useCallback(async (docId, { text, type = 'internal', escalation = '' }) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const blocker = {
-      id:         crypto.randomUUID(),
-      text, type, escalation,
-      resolved:   false,
-      addedAt:    new Date().toISOString().slice(0, 10),
-      resolvedAt: null,
-    };
-    const blockers = [...(project.blockers || []), blocker];
-    const statusUpdate = type === 'external' ? { status: 'blocked' } : {};
-    await patchProject(docId, { blockers, ...statusUpdate }, 'Failed to add blocker');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const blocker = {
+        id:         crypto.randomUUID(),
+        text, type, escalation,
+        resolved:   false,
+        addedAt:    new Date().toISOString().slice(0, 10),
+        resolvedAt: null,
+      };
+      const blockers = [...(data.blockers || []), blocker];
+      const statusUpdate = type === 'external' ? { status: 'blocked' } : {};
+      return { blockers, ...statusUpdate };
+    });
+  }, []);
 
   const resolveBlocker = useCallback(async (docId, blockerId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const blockers = (project.blockers || []).map((b) =>
-      b.id === blockerId
-        ? { ...b, resolved: true, resolvedAt: new Date().toISOString().slice(0, 10) }
-        : b,
-    );
-    await patchProject(docId, { blockers }, 'Failed to resolve blocker');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const blockers = (data.blockers || []).map((b) =>
+        b.id === blockerId
+          ? { ...b, resolved: true, resolvedAt: new Date().toISOString().slice(0, 10) }
+          : b,
+      );
+      return { blockers };
+    });
+  }, []);
 
   const deleteBlocker = useCallback(async (docId, blockerId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const blockers = (project.blockers || []).filter((b) => b.id !== blockerId);
-    await patchProject(docId, { blockers }, 'Failed to delete blocker');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const blockers = (data.blockers || []).filter((b) => b.id !== blockerId);
+      return { blockers };
+    });
+  }, []);
 
   const toggleBlocker = useCallback(async (docId, blockerId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const blockers = (project.blockers || []).map((b) =>
-      b.id === blockerId ? { ...b, resolved: !b.resolved } : b,
-    );
-    await patchProject(docId, { blockers }, 'Failed to toggle blocker');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const blockers = (data.blockers || []).map((b) =>
+        b.id === blockerId ? { ...b, resolved: !b.resolved } : b,
+      );
+      return { blockers };
+    });
+  }, []);
 
   // ── Activity log (updates[]) ──────────────────────────────────────────────
   const addUpdate = useCallback(async (docId, text) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const updates = [
-      { id: crypto.randomUUID(), date: new Date().toISOString().slice(0, 10), text },
-      ...(project.updates || []),
-    ];
-    await patchProject(docId, { updates }, 'Failed to add update');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const updates = [
+        { id: crypto.randomUUID(), date: new Date().toISOString().slice(0, 10), text },
+        ...(data.updates || []),
+      ];
+      return { updates };
+    });
+  }, []);
 
   // ── Decision Log ──────────────────────────────────────────────────────────
   const addDecision = useCallback(async (docId, decision) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const entry = {
-      id:           crypto.randomUUID(),
-      date:         new Date().toISOString().slice(0, 10),
-      title:        decision.title || '',
-      decision:     decision.decision || '',
-      why:          decision.why || '',
-      madeBy:       decision.madeBy || '',
-      alternatives: decision.alternatives || '',
-    };
-    const decisions = [entry, ...(project.decisions || [])];
-    await patchProject(docId, { decisions }, 'Failed to add decision');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const entry = {
+        id:           crypto.randomUUID(),
+        date:         new Date().toISOString().slice(0, 10),
+        title:        decision.title || '',
+        decision:     decision.decision || '',
+        why:          decision.why || '',
+        madeBy:       decision.madeBy || '',
+        alternatives: decision.alternatives || '',
+      };
+      const decisions = [entry, ...(data.decisions || [])];
+      return { decisions };
+    });
+  }, []);
 
   // ── POW Entries (append-only) ─────────────────────────────────────────────
   const addPowEntry = useCallback(async (docId, entry) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const powEntry = {
-      id:        crypto.randomUUID(),
-      weekOf:    entry.weekOf,
-      moved:     entry.moved || '',
-      blocked:   entry.blocked || '',
-      focusNext: entry.focusNext || '',
-      status:    entry.status || 'onTrack',
-      loggedBy:  entry.loggedBy || 'Kostas',
-      loggedAt:  new Date().toISOString(),
-    };
-    const powEntries = [powEntry, ...(project.powEntries || [])];
-    await patchProject(docId, { powEntries }, 'Failed to add POW entry');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const powEntry = {
+        id:        crypto.randomUUID(),
+        weekOf:    entry.weekOf,
+        moved:     entry.moved || '',
+        blocked:   entry.blocked || '',
+        focusNext: entry.focusNext || '',
+        status:    entry.status || 'onTrack',
+        loggedBy:  entry.loggedBy || 'Kostas',
+        loggedAt:  new Date().toISOString(),
+      };
+      const powEntries = [powEntry, ...(data.powEntries || [])];
+      return { powEntries };
+    });
+  }, []);
 
   // ── Brainstorm Ideas (global) ─────────────────────────────────────────────
   const addBrainstormIdea = useCallback(async ({ text, tag = '' }) => {
@@ -263,55 +264,55 @@ export function ProjectProvider({ children }) {
 
   // ── Milestone helpers (kept for War Room backward compat) ────────────────
   const toggleMilestone = useCallback(async (docId, milestoneId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const milestones = (project.milestones || []).map((m) =>
-      m.id === milestoneId ? { ...m, done: !m.done } : m,
-    );
-    await patchProject(docId, { milestones }, 'Failed to toggle milestone');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const milestones = (data.milestones || []).map((m) =>
+        m.id === milestoneId ? { ...m, done: !m.done } : m,
+      );
+      return { milestones };
+    });
+  }, []);
 
   const addMilestone = useCallback(async (docId, milestone) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const milestones = [...(project.milestones || []), {
-      id:      crypto.randomUUID(),
-      title:   milestone.title,
-      dueDate: milestone.dueDate || '',
-      done:    false,
-    }];
-    await patchProject(docId, { milestones }, 'Failed to add milestone');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const milestones = [...(data.milestones || []), {
+        id:      crypto.randomUUID(),
+        title:   milestone.title,
+        dueDate: milestone.dueDate || '',
+        done:    false,
+      }];
+      return { milestones };
+    });
+  }, []);
 
   const deleteMilestone = useCallback(async (docId, milestoneId) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const milestones = (project.milestones || []).filter((m) => m.id !== milestoneId);
-    await patchProject(docId, { milestones }, 'Failed to delete milestone');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const milestones = (data.milestones || []).filter((m) => m.id !== milestoneId);
+      return { milestones };
+    });
+  }, []);
 
   const updateMilestone = useCallback(async (docId, milestoneId, changes) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const milestones = (project.milestones || []).map((m) =>
-      m.id === milestoneId ? { ...m, ...changes } : m,
-    );
-    await patchProject(docId, { milestones }, 'Failed to update milestone');
-  }, [projects, patchProject]);
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const milestones = (data.milestones || []).map((m) =>
+        m.id === milestoneId ? { ...m, ...changes } : m,
+      );
+      return { milestones };
+    });
+  }, []);
 
   // ── Task assignee ─────────────────────────────────────────────────────────
   const setTaskAssignee = useCallback(async (docId, phaseId, taskId, assignee) => {
-    const project = projects.find((p) => p._docId === docId);
-    if (!project) return;
-    const phases = (project.phases || []).map((ph) => {
-      if (ph.id !== phaseId) return ph;
-      const tasks = (ph.tasks || []).map((t) =>
-        t.id === taskId ? { ...t, assignee: assignee || null } : t,
-      );
-      return { ...ph, tasks };
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const phases = (data.phases || []).map((ph) => {
+        if (ph.id !== phaseId) return ph;
+        const tasks = (ph.tasks || []).map((t) =>
+          t.id === taskId ? { ...t, assignee: assignee || null } : t,
+        );
+        return { ...ph, tasks };
+      });
+      return { phases };
     });
-    await patchProject(docId, { phases }, 'Failed to set task assignee');
-  }, [projects, patchProject]);
+  }, []);
 
   // ── Project interconnection ───────────────────────────────────────────────
   const promotePhaseToProject = useCallback(async (docId, phaseId) => {

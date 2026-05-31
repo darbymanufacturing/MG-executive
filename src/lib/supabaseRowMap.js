@@ -12,7 +12,21 @@
  *                     identical shape; typed columns are an SQL-queryable subset.
  */
 
-const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+const num = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  // Normalize European decimal separator (e.g. "3,67" → "3.67").
+  // Only replace a comma that acts as a decimal separator:
+  // a trailing pattern like "1,234" (thousands sep) should not be changed —
+  // but for our domain (battery %, km, revenue) values never use thousands commas.
+  const normalized = typeof v === 'string' ? v.replace(',', '.') : v;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    // eslint-disable-next-line no-console
+    console.warn('[supabaseRowMap] num(): could not parse value to a finite number — dropping to null. Raw value:', v);
+    return null;
+  }
+  return parsed;
+};
 const bool = (v) => (typeof v === 'boolean' ? v : null);
 
 /** Firestore collection name → Supabase table name. */

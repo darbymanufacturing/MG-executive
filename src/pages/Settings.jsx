@@ -162,18 +162,28 @@ export default function Settings() {
   };
 
   const handleRemoveTechnician = async (uid) => {
-    // #185 — only admins and owners may remove team members
+    // #185 — only admins and owners may remove team members (client-side pre-check;
+    // the server re-validates in api/delete-user.js)
     if (!['admin', 'owner'].includes(userProfile?.role)) {
       toastError('Only admins and owners can remove team members.');
       return;
     }
-    // #401 — cross-org delete guard: target must belong to same org as caller
+    // #401 — cross-org delete guard (client-side pre-check; server re-validates)
     const target = technicians.find((t) => t.uid === uid);
     if (target?.orgId && target.orgId !== userProfile?.orgId) {
       toastError('Cannot remove a user from another organisation.');
       return;
     }
-    await deleteDoc(doc(db, 'users', uid));
+    // #bug-18 — delete both Firestore doc + Firebase Auth account via server-side Admin SDK
+    const res = await authedFetch('/api/delete-user', {
+      method: 'POST',
+      body: JSON.stringify({ uid }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toastError(data.error || 'Failed to remove user');
+      return;
+    }
     setRemoveConfirm(null);
   };
 
@@ -851,7 +861,7 @@ git checkout main`}
         onClose={() => setRemoveConfirm(null)}
         onConfirm={() => handleRemoveTechnician(removeConfirm)}
         title="Remove Technician"
-        message="This will remove the technician's access. Their Firebase Auth account remains — contact Firebase console to fully delete it."
+        message="This will permanently remove the technician's access and delete their login account."
         confirmLabel="Remove Access"
       />
 

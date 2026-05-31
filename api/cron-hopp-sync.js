@@ -21,8 +21,9 @@ import { toSupabaseRow } from '../src/lib/supabaseRowMap.js';
 export const maxDuration = 60;
 
 // ADR-0013: the cron also dual-writes trips + revenue to Supabase (service-role,
-// bypasses RLS). Single-tenant cron stamps a fixed org; override via OMNI_ORG_ID.
-const ORG_ID = process.env.OMNI_ORG_ID || 'mg-executive-org';
+// bypasses RLS). OMNI_ORG_ID is required — no hardcoded fallback to prevent
+// cross-tenant data corruption when a second org is added (BUG #382).
+const ORG_ID = process.env.OMNI_ORG_ID;
 
 const BATCH_SIZE = 450;
 // Sync window starts at 00:00 UTC this many days back. The revenue rollup only
@@ -97,14 +98,29 @@ export default async function handler(req, res) {
   console.log(`[cron-hopp-sync] trigger=${trigger} window=${since.toISOString()}..${until.toISOString()}`);
 
   // ── Load scooters ────────────────────────────────────────────────
+  // BUG #346 — field-mask projection: only fetch the three fields actually consumed
+  // downstream (scooterId → scooterCityMap key, city/location → city value, orgId →
+  // multi-org guard). At 10 k scooters/client this saves ~7.2 M full-doc reads/month.
+  // TODO (BUG #346 Layer 2): eliminate per-scooter reads entirely by maintaining a
+  // config/fleet.scooterIndex singleton doc {scooterIds, cityMap} via an onCreate/
+  // onDelete Firestore trigger on the scooters collection — cron reads 1 doc not N.
   let scooters;
   try {
-    const snap = await db.collection(COLLECTIONS.scooters).get();
+    const snap = await db.collection(COLLECTIONS.scooters).select('scooterId', 'city', 'location', 'orgId').get();
     scooters = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
   } catch (err) {
     return finalize(res, db, {
       trigger, triggeredByUid, startedAt,
       ok: false, errorMessage: 'Failed to load scooters: ' + err.message,
+    });
+  }
+
+  // BUG #382 — OMNI_ORG_ID is required; fail loudly rather than silently corrupt
+  // cross-tenant data by stamping rows with a wrong org.
+  if (!ORG_ID) {
+    return finalize(res, db, {
+      trigger, triggeredByUid, startedAt,
+      ok: false, errorMessage: 'OMNI_ORG_ID env var is required — set it in the Vercel project environment variables',
     });
   }
 
@@ -127,6 +143,19 @@ export default async function handler(req, res) {
     scooters.map((s) => [String(s.scooterId || s._docId), s.city || s.location || null]),
   );
 
+  // BUG #382 — multi-org guard: if any scooter belongs to a different org than the
+  // configured OMNI_ORG_ID, abort rather than stamp all their data with the wrong org_id.
+  // This is a safe outage instead of silent cross-tenant data corruption.
+  const distinctOrgIds = new Set(scooters.map((s) => s.orgId).filter(Boolean));
+  const foreignOrgs = [...distinctOrgIds].filter((id) => id !== ORG_ID);
+  if (foreignOrgs.length > 0) {
+    return finalize(res, db, {
+      trigger, triggeredByUid, startedAt,
+      ok: false,
+      errorMessage: `Multi-org Hopp sync not yet supported — aborting to prevent cross-tenant corruption; deploy per-org cron first. Foreign orgIds detected: ${foreignOrgs.join(', ')}`,
+    });
+  }
+
   // ── Bulk pull: ONE call per tool (no scooterId), SEQUENTIAL ──────
   // Hopp's list_trips + list_repair_events each return ALL scooters in a single
   // call, so we no longer fan out 3 × N requests. Sequential (not parallel) on
@@ -134,10 +163,11 @@ export default async function handler(req, res) {
   // made them stampede the token rotation → mass 401 ("all candidates failed").
   // The first call refreshes the token; the next reuses it.
   //
-  // list_status_events is intentionally NOT pulled: the Hopp operator account
-  // lacks the vehicleEvents privilege (returns NOT_AUTHORIZED) and that query is
-  // per-scooter only. Telemetry keeps flowing via the PME CSV importer — re-enable
-  // here (per-scooter) once Hopp grants the privilege.
+  // list_status_events is per-scooter only (no bulk endpoint — confirmed by
+  // hopp-mcp-client.js and backfill-hopp-history.mjs). It was disabled in commit
+  // a33f45a because #315 returned NOT_AUTHORIZED. #315 is now RESOLVED (2026-05-29):
+  // the root cause was our own bug (missing getVehicleByCode() lookup) not a Hopp
+  // privilege gap. Re-enabled below (per-scooter, sequential). See #368.
   const range = { since: since.toISOString(), until: until.toISOString() };
   const aggregated = { trips: [], events: [], tickets: [], errors: [] };
   let pullsOk = 0;
@@ -164,6 +194,40 @@ export default async function handler(req, res) {
     aggregated.errors.push({ tool: 'list_repair_events', error: String(err?.message || err) });
   }
 
+  // ── Per-scooter sequential pull: list_status_events (#368 re-enable) ──────
+  // No bulk endpoint exists — must be called once per scooter. Sequential (not
+  // parallel) for the same rotating-token reason as the bulk calls above.
+  // A per-scooter failure pushes to aggregated.errors and continues (does NOT
+  // abort the run or affect pullsOk — events are additive, not required for a
+  // successful sync). City is injected from scooterCityMap before write to
+  // match the backfill pattern (backfill-hopp-history.mjs:214).
+  {
+    let eventsOk = 0;
+    for (const [scooterId] of scooterCityMap) {
+      try {
+        const r = await callHoppTool('list_status_events', { scooterId, ...range });
+        const evts = Array.isArray(r?.events) ? r.events : [];
+        const city = scooterCityMap.get(scooterId) || null;
+        aggregated.events.push(...evts.map((evt) => ({ ...evt, city, scooterId })));
+        eventsOk++;
+        if (Array.isArray(r?.errors) && r.errors.length) {
+          aggregated.errors.push(
+            ...r.errors.map((e) => ({ tool: 'list_status_events', scooterId, error: String(e) })),
+          );
+        }
+      } catch (err) {
+        aggregated.errors.push({
+          tool: 'list_status_events',
+          scooterId,
+          error: String(err?.message || err),
+        });
+      }
+    }
+    console.log(
+      `[cron-hopp-sync] list_status_events: ${eventsOk}/${scooterCityMap.size} scooters ok, ${aggregated.events.length} events collected`,
+    );
+  }
+
   // If EVERY Hopp pull failed (e.g. the refresh token is exhausted), this is a HARD failure —
   // report ok:false so the UI shows a real error (not "up to date — nothing new") and the cron
   // failure-alert fires, instead of silently logging a green zero-data sync.
@@ -184,9 +248,11 @@ export default async function handler(req, res) {
   try {
     // Existing-ID lookups for dedup counting (best-effort; not strictly necessary
     // since batch.set is idempotent — we just want accurate `duplicates` reporting)
-    written.trips    = await writeBatch(db, COLLECTIONS.trips,              aggregated.trips,    { merge: true, stampField: '_importedAt' });
-    written.events   = await writeBatch(db, COLLECTIONS.telemetryEvents,    aggregated.events,   { merge: false, stampField: 'createdAt' });
-    written.tickets  = await writeBatch(db, COLLECTIONS.maintenanceTickets, aggregated.tickets,  { merge: true, stampField: 'updatedAt' });
+    // BUG #382 — stamp orgId into every Firestore doc so docs are org-scoped (SCHEMA.md: orgId field).
+    const stampOrg = (items) => items.map((item) => ({ ...item, orgId: ORG_ID }));
+    written.trips    = await writeBatch(db, COLLECTIONS.trips,              stampOrg(aggregated.trips),   { merge: true, stampField: '_importedAt' });
+    written.events   = await writeBatch(db, COLLECTIONS.telemetryEvents,    stampOrg(aggregated.events),  { merge: false, stampField: 'createdAt' });
+    written.tickets  = await writeBatch(db, COLLECTIONS.maintenanceTickets, stampOrg(aggregated.tickets), { merge: true, stampField: 'updatedAt' });
 
     // Revenue rollup — #172: rollup now returns { rows, errors }
     const { rows: revenueRows, errors: rollupErrors } = rollupTripsToRevenue(
@@ -198,7 +264,7 @@ export default async function handler(req, res) {
     written.revenueDays = await writeBatch(
       db,
       COLLECTIONS.revenue,
-      revenueRows.map((r) => ({ ...r.data, _docId: r.docId })),
+      revenueRows.map((r) => ({ ...r.data, orgId: ORG_ID, _docId: r.docId })),
       { merge: true, stampField: 'lastSyncedAt' },
     );
 

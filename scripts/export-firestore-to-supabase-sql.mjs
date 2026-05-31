@@ -20,12 +20,16 @@
 import admin from 'firebase-admin';
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { toSupabaseRow, SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
 
+const __filename = fileURLToPath(import.meta.url);
+
 const args = process.argv.slice(2);
-const flag = (n, d = null) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
+const flag = (n, d = null) => { const i = args.indexOf(n); const v = args[i + 1]; return i >= 0 && v !== undefined && !v.startsWith('--') ? v : d; };
 const ORG_ID = flag('--org-id', 'mg-executive-org');
 const BATCH = Number(flag('--batch', '500'));
+if (!Number.isFinite(BATCH) || BATCH <= 0) throw new Error('--batch must be a positive integer');
 const ONLY = (flag('--only') || 'scooterTrips,sprEvents,sprWeather,revenue').split(',').map((s) => s.trim()).filter(Boolean);
 
 // Column list + Postgres types per table (the jsonb_to_recordset AS-clause).
@@ -72,7 +76,9 @@ function normalizeDates(row, cols) {
     if (v === null || v === undefined || v === '') { row[name] = null; continue; }
     const d = new Date(v);
     if (Number.isNaN(d.getTime())) { row[name] = null; continue; }
-    row[name] = type === 'date' ? d.toISOString().slice(0, 10) : d.toISOString();
+    row[name] = type === 'date'
+      ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Athens' })
+      : d.toISOString();
   }
   return row;
 }
@@ -108,7 +114,12 @@ async function main() {
     const table = SUPABASE_TABLE[coll];
     if (!table) { console.warn(`⚠️  unknown collection "${coll}" — skipping`); continue; }
     const snap = await db.collection(coll).get(); // 1 read/doc against Spark quota
-    const rows = snap.docs.map((d) => normalizeDates(toSupabaseRow(coll, ORG_ID, d.id, d.data()), COLS[table]));
+    const rows = snap.docs.map((d) => {
+      const docData = d.data();
+      const effectiveOrgId = docData.orgId || ORG_ID;
+      if (!docData.orgId) console.warn(`⚠️  doc ${d.id} missing orgId field — falling back to CLI flag "${ORG_ID}"`);
+      return normalizeDates(toSupabaseRow(coll, effectiveOrgId, d.id, docData), COLS[table]);
+    });
     let files = 0;
     for (let i = 0; i < rows.length; i += BATCH) {
       const part = String(files).padStart(3, '0');
@@ -127,4 +138,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => { console.error('\n❌ export failed:', e.message); process.exit(1); });
+// Export pure utilities for unit testing (importers get no Firebase side-effects).
+export { normalizeDates };
+
+if (process.argv[1] === __filename) {
+  main().catch((e) => { console.error('\n❌ export failed:', e.message); process.exit(1); });
+}

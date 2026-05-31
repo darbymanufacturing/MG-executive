@@ -11,6 +11,7 @@ import {
   filterByRange,
   filterRevenueByLocation,
   revenuePerCityBreakdown,
+  dailyRevenueTrend,
 } from '../revenueCalculations.js';
 
 const FIN_DEFAULTS = {
@@ -238,5 +239,75 @@ describe('revenuePerCityBreakdown', () => {
     expect(result[0].activeScooters).toBe(2);
     expect(result[1].activeScooters).toBe(1);
     expect(result[1].totalScooters).toBe(2);
+  });
+});
+
+describe('dailyRevenueTrend', () => {
+  // January 2026 has 31 days.
+  // A monthly cost of €310 → recurringDailyRate = 310 / 31 = 10 exactly.
+  // one-time costs have monthlyMultiplier: 0, so they do NOT enter totalMonthlyCost.
+
+  const MONTHLY_COST_310 = [{ frequency: 'monthly', amount: 310, category: 'ops' }];
+
+  test('one-time cost appears in full only on its startDate', () => {
+    const costs = [
+      ...MONTHLY_COST_310,
+      { frequency: 'one-time', amount: 1200, startDate: '2026-01-10', category: 'insurance' },
+    ];
+    const result = dailyRevenueTrend([], costs, '2026-01');
+
+    expect(result).toHaveLength(31);
+
+    // Day 10 should carry the recurring rate + the full one-time amount
+    const day10 = result.find((r) => r.date === '2026-01-10');
+    expect(day10.costRate).toBeCloseTo(10 + 1200); // 1210
+
+    // All other days should carry only the recurring rate
+    result
+      .filter((r) => r.date !== '2026-01-10')
+      .forEach((r) => {
+        expect(r.costRate).toBeCloseTo(10);
+      });
+  });
+
+  test('monthly cost is spread evenly across all days', () => {
+    const result = dailyRevenueTrend([], MONTHLY_COST_310, '2026-01');
+    expect(result).toHaveLength(31);
+    result.forEach((r) => {
+      expect(r.costRate).toBeCloseTo(10); // 310 / 31
+    });
+  });
+
+  test('one-time cost outside selected month contributes nothing', () => {
+    const costs = [
+      ...MONTHLY_COST_310,
+      { frequency: 'one-time', amount: 500, startDate: '2026-02-05', category: 'other' },
+    ];
+    const result = dailyRevenueTrend([], costs, '2026-01');
+    result.forEach((r) => {
+      expect(r.costRate).toBeCloseTo(10); // Feb cost must not bleed into Jan
+    });
+  });
+
+  test('multiple one-time costs on the same date accumulate', () => {
+    const costs = [
+      ...MONTHLY_COST_310,
+      { frequency: 'one-time', amount: 600, startDate: '2026-01-15', category: 'a' },
+      { frequency: 'one-time', amount: 400, startDate: '2026-01-15', category: 'b' },
+    ];
+    const result = dailyRevenueTrend([], costs, '2026-01');
+    const day15 = result.find((r) => r.date === '2026-01-15');
+    expect(day15.costRate).toBeCloseTo(10 + 600 + 400); // 1010
+  });
+
+  test('profit equals revenue minus costRate per day', () => {
+    const costs = [
+      ...MONTHLY_COST_310,
+      { frequency: 'one-time', amount: 1200, startDate: '2026-01-10', category: 'insurance' },
+    ];
+    const periodRevenue = [{ date: '2026-01-10', totalPaidRevenue: 500, totalTrips: 20 }];
+    const result = dailyRevenueTrend(periodRevenue, costs, '2026-01');
+    const day10 = result.find((r) => r.date === '2026-01-10');
+    expect(day10.profit).toBeCloseTo(500 - (10 + 1200));
   });
 });

@@ -43,7 +43,9 @@ const MCP_TOKEN = process.env.MCP_BEARER_TOKEN;
 const FLEET_START = { Corinth: '2025-03-05', Nafplion: '2025-08-01' };
 const DEFAULT_START = '2025-03-05';            // fallback for unknown city
 const PROGRESS_DOC = 'backfill_state/hopp';
+const COMPLETED_SUBCOLL = 'completed';
 const BATCH_SIZE = 450;
+const ROLLUP_PAGE = 5000;
 const COLLECTIONS = {
   scooters: 'scooters',
   trips: 'scooterTrips',
@@ -53,12 +55,35 @@ const COLLECTIONS = {
 };
 
 // ── Args ──────────────────────────────────────────────────────────────────
+/**
+ * Parse the backfill CLI arguments from an argv slice (default: process.argv.slice(2)).
+ * Exported so tests can call it directly with synthetic argv arrays.
+ */
+export function parseArgs(argv = process.argv.slice(2)) {
+  const COMMIT      = argv.includes('--commit');
+  const RESET       = argv.includes('--reset');
+  const ROLLUP_ONLY = argv.includes('--rollup-revenue');
+
+  const onlyIdx = argv.indexOf('--only');
+  const onlyVal = onlyIdx >= 0 ? argv[onlyIdx + 1] : undefined;
+  const ONLY = (onlyVal && !onlyVal.startsWith('--')) ? onlyVal : null;
+
+  const mwIdx = argv.indexOf('--max-writes');
+  let MAX_WRITES = 15000;
+  if (mwIdx >= 0) {
+    const n = parseInt(argv[mwIdx + 1], 10);
+    if (!Number.isFinite(n) || n <= 0) {
+      console.warn(`[warn] --max-writes value "${argv[mwIdx + 1]}" is invalid; defaulting to 15000`);
+    } else {
+      MAX_WRITES = n;
+    }
+  }
+
+  return { COMMIT, RESET, ROLLUP_ONLY, ONLY, MAX_WRITES };
+}
+
 const args = process.argv.slice(2);
-const COMMIT       = args.includes('--commit');
-const RESET        = args.includes('--reset');
-const ROLLUP_ONLY  = args.includes('--rollup-revenue');
-const ONLY         = (() => { const i = args.indexOf('--only'); return i >= 0 ? args[i + 1] : null; })();
-const MAX_WRITES   = (() => { const i = args.indexOf('--max-writes'); return i >= 0 ? parseInt(args[i + 1], 10) : 15000; })();
+const { COMMIT, RESET, ROLLUP_ONLY, ONLY, MAX_WRITES } = parseArgs(args);
 
 let writesThisRun = 0;
 
@@ -148,21 +173,51 @@ async function writeDocs(db, collection, items, { merge, stamp, injectCity }) {
     }
     if (COMMIT) await batch.commit();
   }
-  writesThisRun += n;
+  if (COMMIT) writesThisRun += n;
   return n;
 }
 
 // ── Phase 2: revenue rollup from backfilled scooterTrips ────────────────────
 async function rollupRevenue(db, scooterCityMap) {
   console.log('\n=== Phase 2: revenue rollup from scooterTrips ===');
-  const snap = await db.collection(COLLECTIONS.trips).get();
-  const trips = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
-  console.log(`Read ${trips.length} trips from scooterTrips.`);
-  const { rows, errors } = rollupTripsToRevenue(trips, scooterCityMap, '2025-01-01T00:00:00Z', new Date().toISOString());
-  if (errors.length) console.warn(`  ${errors.length} trips skipped (unknown scooter): ${errors.slice(0, 3).join('; ')}…`);
-  console.log(`  → ${rows.length} daily revenue rows.`);
+  const accum = new Map();   // docId → { docId, data }
+  let cursor = null;
+  let totalTrips = 0;
+  let pageCount = 0;
+
+  while (true) {
+    let q = db.collection(COLLECTIONS.trips).orderBy('startedAt').limit(ROLLUP_PAGE);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    pageCount++;
+
+    const trips = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+    totalTrips += trips.length;
+    console.log(`  Page ${pageCount}: read ${trips.length} trips (${totalTrips} total so far)…`);
+
+    if (trips.length > 0) {
+      const { rows, errors } = rollupTripsToRevenue(trips, scooterCityMap, '2025-01-01T00:00:00Z', new Date().toISOString());
+      if (errors.length) console.warn(`    ${errors.length} trips skipped (unknown scooter): ${errors.slice(0, 3).join('; ')}…`);
+      for (const r of rows) {
+        const existing = accum.get(r.docId);
+        if (!existing) {
+          accum.set(r.docId, { docId: r.docId, data: { ...r.data } });
+        } else {
+          existing.data.totalPaidRevenue  = (existing.data.totalPaidRevenue  || 0) + (r.data.totalPaidRevenue  || 0);
+          existing.data.totalTrips        = (existing.data.totalTrips        || 0) + (r.data.totalTrips        || 0);
+          existing.data.totalTripDistanceKm = (existing.data.totalTripDistanceKm || 0) + (r.data.totalTripDistanceKm || 0);
+          existing.data.uniqueVehiclesCount = (existing.data.uniqueVehiclesCount || 0) + (r.data.uniqueVehiclesCount || 0);
+        }
+      }
+    }
+
+    if (snap.size < ROLLUP_PAGE) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+
+  console.log(`Read ${totalTrips} trips total across ${pageCount} page(s). → ${accum.size} daily revenue rows.`);
   const n = await writeDocs(db, COLLECTIONS.revenue,
-    rows.map((r) => ({ ...r.data, _docId: r.docId })), { merge: true, stamp: 'lastSyncedAt' });
+    [...accum.values()].map((r) => ({ ...r.data, _docId: r.docId })), { merge: true, stamp: 'lastSyncedAt' });
   console.log(`  ${COMMIT ? 'Wrote' : '[dry-run] would write'} ${n} revenue rows.`);
 }
 
@@ -183,9 +238,19 @@ async function main() {
 
   // Progress (resume support).
   const progRef = db.doc(PROGRESS_DOC);
-  if (RESET && COMMIT) { await progRef.delete().catch(() => {}); console.log('Progress reset.'); }
+  if (RESET && COMMIT) {
+    const completedDocs = await progRef.collection(COMPLETED_SUBCOLL).listDocuments();
+    if (completedDocs.length) {
+      const b = db.batch();
+      completedDocs.forEach((ref) => b.delete(ref));
+      await b.commit();
+    }
+    await progRef.delete().catch(() => {});
+    console.log('Progress reset.');
+  }
   const progSnap = await progRef.get();
-  const done = new Set((progSnap.exists && progSnap.data().completed) || []);
+  const completedSnap = await progRef.collection(COMPLETED_SUBCOLL).get();
+  const done = new Set(completedSnap.docs.map((d) => d.id));
   const totals = (progSnap.exists && progSnap.data().totals) || { trips: 0, tickets: 0, events: 0 };
   console.log(`${done.size} scooter-months already completed.`);
 
@@ -218,7 +283,12 @@ async function main() {
           ` | run writes=${writesThisRun}`);
 
         done.add(key);
-        if (COMMIT) await progRef.set({ completed: [...done], totals, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        if (COMMIT) {
+          const cpBatch = db.batch();
+          cpBatch.set(progRef.collection(COMPLETED_SUBCOLL).doc(key), { ts: admin.firestore.FieldValue.serverTimestamp() });
+          cpBatch.set(progRef, { totals, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+          await cpBatch.commit();
+        }
       } catch (err) {
         console.error(`  !! ${key}: ${err.message}`);
         // Stop cleanly (don't spin through errors) on the two expected fatal conditions — both resumable.

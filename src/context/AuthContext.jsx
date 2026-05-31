@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -9,6 +9,7 @@ import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { authedFetch } from '../utils/apiClient.js';
+import { useToast } from './ToastContext.jsx';
 
 const AuthContext = createContext(null);
 
@@ -33,6 +34,12 @@ export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [claimsSyncing, setClaimsSyncing] = useState(false);
+  const { error: toastError } = useToast();
+
+  // Keep a stable ref to syncClaims so the onSnapshot closure can call it
+  // without needing to be re-created when syncClaims is redefined below.
+  const syncClaimsRef = useRef(null);
 
   useEffect(() => {
     let profileUnsub = null;
@@ -52,12 +59,55 @@ export function AuthProvider({ children }) {
       }
 
       const userRef = doc(db, 'users', firebaseUser.uid);
-      profileUnsub = onSnapshot(userRef, (snap) => {
+      profileUnsub = onSnapshot(userRef, async (snap) => {
         // #15 — never auto-provision a role. A signed-in user with no users/{uid}
         // doc gets userProfile=null → no access (gated in App.jsx). Accounts are
         // created only by an admin via createTechnicianAccount. Clear authLoading
         // either way so the app never hangs on a missing doc.
         setUserProfile(snap.exists() ? snap.data() : null);
+
+        // #428 — If no profile doc, skip claim check (NoAccessScreen gate handles it).
+        if (!snap.exists()) {
+          setAuthLoading(false);
+          return;
+        }
+
+        // #428 — Verify JWT claims match the Firestore profile before clearing
+        // authLoading. Stale or absent claims (first sign-in, role change) cause
+        // every useOrgCollection Firestore query to be rejected by security rules.
+        try {
+          const tokenResult = await firebaseUser.getIdTokenResult();
+          const { orgId: claimOrgId, role: claimRole } = tokenResult.claims;
+          const { orgId: profileOrgId, role: profileRole } = snap.data();
+
+          const claimsMatch =
+            claimOrgId === profileOrgId && claimRole === profileRole;
+
+          if (!claimsMatch) {
+            // Claims are absent or stale — sync them before letting the shell mount.
+            setClaimsSyncing(true);
+            try {
+              if (syncClaimsRef.current) await syncClaimsRef.current();
+            } catch (syncErr) {
+              // Sync failed (transient network / server error). Surface a toast so
+              // the user knows, but still clear loading — the shell will render and
+              // Firestore rules will reject individual queries gracefully.
+              toastError(
+                'Could not update account permissions. Some features may be unavailable.'
+              );
+            } finally {
+              setClaimsSyncing(false);
+            }
+          }
+          // Claims already match — happy path, no extra round-trip needed.
+        } catch (_tokenErr) {
+          // getIdTokenResult() failed (offline, revoked token, etc.).
+          // Don't block the UI — proceed and let Firestore rules enforce access.
+          toastError(
+            'Could not verify account permissions. Some features may be unavailable.'
+          );
+        }
+
         setAuthLoading(false);
       });
     });
@@ -66,6 +116,7 @@ export function AuthProvider({ children }) {
       authUnsub();
       if (profileUnsub) profileUnsub();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // #15 — first-login auto-provisioning REMOVED. It used to create a users/{uid}
@@ -119,6 +170,10 @@ export function AuthProvider({ children }) {
     return res.json();
   };
 
+  // #428 — Keep the ref in sync so the onSnapshot closure (which captures this
+  // ref at mount time) always calls the latest syncClaims for the current user.
+  syncClaimsRef.current = syncClaims;
+
   // Admin-only: create a crew/staff account without signing out the current admin.
   // Uses the Firebase Auth REST API so the current session is unaffected.
   // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
@@ -165,7 +220,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, authLoading, userRole, userProfile,
+      user, authLoading, claimsSyncing, userRole, userProfile,
       signIn, signUp, signOut, createTechnicianAccount,
       refreshClaims, syncClaims,
     }}>

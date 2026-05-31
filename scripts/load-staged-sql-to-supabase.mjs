@@ -21,7 +21,7 @@ import { join, resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 const args = process.argv.slice(2);
-const flag = (n, d = null) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
+const flag = (n, d = null) => { const i = args.indexOf(n); const v = args[i + 1]; return i >= 0 && v !== undefined && !v.startsWith('--') ? v : d; };
 const DIR = flag('--dir');
 const ONLY_TABLE = flag('--table');
 if (!DIR) { console.error('Required: --dir <export-dir>'); process.exit(1); }

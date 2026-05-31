@@ -8,6 +8,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const txUpdateMock = vi.fn();
+
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({ __ref: 'collection' })),
   doc: vi.fn((_db, col, id) => ({ __ref: 'doc', col, id })),
@@ -16,11 +18,16 @@ vi.mock('firebase/firestore', () => ({
   updateDoc: vi.fn(() => Promise.resolve()),
   deleteDoc: vi.fn(() => Promise.resolve()),
   serverTimestamp: vi.fn(() => '__SERVER_TS__'),
+  runTransaction: vi.fn(async (_db, fn) => {
+    // Simulate a Firestore transaction: call fn with a mock tx object
+    const snap = { exists: () => true, data: () => ({ phases: [{ id: 'ph-1', number: 1 }] }) };
+    const tx = { get: vi.fn(() => Promise.resolve(snap)), update: txUpdateMock };
+    return fn(tx);
+  }),
 }));
 
 vi.mock('../../lib/firebase.js', () => ({
   db: { __db: true },
-  auth: { currentUser: { uid: 'user-1' } },
 }));
 
 // Pass-through safeWrite: invoke the writer so the firestore mock is exercised.
@@ -28,12 +35,12 @@ vi.mock('../../utils/firestoreWrite.js', () => ({
   safeWrite: vi.fn(async (writer) => ({ ok: true, data: await writer() })),
 }));
 
-import { addDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { orgWrite, orgUpdate, orgDelete, setActiveOrg, getActiveOrg } from '../orgWrite.js';
+import { addDoc, setDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { orgWrite, orgUpdate, orgDelete, orgTransaction, setActiveOrg, getActiveOrg } from '../orgWrite.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  setActiveOrg('org-A');
+  setActiveOrg('org-A', 'user-1');
 });
 
 describe('orgWrite — leak-proof create', () => {
@@ -112,5 +119,53 @@ describe('setActiveOrg / getActiveOrg', () => {
     expect(getActiveOrg()).toBe('org-B');
     setActiveOrg(null);
     expect(getActiveOrg()).toBe(null);
+  });
+});
+
+describe('orgTransaction — atomic array mutation', () => {
+  it('passes current server doc data to the mutator', async () => {
+    let receivedData;
+    await orgTransaction('projects', 'proj-1', (data) => {
+      receivedData = data;
+      return { phases: [...data.phases, { id: 'ph-2', number: 2 }] };
+    });
+    // The mock snap returns { phases: [{ id: 'ph-1', number: 1 }] }
+    expect(receivedData).toEqual({ phases: [{ id: 'ph-1', number: 1 }] });
+  });
+
+  it('writes patched fields plus updatedAt via tx.update', async () => {
+    await orgTransaction('projects', 'proj-1', (data) => {
+      return { phases: [...data.phases, { id: 'ph-2', number: 2 }] };
+    });
+    expect(txUpdateMock).toHaveBeenCalledTimes(1);
+    const [, patch] = txUpdateMock.mock.calls[0];
+    expect(patch).toMatchObject({
+      phases: [{ id: 'ph-1', number: 1 }, { id: 'ph-2', number: 2 }],
+      updatedAt: '__SERVER_TS__',
+    });
+  });
+
+  it('throws ADR-0003 error and never calls runTransaction when no org is active', async () => {
+    setActiveOrg(null);
+    await expect(
+      orgTransaction('projects', 'proj-1', () => ({ phases: [] })),
+    ).rejects.toThrow(/no active orgId/);
+    expect(runTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('bug #425 — uid sync via setActiveOrg', () => {
+  it('after setActiveOrg(null, null), orgWrite throws and addDoc is never called', async () => {
+    setActiveOrg(null, null);
+    await expect(orgWrite('costs', { name: 'x' })).rejects.toThrow(/no active orgId/);
+    expect(addDoc).not.toHaveBeenCalled();
+  });
+
+  it('orgWrite stamps createdByUid from setActiveOrg, not auth.currentUser', async () => {
+    // Set provider uid and verify it is used over any stale Firebase global
+    setActiveOrg('org-A', 'provider-uid');
+    await orgWrite('costs', { name: 'y' });
+    const payload = addDoc.mock.calls[0][1];
+    expect(payload.createdByUid).toBe('provider-uid');
   });
 });

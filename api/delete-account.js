@@ -49,7 +49,10 @@ export default async function handler(req, res) {
   const orgRef = db.collection('organizations').doc(orgId);
   const orgSnap = await orgRef.get();
   const org = orgSnap.exists ? orgSnap.data() : null;
-  const isOwner = myRole === 'owner' || org?.ownerUid === authUser.uid;
+  // SECURITY: ownerUid is the sole authoritative ownership field (server-maintained).
+  // myRole is a denormalized UX hint that can be stale (e.g. after a transfer) — never
+  // use it alone as an ownership gate, or a former owner can still delete/transfer the org.
+  const isOwner = org?.ownerUid === authUser.uid;
 
   // Count org members + admins (for the owner-must-nominate / sole-owner logic).
   const membersSnap = await db.collection('users').where('orgId', '==', orgId).get();
@@ -105,10 +108,34 @@ export default async function handler(req, res) {
         if (successor.role !== 'admin' && successor.role !== 'owner') {
           return res.status(400).json({ error: 'Ownership can only be transferred to an admin.' });
         }
-        // Promote successor to owner, set org.ownerUid, then remove the departing owner.
-        await db.collection('users').doc(successorUid).update({ role: 'owner' });
-        await orgRef.update({ ownerUid: successorUid, members: FieldValue.arrayRemove(authUser.uid) });
-        await db.collection('users').doc(authUser.uid).delete();
+        // TOCTOU fix: wrap all Firestore writes in a single transaction so they are atomic.
+        // If any write fails (contention, network) the entire set rolls back — we never end
+        // up with two effective owners (successor's role='owner' but org.ownerUid unchanged).
+        // The re-reads inside the transaction re-validate ownership and successor eligibility
+        // against the live state, closing the window between the outer read and the writes.
+        const successorRef = db.collection('users').doc(successorUid);
+        const meRef = db.collection('users').doc(authUser.uid);
+        await db.runTransaction(async (tx) => {
+          const [txOrgSnap, txSuccessorSnap] = await Promise.all([
+            tx.get(orgRef),
+            tx.get(successorRef),
+          ]);
+          // Re-validate ownership inside the transaction (TOCTOU guard).
+          if (!txOrgSnap.exists || txOrgSnap.data().ownerUid !== authUser.uid) {
+            throw Object.assign(new Error('You are no longer the owner of this organization.'), { status: 403 });
+          }
+          // Re-validate successor eligibility inside the transaction.
+          const txSuccessorRole = txSuccessorSnap.exists ? txSuccessorSnap.data().role : null;
+          if (txSuccessorRole !== 'admin' && txSuccessorRole !== 'owner') {
+            throw Object.assign(new Error('Ownership can only be transferred to an admin.'), { status: 400 });
+          }
+          tx.update(successorRef, { role: 'owner' });
+          tx.update(orgRef, { ownerUid: successorUid, members: FieldValue.arrayRemove(authUser.uid) });
+          tx.delete(meRef);
+        });
+        // Auth deletion is a non-Firestore side effect — keep outside the transaction.
+        // The profile doc deletion (inside the transaction) is the actual access-control cut;
+        // Auth deletion is best-effort (orphaned Auth accounts are harmless without a profile).
         await getAuth().deleteUser(authUser.uid).catch(() => {});
         // NOTE: the successor must call /api/sync-claim (or re-login) to refresh their owner claim.
         return res.status(200).json({
@@ -158,6 +185,9 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('delete-account error:', err);
-    return res.status(500).json({ error: err.message || 'Account deletion failed' });
+    // Transaction aborts throw errors with a .status field (403/400) when the business
+    // invariant check fails inside the transaction — propagate those as-is.
+    const httpStatus = typeof err.status === 'number' ? err.status : 500;
+    return res.status(httpStatus).json({ error: err.message || 'Account deletion failed' });
   }
 }

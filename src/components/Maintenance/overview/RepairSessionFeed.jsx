@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Activity, X, Image } from 'lucide-react';
 import { useRepairSessions } from '../../../context/RepairSessionContext.jsx';
+import { sanitizeCloudinaryUrl } from '../../../utils/sanitizeCloudinaryUrl.js';
 import styles from './RepairSessionFeed.module.css';
 
 function formatDate(iso) {
@@ -60,11 +61,16 @@ function SessionDetail({ session, onClose }) {
                   {s.notes && <p className={styles.detailStepNote}>{s.notes}</p>}
                   {s.photoUrls?.length > 0 && (
                     <div className={styles.photoThumbs}>
-                      {s.photoUrls.map((url, j) => (
-                        <a key={j} href={url} target="_blank" rel="noopener noreferrer">
-                          <img src={url} alt={`Step ${s.stepNumber} photo`} className={styles.photoThumb} />
-                        </a>
-                      ))}
+                      {s.photoUrls.map((url, j) => {
+                        const safeUrl = sanitizeCloudinaryUrl(url);
+                        return safeUrl ? (
+                          <a key={j} href={safeUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={safeUrl} alt={`Step ${s.stepNumber} photo`} className={styles.photoThumb} />
+                          </a>
+                        ) : (
+                          <img key={j} src={url} alt={`Step ${s.stepNumber} photo`} className={styles.photoThumb} />
+                        );
+                      })}
                     </div>
                   )}
                   {!s.notes && !s.photoUrls?.length && (

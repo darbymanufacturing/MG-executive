@@ -22,6 +22,84 @@ function todayLabel() {
   return new Date().toLocaleDateString('en-GB', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
+/**
+ * Pure function that builds the LLM payload from raw context data.
+ * Extracted so it can be unit-tested without rendering the component.
+ * @param {{ issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx }} contexts
+ * @param {Date} now  — injectable for testing
+ * @returns {{ openIssuesCount, activeTicketsCount, revenueThisMonth, costsThisMonth,
+ *             activeProjectsCount, fleetSize, inRepair, overdueTickets,
+ *             completedToday, revenueThisWeek, revenuePrevWeek, dataIsVoid, payload }}
+ */
+export function buildBriefPayload(contexts, now = new Date()) {
+  const { issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx } = contexts;
+
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const openIssuesCount = issueCtx?.activeIssues?.filter(i => i.status !== 'done').length ?? 0;
+  const activeTicketsCount = maintenanceCtx?.tickets?.filter(t => t.status === 'Active').length ?? 0;
+  const revenueThisMonth = (revenueCtx?.revenueData || [])
+    .filter(r => r.date?.startsWith(monthKey))
+    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  const costsThisMonth = (costsCtx?.costs || [])
+    .filter(c => c.startDate?.startsWith(monthKey))
+    .reduce((s, c) => s + (c.amount || 0), 0);
+  const activeProjectsCount = (projectCtx?.projects || [])
+    .filter(p => p.effectiveStatus !== 'archived' && !p.archived).length;
+  const fleetSize = costsCtx?.config?.fleetSize ?? 0;
+
+  // Fix #bug-375: count scooters in repair, not Active+Backlog tickets
+  const inRepair = maintenanceCtx?.scooters?.filter(s => s.status === 'In Repair').length ?? 0;
+
+  // Fix #bug-375: compute overdue tickets (not Completed, open > 7 days)
+  const overdueTickets = (maintenanceCtx?.tickets ?? [])
+    .filter(t => t.status !== 'Completed' && (t.daysOpen ?? 0) > 7)
+    .map(t => ({ issueDescription: t.issueDescription ?? t.title ?? '', daysOpen: t.daysOpen }));
+
+  // Fix #bug-375: tickets completed today
+  const todayDateKey = now.toISOString().slice(0, 10);
+  const completedToday = (maintenanceCtx?.tickets ?? [])
+    .filter(t => t.status === 'Completed' && t.dateCompleted === todayDateKey).length;
+
+  // Fix #bug-375: compute weekly revenue buckets (use UTC midnight to be consistent
+  // with ISO date strings like "2026-06-01" which parse as UTC midnight)
+  const msDay = 86_400_000;
+  const today0 = new Date(now);
+  today0.setUTCHours(0, 0, 0, 0);
+  const todayMs = today0.getTime();
+  const revenueThisWeek = (revenueCtx?.revenueData ?? [])
+    .filter(r => { const d = new Date(r.date).getTime(); return d >= todayMs - 6 * msDay && d <= todayMs; })
+    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  const revenuePrevWeek = (revenueCtx?.revenueData ?? [])
+    .filter(r => { const d = new Date(r.date).getTime(); return d >= todayMs - 13 * msDay && d < todayMs - 6 * msDay; })
+    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+
+  // Fix #bug-375: detect data-void state (all zeroes = pipeline stalled)
+  const dataIsVoid = revenueThisMonth === 0 && costsThisMonth === 0
+    && revenueThisWeek === 0 && inRepair === 0;
+
+  const payload = {
+    openIssues:      issueCtx?.activeIssues ?? [],
+    overdueTickets,
+    activeTickets:   activeTicketsCount,
+    completedToday,
+    openProjects:    projectCtx?.activeProjects ?? [],
+    revenueThisWeek,
+    revenuePrevWeek,
+    revenueThisMonth,
+    costsThisMonth,
+    criticalIssues:  issueCtx?.activeIssues?.filter(i => i.urgency === 'critical').length ?? 0,
+    fleetSize,
+    inRepair,
+  };
+
+  return {
+    openIssuesCount, activeTicketsCount, revenueThisMonth, costsThisMonth,
+    activeProjectsCount, fleetSize, inRepair, overdueTickets,
+    completedToday, revenueThisWeek, revenuePrevWeek, dataIsVoid, payload,
+  };
+}
+
 function parseBriefData(data) {
   const sections = data.sections || [];
   // BUG #161: filter(Boolean) guards against undefined keywords
@@ -100,24 +178,12 @@ export default function DailyBrief() {
     // #400: use org-scoped doc ID so cron-purge can query by orgId on org deletion
     const briefKey = orgId ? orgDocId(orgId, rawBriefKey) : rawBriefKey;
 
-    /* ── Build real payload from contexts (BUG #159) ── */
+    /* ── Build real payload from contexts (BUG #159, #bug-375) ── */
     const now = new Date();
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-    const openIssuesCount = issueCtx?.activeIssues?.filter(i => i.status !== 'done').length ?? 0;
-    const activeTicketsCount = maintenanceCtx?.tickets?.filter(t => t.status === 'Active').length ?? 0;
-    const revenueThisMonth = (revenueCtx?.revenueData || [])
-      .filter(r => r.date?.startsWith(monthKey))
-      .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
-    const costsThisMonth = (costsCtx?.costs || [])
-      .filter(c => c.startDate?.startsWith(monthKey))
-      .reduce((s, c) => s + (c.amount || 0), 0);
-    const activeProjectsCount = (projectCtx?.projects || [])
-      .filter(p => p.effectiveStatus !== 'archived' && !p.archived).length;
-    const fleetSize = costsCtx?.config?.fleetSize ?? 0;
-    const inRepair = maintenanceCtx?.tickets?.filter(
-      t => t.status === 'Active' || t.status === 'Backlog'
-    ).length ?? 0;
+    const { revenueThisMonth, costsThisMonth, dataIsVoid, payload } = buildBriefPayload(
+      { issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx },
+      now,
+    );
 
     async function fetchOrGenerate() {
       try {
@@ -130,7 +196,14 @@ export default function DailyBrief() {
           return;
         }
 
-        /* 2. None found — call API to generate */
+        /* 2. Data-void guard: if all key metrics are zero the pipeline is stalled —
+              don't ask the LLM to narrate over empty numbers (#bug-375) */
+        if (dataIsVoid) {
+          setStatus('error'); // renders BriefUnavailable with retry CTA
+          return;
+        }
+
+        /* 3. None found — call API to generate */
         setStatus('generating');
 
         const res = await authedFetch('/api/daily-brief', {
@@ -139,22 +212,7 @@ export default function DailyBrief() {
           body: JSON.stringify({
             userId: user.uid,
             date: todayKey(),
-            data: {
-              // buildPrompt expects ARRAYS here (it .filter()s + reads titles/names), not counts.
-              // Sending counts threw a TypeError → 500 (brief unavailable). Send the real arrays.
-              openIssues:      issueCtx?.activeIssues ?? [],
-              overdueTickets:  [],
-              activeTickets:   activeTicketsCount,
-              completedToday:  0,
-              openProjects:    projectCtx?.activeProjects ?? [],
-              revenueThisWeek: 0,
-              revenuePrevWeek: 0,
-              revenueThisMonth,
-              costsThisMonth,
-              criticalIssues:  issueCtx?.activeIssues?.filter(i => i.urgency === 'critical').length ?? 0,
-              fleetSize,
-              inRepair,
-            },
+            data: payload,
           }),
         });
 

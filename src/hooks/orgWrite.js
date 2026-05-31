@@ -25,16 +25,22 @@
  * (or re-throws when `opts.rethrow` is set — passed straight through to safeWrite).
  */
 import {
-  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, runTransaction,
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase.js';
+import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 
 let _orgId = null;
+let _userUid = null;
 
-/** Published by OrgProvider whenever the active org changes (or null on sign-out). */
-export function setActiveOrg(orgId) {
+/**
+ * Published by OrgProvider whenever the active org changes (or null on sign-out).
+ * Accepts both orgId and uid atomically so neither can diverge during auth transitions
+ * (fix for bug #425 — stale auth.currentUser read race window).
+ */
+export function setActiveOrg(orgId, uid = null) {
   _orgId = orgId || null;
+  _userUid = uid ?? null;
 }
 
 /** Current active orgId (or null). Mostly for tests / debugging. */
@@ -52,7 +58,7 @@ function requireOrg(op) {
 export async function orgWrite(collectionName, data, opts = {}) {
   const orgId = requireOrg(`create in ${collectionName}`);
   const { id, merge = false, ...writeOpts } = opts;
-  const uid = auth.currentUser?.uid ?? null;
+  const uid = _userUid;
   const payload = {
     ...data,
     orgId,
@@ -85,4 +91,25 @@ export async function orgDelete(collectionName, docId, opts = {}) {
     () => deleteDoc(doc(db, collectionName, docId)),
     { errorMessage: `Failed to delete ${collectionName}`, ...opts },
   );
+}
+
+/**
+ * Atomically read + mutate a project doc using a Firestore transaction.
+ * `mutator(data)` receives the current Firestore doc data (or {} if the doc
+ * doesn't exist) and must return the fields to merge back (plain object, NOT
+ * the full doc). `updatedAt` is stamped automatically.
+ *
+ * Firestore retries contending transactions up to 5 times, so concurrent
+ * writes from multiple tabs are serialized correctly — no stale read-modify-write.
+ * Throws on network failure (matches orgUpdate rethrow:true behaviour).
+ */
+export async function orgTransaction(collectionName, docId, mutator) {
+  requireOrg(`transaction on ${collectionName}/${docId}`);
+  const ref = doc(db, collectionName, docId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists() ? snap.data() : {};
+    const patch = await mutator(data);
+    tx.update(ref, { ...patch, updatedAt: serverTimestamp() });
+  });
 }

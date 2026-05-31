@@ -3,7 +3,7 @@
  *
  * Firestore's managed export (`gcloud firestore export`) requires the Blaze plan.
  * On Spark this script does the equivalent: reads every root collection via the
- * Admin SDK and writes one JSON file per collection to a timestamped folder,
+ * Admin SDK and writes one JSONL file per collection to a timestamped folder,
  * plus a _manifest.json with per-collection counts.
  *
  * Credentials (one of):
@@ -13,17 +13,18 @@
  * Run:
  *   node scripts/backup-firestore.mjs
  *
- * Output: ./backups/firestore-YYYYMMDD-HHMMSS/<collection>.json (+ _manifest.json)
+ * Output: ./backups/firestore-YYYYMMDD-HHMMSS/<collection>.jsonl (+ _manifest.json)
  *
  * ⚠️ Reads every doc once — on Spark this consumes ~(total doc count) of the
  *    50K/day read quota. Run sparingly. Restore with restore-firestore.mjs.
- *    Caveat: backs up ROOT collections only; this app stores nested data as
- *    arrays inside docs (not subcollections), so a flat backup is complete.
- *    If subcollections are ever added, extend this to recurse.
+ *    Subcollections are detected automatically; if any are found the script
+ *    aborts with a FATAL error (extend backupCollection() to recurse if needed).
  */
 import admin from 'firebase-admin';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, appendFileSync } from 'fs';
 import { resolve } from 'path';
+
+const PAGE_SIZE = 500;
 
 function initAdmin() {
   if (admin.apps.length) return;
@@ -53,6 +54,43 @@ function encode(v) {
   return v;
 }
 
+/**
+ * Backup a single collection to a JSONL file using paginated reads.
+ * Keeps memory flat at one page (~PAGE_SIZE docs) at a time.
+ * Also checks each doc for subcollections and aborts if any are found
+ * (extend this function with recursion if subcollections are ever added).
+ */
+async function backupCollection(col, dir, manifestCollections) {
+  const filePath = resolve(dir, `${col.id}.jsonl`);
+  let cursor = null;
+  let count = 0;
+
+  while (true) {
+    let q = col.orderBy('__name__').limit(PAGE_SIZE);
+    if (cursor) q = q.startAfter(cursor);
+    const page = await q.get();
+    if (page.empty) break;
+
+    // Check for subcollections on each doc in this page — fail loud if found.
+    for (const d of page.docs) {
+      const subs = await d.ref.listCollections();
+      if (subs.length) {
+        console.error(`FATAL: subcollection detected under ${col.id}/${d.id} — extend backup script to recurse before running again.`);
+        process.exit(1);
+      }
+    }
+
+    const lines = page.docs.map((d) => JSON.stringify({ id: d.id, data: encode(d.data()) })).join('\n') + '\n';
+    appendFileSync(filePath, lines);
+    count += page.size;
+    cursor = page.docs[page.docs.length - 1];
+    if (page.size < PAGE_SIZE) break;
+  }
+
+  manifestCollections[col.id] = count;
+  return count;
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 
 async function main() {
@@ -65,16 +103,12 @@ async function main() {
 
   console.log(`Backing up to ${dir}\n`);
   const cols = await db.listCollections();
-  const manifest = { createdAt: now.toISOString(), project: 'mg-executive', collections: {}, totalDocs: 0 };
+  const manifest = { createdAt: now.toISOString(), project: 'mg-executive', format: 'jsonl', collections: {}, totalDocs: 0 };
 
   for (const col of cols) {
-    const snap = await col.get();
-    const docs = {};
-    snap.forEach((d) => { docs[d.id] = encode(d.data()); });
-    writeFileSync(resolve(dir, `${col.id}.json`), JSON.stringify(docs, null, 2));
-    manifest.collections[col.id] = snap.size;
-    manifest.totalDocs += snap.size;
-    console.log(`  ${col.id.padEnd(24)} ${snap.size} docs`);
+    const count = await backupCollection(col, dir, manifest.collections);
+    manifest.totalDocs += count;
+    console.log(`  ${col.id.padEnd(24)} ${count} docs`);
   }
 
   writeFileSync(resolve(dir, '_manifest.json'), JSON.stringify(manifest, null, 2));

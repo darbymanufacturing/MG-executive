@@ -85,4 +85,15 @@ describe('useOrgDoc', () => {
     expect(() => renderHook(() => useOrgDoc('config', 'whatever'))).toThrow(/requires an orgId/);
     spy.mockRestore();
   });
+
+  it('never initiates a Firestore subscription for a cross-org prefixed docId (pre-read block)', () => {
+    // Bug #429: the old code called onSnapshot before checking the prefix, causing
+    // a brief window where another org's document was delivered to browser memory.
+    useOrg.mockReturnValue({ orgId: 'org-A', loading: false });
+    const { result } = renderHook(() => useOrgDoc('config', 'org-B_fleet'));
+    // The subscription must be blocked before Firestore is even contacted.
+    expect(onSnapshotMock).not.toHaveBeenCalled();
+    expect(result.current.item).toBe(null);
+    expect(result.current.loading).toBe(false);
+  });
 });

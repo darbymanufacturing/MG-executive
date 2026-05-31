@@ -119,7 +119,10 @@ export function isDayFullyCovered(dateStr, since, until, now = new Date()) {
 }
 
 function isoDate(d) {
-  return d.toISOString().slice(0, 10);
+  const y  = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mm}-${dd}`;
 }
 
 function safeNum(v) {

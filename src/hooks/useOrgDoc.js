@@ -27,6 +27,12 @@ export function useOrgDoc(collectionName, docId) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset to loading when the doc target / org changes
     if (orgLoading || !orgId || !docId) { setLoading(true); return undefined; }
+    // Pre-validate prefix (ADR-0003): refuse to subscribe to another org's doc.
+    if (docId.includes('_') && !docId.startsWith(`${orgId}_`)) {
+      setItem(null);
+      setLoading(false);
+      return undefined;
+    }
     setLoading(true);
     setError(null);
     const unsub = onSnapshot(

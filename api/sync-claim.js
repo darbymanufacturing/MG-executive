@@ -49,6 +49,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'User profile is missing orgId or role — cannot sync claims.' });
   }
 
+  // Cross-check: never mint a privileged claim without verifying against the org doc.
+  if (role === 'owner' || role === 'admin') {
+    const orgSnap = await db.collection('organizations').doc(orgId).get();
+    const org = orgSnap.exists ? orgSnap.data() : null;
+    if (!org) {
+      return res.status(400).json({ error: 'Organization not found — cannot verify role.' });
+    }
+    if (role === 'owner' && org.ownerUid !== targetUid) {
+      return res.status(403).json({ error: 'role:owner claim refused — user is not the org ownerUid.' });
+    }
+    if (role === 'admin' && !(org.members || []).includes(targetUid)) {
+      return res.status(403).json({ error: 'role:admin claim refused — user is not a member of the org.' });
+    }
+  }
+
   // Authorization: self, OR an owner/admin of the SAME org as the target.
   if (targetUid !== caller.uid) {
     const callerSnap = await db.collection('users').doc(caller.uid).get();

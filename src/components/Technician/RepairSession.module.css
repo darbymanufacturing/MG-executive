@@ -294,6 +294,27 @@
 
 .partDropdownSku { font-size: var(--text-xs); color: var(--color-text-muted); flex-shrink: 0; }
 
+/* #421 — out-of-stock item: muted, unclickable */
+.partDropdownItemOutOfStock {
+  color: var(--color-text-muted);
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.partDropdownItemOutOfStock:hover { background: none; }
+
+.partStockLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.partStockLabelOos {
+  font-size: var(--text-xs);
+  color: var(--color-danger, #DC2626);
+  flex-shrink: 0;
+}
+
 /* ── Footer ── */
 .footer {
   position: sticky;

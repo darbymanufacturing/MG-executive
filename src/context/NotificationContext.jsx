@@ -1,7 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { isPowDay } from '../utils/powHelpers.js';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgWrite, orgUpdate } from '../hooks/orgWrite.js';
 
 const NotificationContext = createContext(null);
+
+const NOTIFICATIONS_COL = 'notifications';
 
 /**
  * In-app notification system.
@@ -9,57 +13,106 @@ const NotificationContext = createContext(null);
  *  - badgeCount on the sidebar Projects nav item
  *  - a notifications array for a bell/banner in the top bar
  *
- * Notifications are stored in state only (session-scoped).
+ * Notifications are stored in Firestore (org-scoped, persistent across reloads).
+ * Field shape: { id, type, message, persistent, dismissed, createdAt (ISO string) }
+ * The POW-day notification is client-generated (derived each Monday from isPowDay())
+ * and its dismissed state is persisted as a minimal Firestore doc.
+ *
  * The Projects module pushes notifications via pushNotification().
  * Dismissed notifications stay in history but are marked dismissed.
  */
 export function NotificationProvider({ children }) {
-  const [notifications, setNotifications] = useState([]);
+  // Firestore-backed notifications (org-scoped, real-time)
+  const { items: firestoreNotifications, loading } = useOrgCollection(NOTIFICATIONS_COL, {
+    orderBy: ['createdAt', 'desc'],
+    limit: 500,
+  });
+
+  // Client-generated POW-day notification (derived, not stored in Firestore itself,
+  // but dismissed state is persisted as a Firestore doc).
+  const [powNotification, setPowNotification] = useState(null);
 
   // Seed a POW-day notification on Mondays
   useEffect(() => {
     if (isPowDay()) {
-      setNotifications((prev) => {
-        if (prev.some((n) => n.id === '__pow_day__')) return prev;
-        return [
-          {
-            id: '__pow_day__',
-            type: 'pow',
-            message: 'Today is POW day — log your Progress of Week entries.',
-            persistent: true,
-            dismissed: false,
-            createdAt: new Date().toISOString(),
-          },
-          ...prev,
-        ];
+      setPowNotification({
+        id: '__pow_day__',
+        type: 'pow',
+        message: 'Today is POW day — log your Progress of Week entries.',
+        persistent: true,
+        dismissed: false,
+        createdAt: new Date().toISOString(),
+        _clientGenerated: true,
       });
     }
   }, []);
 
-  const pushNotification = useCallback((notification) => {
-    setNotifications((prev) => {
-      // Avoid exact duplicates by id
-      if (notification.id && prev.some((n) => n.id === notification.id)) return prev;
-      return [
-        {
-          dismissed: false,
-          createdAt: new Date().toISOString(),
-          ...notification,
-        },
-        ...prev,
-      ];
+  // Merge client-generated POW notification with its Firestore dismissed state
+  const powFirestoreDoc = useMemo(
+    () => firestoreNotifications.find((n) => n.id === '__pow_day__'),
+    [firestoreNotifications],
+  );
+
+  // Build combined notifications list: POW first (if active day), then Firestore docs
+  // (excluding any Firestore doc whose id === '__pow_day__' — that's just the dismissed flag store)
+  const notifications = useMemo(() => {
+    const fsNotifs = firestoreNotifications.filter((n) => n.id !== '__pow_day__');
+    if (!powNotification) return fsNotifs;
+    // Merge dismissed state from Firestore into the client-generated POW notification
+    const mergedPow = powFirestoreDoc
+      ? { ...powNotification, dismissed: powFirestoreDoc.dismissed, _docId: powFirestoreDoc._docId }
+      : powNotification;
+    return [mergedPow, ...fsNotifs];
+  }, [firestoreNotifications, powNotification, powFirestoreDoc]);
+
+  const pushNotification = useCallback(async (notification) => {
+    // Dedup: avoid writing if a notification with the same logical id already exists
+    if (notification.id && firestoreNotifications.some((n) => n.id === notification.id)) return;
+    await orgWrite(NOTIFICATIONS_COL, {
+      ...notification,
+      dismissed: false,
+      createdAt: notification.createdAt ?? new Date().toISOString(),
     });
-  }, []);
+  }, [firestoreNotifications]);
 
-  const dismissNotification = useCallback((id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, dismissed: true } : n)),
+  const dismissNotification = useCallback(async (id) => {
+    if (id === '__pow_day__') {
+      // POW-day: persist dismissed state to Firestore (upsert at a stable doc id)
+      if (powFirestoreDoc) {
+        await orgUpdate(NOTIFICATIONS_COL, powFirestoreDoc._docId, { dismissed: true });
+      } else {
+        // Write the minimal dismissed marker for the first time
+        await orgWrite(NOTIFICATIONS_COL, {
+          id: '__pow_day__',
+          dismissed: true,
+          createdAt: new Date().toISOString(),
+        }, { id: '__pow_day__', merge: true });
+      }
+      // Optimistically update local state so UI reflects immediately
+      setPowNotification((prev) => prev ? { ...prev, dismissed: true } : prev);
+      return;
+    }
+
+    // For Firestore-backed notifications, look up _docId by logical id field
+    const notif = firestoreNotifications.find((n) => n.id === id);
+    if (notif?._docId) {
+      await orgUpdate(NOTIFICATIONS_COL, notif._docId, { dismissed: true });
+    }
+  }, [firestoreNotifications, powFirestoreDoc]);
+
+  const dismissAll = useCallback(async () => {
+    // Dismiss POW-day if present and not dismissed
+    if (powNotification && !powNotification.dismissed) {
+      await dismissNotification('__pow_day__');
+    }
+    // Dismiss all Firestore notifications that are not yet dismissed
+    const active = firestoreNotifications.filter(
+      (n) => n.id !== '__pow_day__' && !n.dismissed && n._docId,
     );
-  }, []);
-
-  const dismissAll = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, dismissed: true })));
-  }, []);
+    await Promise.all(
+      active.map((n) => orgUpdate(NOTIFICATIONS_COL, n._docId, { dismissed: true })),
+    );
+  }, [firestoreNotifications, powNotification, dismissNotification]);
 
   const activeNotifications = useMemo(
     () => notifications.filter((n) => !n.dismissed),
@@ -74,6 +127,7 @@ export function NotificationProvider({ children }) {
         activeNotifications,
         badgeCount,
         unreadCount: badgeCount, /* Omni alias */
+        loading,
         pushNotification,
         dismissNotification,
         dismissAll,

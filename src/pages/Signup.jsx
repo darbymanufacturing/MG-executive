@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, Building2, Loader2, AlertCircle } from 'lucide-react';
-import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext.jsx';
 import { auth, db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -36,9 +36,16 @@ export default function Signup() {
     setError('');
     if (!orgName.trim()) { setError('Please enter your company or organization name.'); return; }
     setLoading(true);
+
+    // Rollback trackers — set after each step succeeds so the catch block
+    // knows exactly what to undo if a later step fails.
+    let authCreated = false;
+    let orgDocId = null;
+
     try {
       // 1. Create the auth user (this also signs them in).
       await signUp(email, password);
+      authCreated = true;
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error('Sign-up succeeded but no session was created. Please try signing in.');
 
@@ -58,6 +65,7 @@ export default function Signup() {
         }),
         { rethrow: true, errorMessage: 'Could not create your organization. Please try again.' },
       );
+      orgDocId = orgId;
 
       // 3. Create the owner profile — the UI + claims source of truth (ADR-0004).
       await safeWrite(
@@ -78,6 +86,15 @@ export default function Signup() {
       // 5. Into the onboarding wizard.
       navigate('/onboarding', { replace: true });
     } catch (err) {
+      // Rollback: delete org doc first (while auth session is still valid),
+      // then delete the Auth user. Errors are swallowed so the original error
+      // message is still surfaced to the user.
+      if (orgDocId) {
+        try { await deleteDoc(doc(db, 'organizations', orgDocId)); } catch (_) {}
+      }
+      if (authCreated && auth.currentUser) {
+        try { await auth.currentUser.delete(); } catch (_) {}
+      }
       setError(err.message || 'Something went wrong creating your account.');
       setLoading(false);
     }

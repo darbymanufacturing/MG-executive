@@ -61,26 +61,7 @@ ${criticalIssuesList.length ? `- Critical/high issues:\n${criticalIssuesList.sli
 ${blockedProjects.length ? `- Blocked projects:\n${blockedProjects.slice(0, 2).map(p => `  • ${p.name}${p.blockers?.[0]?.text ? `: ${p.blockers[0].text.slice(0, 60)}` : ''}`).join('\n')}` : ''}
 ${overdueTickets.length ? `- Most overdue tickets:\n${overdueTickets.slice(0, 2).map(t => `  • ${t.issueDescription?.slice(0, 60)} (${t.daysOpen}d)`).join('\n')}` : ''}
 
-Return ONLY valid JSON — no markdown:
-{
-  "narrative": "2-3 sentence plain English summary of the key operational state and biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery.",
-  "sections": [
-    {
-      "title": "Yesterday / Overnight",
-      "items": ["bullet point", "bullet point"]
-    },
-    {
-      "title": "Needs attention today",
-      "items": ["action item", "action item"]
-    },
-    {
-      "title": "Positive signals",
-      "items": ["good news", "good news"]
-    }
-  ]
-}
-
-Keep each bullet concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
+Use the daily_brief tool to return the structured brief. For the narrative: write 2-3 sentences summarising the key operational state and the biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery. Keep each items entry concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
 }
 
 export default async function handler(req, res) {
@@ -109,23 +90,45 @@ export default async function handler(req, res) {
       // rows to total up — that's where hallucinated figures come from. See docs/SCALING.md §13.
       model: 'claude-opus-4-8',
       max_tokens: 1024,
+      tools: [{
+        name: 'daily_brief',
+        description: 'Return the structured daily operational brief.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            narrative: {
+              type: 'string',
+              description: '2-3 sentence plain English summary of key operational state and biggest thing needing attention today.',
+            },
+            sections: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  items: { type: 'array', items: { type: 'string' } },
+                },
+                required: ['title', 'items'],
+              },
+            },
+          },
+          required: ['narrative', 'sections'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'daily_brief' },
       messages: [{ role: 'user', content: buildPrompt(date, data) }],
     });
 
-    const raw = message.content[0]?.text || '{}';
-    const cleaned = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
+    const toolUse = message.content.find(b => b.type === 'tool_use' && b.name === 'daily_brief');
+    if (!toolUse) {
       return res.status(200).json({
         narrative: 'Brief generation encountered a formatting issue. Check the app for details.',
         sections: [],
         generatedAt: new Date().toISOString(),
-        error: 'Parse error',
+        error: 'No tool_use block returned',
       });
     }
+    const parsed = toolUse.input;
 
     return res.status(200).json({
       narrative: parsed.narrative || '',

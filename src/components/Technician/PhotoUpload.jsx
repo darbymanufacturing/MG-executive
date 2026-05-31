@@ -1,9 +1,7 @@
 import { useState, useRef } from 'react';
 import { Camera, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
+import { auth } from '../../lib/firebase.js';
 import styles from './PhotoUpload.module.css';
-
-const CLOUDINARY_CLOUD_NAME    = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = 'repair_photos';
 
 export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onChange }) {
   const [uploading, setUploading] = useState(false);
@@ -29,19 +27,43 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
     setError(null);
 
     try {
-      if (!CLOUDINARY_CLOUD_NAME) {
-        throw new Error('Missing VITE_CLOUDINARY_CLOUD_NAME env var');
+      // Get Firebase ID token for the sign request
+      const idToken = await auth.currentUser.getIdToken();
+
+      const folder    = `repair-photos/${sessionId}`;
+      const public_id = `${stepNumber}-${Date.now()}`;
+      const context   = `sessionId=${sessionId}|stepNumber=${stepNumber}`;
+
+      // Step 1 — obtain a server-side signature so we never embed the API secret
+      // in the client bundle. Unauthenticated callers cannot reach this endpoint.
+      const signRes = await fetch('/api/cloudinary-sign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ folder, public_id, context }),
+      });
+
+      if (!signRes.ok) {
+        const signBody = await signRes.text();
+        throw new Error(`Sign request failed ${signRes.status}: ${signBody}`);
       }
 
+      const { signature, api_key, timestamp, cloud_name } = await signRes.json();
+
+      // Step 2 — signed direct upload to Cloudinary (no upload_preset needed)
       const form = new FormData();
       form.append('file', file);
-      form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-      form.append('folder', `repair-photos/${sessionId}`);
-      form.append('public_id', `${stepNumber}-${Date.now()}`);
-      form.append('context', `sessionId=${sessionId}|stepNumber=${stepNumber}`);
+      form.append('api_key', api_key);
+      form.append('timestamp', String(timestamp));
+      form.append('signature', signature);
+      form.append('folder', folder);
+      form.append('public_id', public_id);
+      form.append('context', context);
 
       const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`,
         { method: 'POST', body: form }
       );
       if (!res.ok) {
@@ -66,7 +88,35 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
     }
   }
 
-  function removePhoto(idx) {
+  async function removePhoto(idx) {
+    const urlToRemove = photoUrls[idx];
+
+    // Fire-and-forget Cloudinary deletion. We do not block the UI on this —
+    // the local state is updated immediately and the server cleans up async.
+    // Cloudinary secure_url format:
+    //   https://res.cloudinary.com/<cloud>/image/upload[/<transformations>]/<public_id>.<ext>
+    // Extract public_id by splitting on "/upload/" and stripping the extension,
+    // then remove any version prefix ("v12345678/").
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+
+      const afterUpload  = urlToRemove.split('/upload/')[1] ?? '';
+      const withoutExt   = afterUpload.replace(/\.[^/.]+$/, '');           // drop extension
+      const publicId     = withoutExt.replace(/^v\d+\//, '');              // strip version prefix
+
+      fetch('/api/cloudinary-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ publicId }),
+      }).catch((err) => console.error('Cloudinary delete failed (fire-and-forget):', err));
+    } catch (err) {
+      // If getting the token fails, log but still proceed with local state removal.
+      console.error('removePhoto: could not get ID token for Cloudinary delete:', err);
+    }
+
     onChange(photoUrls.filter((_, i) => i !== idx));
   }
 

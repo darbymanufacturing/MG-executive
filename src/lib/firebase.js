@@ -10,7 +10,7 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDo1mG2qucaWeD-rmtLhSgk2DddBz1yP4c",
+  apiKey: import.meta.env.VITE_FIREBASE_WEB_API_KEY,
   authDomain: "mg-executive.firebaseapp.com",
   projectId: "mg-executive",
   storageBucket: "mg-executive.firebasestorage.app",
@@ -21,10 +21,23 @@ const firebaseConfig = {
 // Guard against re-initialization during Vite HMR
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
+// ── Emulator flag computed BEFORE getDb so the db init can skip persistentLocalCache.
+// persistentLocalCache immediately begins syncing IndexedDB against the production
+// endpoint; enabling it in emulator mode lets that in-flight sync race the
+// connectFirestoreEmulator redirect (bug #334). Omitting it in emulator mode is safe:
+// emulator sessions are ephemeral and don't need persisted cache.
+const USE_EMULATOR =
+  import.meta.env.DEV && import.meta.env.VITE_USE_PROD_FIRESTORE !== 'true';
+
 // initializeFirestore can only be called once per app instance.
 // On HMR reloads the app already exists, so fall back to getFirestore().
-function getDb(app) {
+function getDb(app, useEmulator) {
   try {
+    if (useEmulator) {
+      // No persistent cache in emulator mode — prevents any production-endpoint sync
+      // from racing the connectFirestoreEmulator call below.
+      return initializeFirestore(app, {});
+    }
     return initializeFirestore(app, {
       cache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
@@ -33,7 +46,7 @@ function getDb(app) {
   }
 }
 
-export const db      = getDb(app);
+export const db      = getDb(app, USE_EMULATOR);
 export const auth    = getAuth(app);
 export const storage = getStorage(app);
 
@@ -49,8 +62,7 @@ export const storage = getStorage(app);
 // Production builds (`npm run build` / Vercel) never connect to the emulator;
 // `import.meta.env.DEV` is false in those.
 // ─────────────────────────────────────────────────────────────────────────────
-const USE_EMULATOR =
-  import.meta.env.DEV && import.meta.env.VITE_USE_PROD_FIRESTORE !== 'true';
+// (USE_EMULATOR is declared above, before getDb — see #334 fix comment.)
 
 if (USE_EMULATOR) {
   // Both connect calls throw if invoked twice on the same instance. HMR can
@@ -70,11 +82,26 @@ if (USE_EMULATOR) {
       console.warn('[firebase] connectAuthEmulator failed:', e);
     }
   }
-  console.info(
-    '%c[firebase] 🧪 LOCAL EMULATOR%c Firestore :8080 · Auth :9099 · UI http://localhost:4000',
-    'background:#A0521D;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600',
-    'color:#A0521D',
-  );
+  // #335 — probe the emulator UI to confirm it is actually running before printing
+  // the "success" banner. connectFirestoreEmulator() does not check connectivity;
+  // if the emulator is not up, the banner was misleading and every Firestore call
+  // would silently fail with ECONNREFUSED.
+  ;(async () => {
+    try {
+      await fetch('http://localhost:4000', { signal: AbortSignal.timeout(1500) });
+      console.info(
+        '%c[firebase] 🧪 LOCAL EMULATOR%c Firestore :8080 · Auth :9099 · UI http://localhost:4000',
+        'background:#A0521D;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600',
+        'color:#A0521D',
+      );
+    } catch {
+      console.warn(
+        '%c[firebase] 🧪 LOCAL EMULATOR — NOT RUNNING%c Did you forget `npm run emulator`? All Firestore/Auth calls will fail.',
+        'background:#DC2626;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600',
+        'color:#DC2626',
+      );
+    }
+  })().catch(() => {});
 } else if (import.meta.env.DEV) {
   console.warn(
     '%c[firebase] ⚠️ PROD FIRESTORE%c VITE_USE_PROD_FIRESTORE=true — dev clicks WILL burn production quota',

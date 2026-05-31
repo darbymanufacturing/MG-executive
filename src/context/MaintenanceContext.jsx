@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
+import { createContext, useContext, useCallback, useMemo, useEffect, useRef } from 'react';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -139,11 +139,11 @@ export function computeDaysOpen(ticket) {
 // ── Context ───────────────────────────────────────────────────────────────────
 const MaintenanceContext = createContext(null);
 
-// Per-org bootstrap guard.
-const bootstrappedConfigs = new Set();
-
 export function MaintenanceProvider({ children }) {
   const { orgId } = useOrg();
+  // Per-org bootstrap guard: scoped to this provider instance (not module-level) so
+  // it resets on unmount/remount (org switch, sign-out). Prevents StrictMode double-write.
+  const bootstrappedRef = useRef(new Set());
   const configDocId = orgId ? `${orgId}_maintenance` : null;
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
@@ -163,8 +163,8 @@ export function MaintenanceProvider({ children }) {
   // Bootstrap config defaults once per org.
   useEffect(() => {
     if (configLoading || !configDocId) return;
-    if (!configItem && !bootstrappedConfigs.has(configDocId)) {
-      bootstrappedConfigs.add(configDocId);
+    if (!configItem && !bootstrappedRef.current.has(configDocId)) {
+      bootstrappedRef.current.add(configDocId);
       orgWrite(CONFIG_COL, DEFAULT_CONFIG, { id: configDocId, silent: true });
     }
   }, [configItem, configLoading, configDocId]);

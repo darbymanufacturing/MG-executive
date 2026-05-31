@@ -24,6 +24,23 @@ export function initSentry() {
   const enabled = Boolean(dsn) && (import.meta.env.PROD || force);
   if (!enabled) return;
 
+  /**
+   * Scrub known PII patterns from a string before it reaches Sentry.
+   * Returns the original value unchanged if falsy (null / undefined / '').
+   */
+  function scrub(str) {
+    if (!str) return str;
+    return str
+      // 1. Email addresses
+      .replace(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g, '[email]')
+      // 2. EUR / financial amounts with decimals (number-then-currency or currency-then-number)
+      .replace(/\b\d{1,6}[.,]\d{2}\s*(EUR|€)|(?<![A-Za-z0-9])(EUR|€)\s*\d{1,6}[.,]\d{2}/g, '[amount]')
+      // 3. Firebase UID (28-char alphanumeric)
+      .replace(/\b[A-Za-z0-9]{28}\b/g, '[uid]')
+      // 4. Bearer tokens
+      .replace(/Bearer\s+\S+/gi, 'Bearer [token]');
+  }
+
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE,
@@ -33,5 +50,28 @@ export function initSentry() {
       'ResizeObserver loop limit exceeded',
       'ResizeObserver loop completed with undelivered notifications.',
     ],
+    beforeSend(event) {
+      // Scrub event.message
+      if (event.message) {
+        event.message = scrub(event.message);
+      }
+      // Scrub exception value strings
+      if (event.exception?.values) {
+        for (const exc of event.exception.values) {
+          if (exc.value) {
+            exc.value = scrub(exc.value);
+          }
+        }
+      }
+      // Scrub breadcrumb messages
+      if (event.breadcrumbs?.values) {
+        for (const crumb of event.breadcrumbs.values) {
+          if (crumb.message) {
+            crumb.message = scrub(crumb.message);
+          }
+        }
+      }
+      return event;
+    },
   });
 }

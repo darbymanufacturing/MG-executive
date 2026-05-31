@@ -182,6 +182,29 @@ describe('rollupTripsToRevenue', () => {
     // Manual CSV uses `${date}_${location || 'global'}`; auto-sync uses same → upsert wins last
     expect(rows[0].docId).toBe('2026-05-27_Nafplion');
   });
+
+  // #bug-349 — isoDate must use local time (Athens +03:00), not UTC.
+  // A trip starting at 01:30 Athens local (= 2026-05-28T22:30:00Z) must land on 2026-05-29,
+  // not 2026-05-28 (the UTC date). Run tests with TZ=Europe/Athens to pin the timezone.
+  test('after-midnight Athens trip buckets to the Athens-local date, not the UTC date', () => {
+    // 2026-05-29T01:30:00+03:00  →  UTC: 2026-05-28T22:30:00Z
+    // Expected local-date: "2026-05-29". Old UTC-based isoDate returned "2026-05-28".
+    const trips = [
+      { scooterId: '54135', startedAt: '2026-05-29T01:30:00+03:00', cost: 6.00, distanceKm: 3.0 },
+    ];
+    const { rows } = rollupTripsToRevenue(
+      trips, SCOOTERS,
+      // Window fully covers both 2026-05-28 and 2026-05-29 (evaluated at a later "now")
+      '2026-05-28T00:00:00Z', '2026-05-30T00:00:00Z',
+      new Date('2026-05-30T12:00:00Z'),
+    );
+    // Must emit exactly one row on the Athens-local date
+    expect(rows).toHaveLength(1);
+    expect(rows[0].data.date).toBe('2026-05-29');
+    // Must NOT land on the UTC date
+    const wrongRow = rows.find((r) => r.data.date === '2026-05-28');
+    expect(wrongRow).toBeUndefined();
+  });
 });
 
 describe('isDayFullyCovered', () => {

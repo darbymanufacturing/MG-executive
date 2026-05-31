@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useMemo } from 'react';
 import {
-  collection, doc, writeBatch, getDocs, query, where,
+  collection, doc, writeBatch, getDocs, query, where, limit,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -66,14 +66,20 @@ export function RevenueProvider({ children }) {
   // ── Clear all revenue data (THIS org only) ────────────────────────────────
   const clearAllRevenue = useCallback(async () => {
     if (!orgId) throw new Error('clearAllRevenue: no active org');
-    const snap = await getDocs(query(collection(db, REVENUE_COL), where('orgId', '==', orgId)));
-    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    // Paginated delete to avoid OOM on large collections (bug-73).
+    let more = true;
+    while (more) {
+      // eslint-disable-next-line no-await-in-loop
+      const snap = await getDocs(query(collection(db, REVENUE_COL), where('orgId', '==', orgId), limit(BATCH_SIZE)));
+      if (snap.empty) break;
       const batch = writeBatch(db);
-      snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      // eslint-disable-next-line no-await-in-loop
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Failed to clear revenue data' },
       );
+      more = snap.docs.length === BATCH_SIZE;
     }
   }, [orgId]);
 

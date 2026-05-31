@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { runTransaction, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
@@ -102,32 +104,38 @@ export function PowProvider({ children }) {
     await orgUpdate(TASKS_COL, id, patch, { rethrow: true, errorMessage: 'Failed to update POW task' });
   }, []);
 
-  /** Assign a person with specific step indices for POW. Pass stepIndices=null to remove. */
-  const toggleAssignee = useCallback(async (id, person, stepIndices = null) => {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    const current = task.assignees ?? [];
-    const isRemoving = current.includes(person) && stepIndices === null;
-
-    let assignees = current;
-    const powSteps = { ...(task.powSteps ?? {}) };
-    const powWeeks = { ...(task.powWeeks ?? {}) };
-
-    if (isRemoving) {
-      assignees = current.filter((a) => a !== person);
-      delete powSteps[person];
-      delete powWeeks[person];
-    } else {
-      if (!current.includes(person)) assignees = [...current, person];
-      powSteps[person] = stepIndices ?? [];
-      powWeeks[person] = currentWeek;
-    }
-
-    await orgUpdate(TASKS_COL, id, {
-      assignees, powSteps, powWeeks,
-      status: assignees.length > 0 ? 'pow' : 'backlog',
-    }, { rethrow: true, errorMessage: 'Failed to update POW assignees' });
-  }, [tasks, currentWeek]);
+  /** Assign a person with specific step indices for POW. Pass stepIndices=null to remove.
+   *  Uses a Firestore transaction to read the document fresh (not from stale React state),
+   *  so rapid concurrent clicks cannot clobber each other's assignee writes. */
+  const toggleAssignee = useCallback(async (taskId, person, stepIndices = null) => {
+    const ref = doc(db, TASKS_COL, taskId);
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const current = data.assignees ?? (data.assignee ? [data.assignee] : []);
+      const isRemoving = current.includes(person) && stepIndices === null;
+      let assignees = current;
+      const powSteps = { ...(data.powSteps ?? {}) };
+      const powWeeks = { ...(data.powWeeks ?? {}) };
+      if (isRemoving) {
+        assignees = current.filter((a) => a !== person);
+        delete powSteps[person];
+        delete powWeeks[person];
+      } else {
+        if (!current.includes(person)) assignees = [...current, person];
+        powSteps[person] = stepIndices ?? [];
+        powWeeks[person] = currentWeek;
+      }
+      txn.update(ref, {
+        assignees,
+        powSteps,
+        powWeeks,
+        status: assignees.length > 0 ? 'pow' : 'backlog',
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }, [currentWeek]);
 
   /** Toggle a step checkbox by its index */
   const toggleStep = useCallback(async (id, stepIndex) => {

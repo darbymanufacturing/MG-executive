@@ -19,11 +19,12 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { resolve, join } from 'path';
 
 const args = process.argv.slice(2);
-const flag = (n, d = null) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
+const flag = (n, d = null) => { const i = args.indexOf(n); const v = args[i + 1]; return i >= 0 && v !== undefined && !v.startsWith('--') ? v : d; };
 const DIR = flag('--dir');
 const TABLE = flag('--table', 'scooter_trips');
 const ROWS = Number(flag('--rows', '70'));
 if (!DIR) { console.error('Required: --dir <export-dir>'); process.exit(1); }
+if (!Number.isFinite(ROWS) || ROWS <= 0) throw new Error('--rows must be a positive integer');
 
 // Numeric columns to checksum per table (top-level typed fields in the enriched rows).
 const NUMERIC_COLS = {
@@ -49,8 +50,21 @@ for (const f of srcFiles) {
   const startIdx = lines.findIndex((l) => l.includes('$omni$['));
   const endIdx = lines.findIndex((l) => l.includes(']$omni$'));
   if (startIdx < 0 || endIdx < 0) { console.error(`! ${f}: markers not found`); process.exit(1); }
-  if (!header) header = lines.slice(0, startIdx + 1).join('\n'); // up to & incl. "$omni$["
-  if (!footer) footer = lines.slice(endIdx).join('\n');          // from "]$omni$" to end
+  const fileHeader = lines.slice(0, startIdx + 1).join('\n'); // up to & incl. "$omni$["
+  const fileFooter = lines.slice(endIdx).join('\n');          // from "]$omni$" to end
+  if (!header) {
+    header = fileHeader;
+    footer = fileFooter;
+  } else {
+    if (fileHeader !== header) {
+      console.error(`! Header mismatch in ${f} vs ${srcFiles[0]}: aborting`);
+      process.exit(1);
+    }
+    if (fileFooter !== footer) {
+      console.error(`! Footer mismatch in ${f} vs ${srcFiles[0]}: aborting`);
+      process.exit(1);
+    }
+  }
   for (let i = startIdx + 1; i < endIdx; i++) {
     const line = lines[i].trim().replace(/,+$/, '');
     if (line) rows.push(line);

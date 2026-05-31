@@ -48,6 +48,18 @@ function init() {
     );
   }
 
+  // Vercel env-var pasting often turns real newlines into literal \n sequences.
+  // Replace them so the PEM key is multi-line as the RSA signer requires.
+  if (credentials.private_key) {
+    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+  }
+  if (!credentials.private_key?.includes('-----BEGIN')) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_KEY private_key does not look like a valid PEM block. ' +
+      'Check that you pasted the full service-account JSON.'
+    );
+  }
+
   admin.initializeApp({
     credential: admin.credential.cert(credentials),
     projectId: credentials.project_id,

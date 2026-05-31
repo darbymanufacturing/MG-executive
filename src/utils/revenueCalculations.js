@@ -21,12 +21,18 @@ export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
     tripsByDate[r.date] = (tripsByDate[r.date] || 0) + (r.totalTrips       || 0);
   });
 
-  // Spread monthly costs evenly across all days; also include one-time costs in this month
-  const monthlyCost  = totalMonthlyCost(costs);
-  const oneTimeCost  = costs
+  // Spread recurring monthly costs evenly; land one-time costs on their exact startDate
+  const monthlyCost      = totalMonthlyCost(costs);
+  const recurringDailyRate = monthlyCost / daysInMonth;
+
+  // Build a per-day map for one-time costs that fall in this month
+  const oneTimeCostByDate = {};
+  costs
     .filter((c) => c.frequency === 'one-time' && c.startDate?.startsWith(selectedMonth))
-    .reduce((s, c) => s + (c.amount || 0), 0);
-  const dailyCostRate = (monthlyCost + oneTimeCost) / daysInMonth;
+    .forEach((c) => {
+      const d = c.startDate.slice(0, 10); // YYYY-MM-DD
+      oneTimeCostByDate[d] = (oneTimeCostByDate[d] || 0) + (c.amount || 0);
+    });
 
   return Array.from({ length: daysInMonth }, (_, i) => {
     const dayNum  = i + 1;
@@ -34,12 +40,13 @@ export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
     const revenue = revByDate[dateStr]   || 0;
     const trips   = tripsByDate[dateStr] || 0;
     const hasData = !!revByDate[dateStr];
+    const costRate = parseFloat((recurringDailyRate + (oneTimeCostByDate[dateStr] || 0)).toFixed(2));
     return {
       day:      `${DAY_ABBRS[m - 1]} ${dayNum}`,
       date:     dateStr,
       revenue:  parseFloat(revenue.toFixed(2)),
-      costRate: parseFloat(dailyCostRate.toFixed(2)),
-      profit:   parseFloat((revenue - dailyCostRate).toFixed(2)),
+      costRate,
+      profit:   parseFloat((revenue - costRate).toFixed(2)),
       trips,
       hasData,
     };

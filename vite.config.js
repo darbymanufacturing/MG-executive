@@ -8,6 +8,12 @@ export default defineConfig({
     host: true,
     port: process.env.PORT ? Number(process.env.PORT) : 5174,
     strictPort: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
   optimizeDeps: {
     include: ['firebase/app', 'firebase/firestore', 'firebase/auth'],

@@ -1,5 +1,6 @@
 import { doc, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { getActiveOrg } from '../hooks/orgWrite.js';
 
 /**
  * Writes back a completed repair session in one atomic batch:
@@ -18,6 +19,10 @@ export async function completeRepairSession({
   completedAt,     // Date
   steps,           // [{ stepNumber, notes, partsUsed: [{partId, partName, quantity, unitCost}], photoUrls }]
 }) {
+  // ADR-0003: every write must be scoped to an org
+  const orgId = getActiveOrg();
+  if (!orgId) throw new Error('repairSessionWriter: no active orgId — write blocked (ADR-0003).');
+
   // #184 — coerce to Date before subtraction; string inputs cause NaN
   const startMs = new Date(startedAt).getTime();
   const endMs   = new Date(completedAt).getTime();
@@ -46,7 +51,18 @@ export async function completeRepairSession({
   // remain "In Progress". At typical repair part counts (< 50 distinct parts) total
   // ops are well under the 500 transaction limit.
   await runTransaction(db, async (transaction) => {
-    // Read all part docs first (all reads must precede writes in a transaction)
+    // Read ticket first — also puts it in the transaction read-set so Firestore
+    // will abort/retry if another concurrent transaction modifies it (BUG-422).
+    const ticketRef = doc(db, 'maintenanceTickets', ticketDocId);
+    const ticketSnap = await transaction.get(ticketRef);
+    if (!ticketSnap.exists()) throw new Error(`Ticket ${ticketDocId} not found`);
+    const ticketStatus = ticketSnap.data().status;
+    if (ticketStatus === 'Completed') {
+      const doneBy = ticketSnap.data().completedBy ?? 'another technician';
+      throw new Error(`Ticket already completed by ${doneBy}`);
+    }
+
+    // Read all part docs (all reads must precede writes in a transaction)
     const partRefs = aggregatedPartsUsed.map(({ partId }) =>
       doc(db, 'maintenanceParts', partId)
     );
@@ -67,8 +83,9 @@ export async function completeRepairSession({
       transaction.update(snap.ref, { stockOnHand: increment(-quantity) });
     });
 
-    // Update ticket in the same transaction
-    transaction.update(doc(db, 'maintenanceTickets', ticketDocId), {
+    // Update ticket in the same transaction — reuse ticketRef (same ref that was read)
+    // so Firestore includes it in the transaction's read-set and enforces the guard.
+    transaction.update(ticketRef, {
       status:         'Completed',
       dateCompleted:  completedAt.toISOString().slice(0, 10),
       completedBy:    technicianUid,
@@ -85,6 +102,7 @@ export async function completeRepairSession({
 
     // Create audit doc in the same transaction
     transaction.set(doc(db, 'repairSessions', sessionId), {
+      orgId,                             // ADR-0003: scope every doc to its org
       ticketId:          ticketDocId,
       scooterId,
       procedureId:       procedureId ?? null,

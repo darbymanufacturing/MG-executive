@@ -9,17 +9,26 @@
  *
  * Run:
  *   node scripts/restore-firestore.mjs ./backups/firestore-YYYYMMDD-HHMMSS              # DRY RUN
- *   node scripts/restore-firestore.mjs ./backups/firestore-YYYYMMDD-HHMMSS --commit     # WRITE
+ *   node scripts/restore-firestore.mjs ./backups/firestore-YYYYMMDD-HHMMSS --commit     # WRITE (full overwrite)
+ *   node scripts/restore-firestore.mjs <dir> --commit --merge                           # WRITE (merge, preserve extra fields)
  *   node scripts/restore-firestore.mjs <dir> --commit --only costs,revenue              # subset
  *
  * Behaviour:
  *  - Restores via batched set() (BATCH_SIZE=450), preserving doc IDs → idempotent upsert.
- *  - ADDITIVE: it does NOT delete docs that exist in Firestore but not in the backup.
- *    (To fully reset a collection, clear it first — deliberately not automated here.)
+ *  - REPLACE (default): existing docs are FULLY OVERWRITTEN with the backup version —
+ *    any fields added after the backup date are silently lost.
+ *    Pass --merge to use set({merge:true}) instead, which merges fields rather than
+ *    replacing the whole doc (safer for partial restores; slower).
+ *  - Does NOT delete docs that exist in Firestore but not in the backup
+ *    (collection-level is additive — no collection wipe).
+ *    To fully reset a collection, clear it first — deliberately not automated here.
  *  - Reverses the Timestamp/GeoPoint/DocumentReference encoding from the backup.
+ *  - Supports both legacy .json format and the newer .jsonl (streaming) format.
+ *    Format is detected from _manifest.json `format` field (absent = legacy json).
  */
 import admin from 'firebase-admin';
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, createReadStream } from 'fs';
+import { createInterface } from 'readline';
 import { resolve, basename } from 'path';
 
 const BATCH_SIZE = 450;
@@ -52,37 +61,88 @@ async function main() {
   const args = process.argv.slice(2);
   const dir = args.find((a) => !a.startsWith('--'));
   const commit = args.includes('--commit');
+  const merge = args.includes('--merge');
   const onlyArg = args.find((a) => a.startsWith('--only'));
   const only = onlyArg ? (onlyArg.split('=')[1] || args[args.indexOf(onlyArg) + 1] || '').split(',').filter(Boolean) : null;
 
   if (!dir) {
-    console.error('Usage: node scripts/restore-firestore.mjs <backup-dir> [--commit] [--only col1,col2]');
+    console.error('Usage: node scripts/restore-firestore.mjs <backup-dir> [--commit] [--merge] [--only col1,col2]');
     process.exit(1);
   }
   initAdmin();
   const db = admin.firestore();
 
-  const files = readdirSync(resolve(dir)).filter((f) => f.endsWith('.json') && f !== '_manifest.json');
-  const targets = only ? files.filter((f) => only.includes(basename(f, '.json'))) : files;
+  // Detect backup format from _manifest.json
+  let manifestData = {};
+  try { manifestData = JSON.parse(readFileSync(resolve(dir, '_manifest.json'), 'utf8')); } catch {}
+  const isJsonl = manifestData.format === 'jsonl';
 
-  console.log(`${commit ? '⚠️  COMMIT MODE — WILL WRITE' : 'DRY RUN — no writes'}  ·  source: ${dir}\n`);
+  const files = readdirSync(resolve(dir)).filter((f) =>
+    (f.endsWith('.json') || f.endsWith('.jsonl')) && f !== '_manifest.json'
+  );
+  const targets = only
+    ? files.filter((f) => only.includes(basename(f, isJsonl ? '.jsonl' : '.json')))
+    : files;
+
+  const modeLabel = commit
+    ? (merge ? '⚠️  COMMIT MODE (MERGE) — WILL WRITE (set+merge)' : '⚠️  COMMIT MODE (REPLACE) — WILL OVERWRITE')
+    : 'DRY RUN — no writes';
+  console.log(`${modeLabel}  ·  source: ${dir}  ·  format: ${isJsonl ? 'jsonl' : 'json'}\n`);
   let grandTotal = 0;
 
   for (const file of targets) {
-    const collName = basename(file, '.json');
-    const docs = JSON.parse(readFileSync(resolve(dir, file), 'utf8'));
-    const ids = Object.keys(docs);
-    console.log(`  ${collName.padEnd(24)} ${ids.length} docs ${commit ? '→ writing' : '(would write)'}`);
-    grandTotal += ids.length;
+    const ext = isJsonl ? '.jsonl' : '.json';
+    const collName = basename(file, ext);
 
-    if (!commit) continue;
+    if (isJsonl) {
+      // Streaming JSONL path — memory-flat, one batch at a time.
+      // Count lines for the dry-run summary by streaming without writing.
+      let lineCount = 0;
 
-    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-      const batch = db.batch();
-      for (const id of ids.slice(i, i + BATCH_SIZE)) {
-        batch.set(db.collection(collName).doc(id), decode(docs[id]));
+      if (commit) {
+        const rl = createInterface({ input: createReadStream(resolve(dir, file)), crlfDelay: Infinity });
+        let batch = db.batch();
+        let batchCount = 0;
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          const { id, data } = JSON.parse(line);
+          lineCount++;
+          batch.set(db.collection(collName).doc(id), decode(data), merge ? { merge: true } : undefined);
+          batchCount++;
+          if (batchCount === BATCH_SIZE) {
+            await batch.commit();
+            batch = db.batch();
+            batchCount = 0;
+          }
+        }
+        if (batchCount > 0) await batch.commit();
+      } else {
+        // Dry run: stream and count only, no writes.
+        const rl = createInterface({ input: createReadStream(resolve(dir, file)), crlfDelay: Infinity });
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          lineCount++;
+        }
       }
-      await batch.commit();
+
+      console.log(`  ${collName.padEnd(24)} ${lineCount} docs ${commit ? '→ written' : '(would write)'}`);
+      grandTotal += lineCount;
+    } else {
+      // Legacy JSON path — backward compatible with all existing backups.
+      const docs = JSON.parse(readFileSync(resolve(dir, file), 'utf8'));
+      const ids = Object.keys(docs);
+      console.log(`  ${collName.padEnd(24)} ${ids.length} docs ${commit ? '→ writing' : '(would write)'}`);
+      grandTotal += ids.length;
+
+      if (!commit) continue;
+
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        for (const id of ids.slice(i, i + BATCH_SIZE)) {
+          batch.set(db.collection(collName).doc(id), decode(docs[id]), merge ? { merge: true } : undefined);
+        }
+        await batch.commit();
+      }
     }
   }
 

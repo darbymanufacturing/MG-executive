@@ -22,78 +22,21 @@
  */
 import admin from 'firebase-admin';
 import { createClient } from '@supabase/supabase-js';
+import { toSupabaseRow, SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
 
 // ── args ────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const COMMIT = args.includes('--commit');
 const flag = (name, def = null) => {
   const i = args.indexOf(name);
-  return i >= 0 && args[i + 1] ? args[i + 1] : def;
+  const v = args[i + 1];
+  return i >= 0 && v !== undefined && !v.startsWith('--') ? v : def;
 };
 const DEFAULT_ORG_ID = flag('--org-id', 'mg-executive-org');
 const ONLY = (flag('--only') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGE = Number(flag('--page', '1000'));
+if (!Number.isFinite(PAGE) || PAGE <= 0) throw new Error('--page must be a positive integer');
 
-// Firestore collection → Supabase table + a doc→row mapper.
-// `data` carries the COMPLETE original doc (camelCase); typed columns are a
-// queryable subset. source_doc_id = the Firestore document id.
-const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
-const PLAN = {
-  telemetryEvents: {
-    table: 'telemetry_events',
-    map: (d) => ({
-      scooter_id: d.scooterId ?? null,
-      event_ts: d.timestamp ?? null,
-      before_state: d.beforeState ?? null,
-      after_state: d.afterState ?? null,
-      reason: d.reason ?? null,
-      event_type: d.eventType ?? null,
-      city: d.city ?? null,
-      battery_level: num(d.batteryLevel),
-    }),
-  },
-  scooterTrips: {
-    table: 'scooter_trips',
-    map: (d) => ({
-      scooter_id: d.scooterId ?? null,
-      started_at: d.startedAt ?? null,
-      ended_at: d.endedAt ?? null,
-      duration_minutes: num(d.durationMinutes),
-      distance_km: num(d.distanceKm),
-      cost: num(d.cost),
-      is_paid: typeof d.isPaid === 'boolean' ? d.isPaid : null,
-      city: d.city ?? null,
-    }),
-  },
-  sprEvents: {
-    table: 'spr_events',
-    map: (d) => ({
-      scooter_id: d.scooterId ?? null,
-      datetime: d.datetime ?? null,
-      city: d.city ?? null,
-      zone: d.zone ?? null,
-      lat: num(d.lat),
-      lon: num(d.lon),
-      after_state: d.afterState ?? null,
-      action: d.action ?? null,
-    }),
-  },
-  sprWeather: {
-    table: 'spr_weather',
-    map: (d) => ({ weather_date: d.date ?? null, city: d.city ?? null }),
-  },
-  revenue: {
-    table: 'revenue_days',
-    map: (d) => ({
-      revenue_date: d.date ?? null,
-      location: d.location ?? null,
-      total_paid_revenue: num(d.totalPaidRevenue),
-      total_trips: num(d.totalTrips),
-      unique_users_count: num(d.uniqueUsersCount),
-      unique_vehicles_count: num(d.uniqueVehiclesCount),
-    }),
-  },
-};
 
 // ── clients ───────────────────────────────────────────────────────────────────
 function initFirestore() {
@@ -117,23 +60,9 @@ function initSupabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-// JSON-safe deep clean: Firestore Timestamps → ISO, drop undefined.
-function clean(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
-  if (Array.isArray(value)) return value.map(clean);
-  if (typeof value === 'object') {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (v !== undefined) out[k] = clean(v);
-    }
-    return out;
-  }
-  return value;
-}
-
 async function backfillCollection(db, sb, name) {
-  const { table, map } = PLAN[name];
+  const table = SUPABASE_TABLE[name];
+  if (!table) throw new Error(`backfillCollection: no mapping for collection "${name}"`);
   let total = 0;
   let written = 0;
   let buffer = [];
@@ -165,13 +94,9 @@ async function backfillCollection(db, sb, name) {
     total += snap.size;
 
     for (const docSnap of snap.docs) {
-      const d = clean(docSnap.data()) ?? {};
-      const row = {
-        org_id: d.orgId || DEFAULT_ORG_ID,
-        source_doc_id: docSnap.id,
-        ...map(d),
-        data: d,
-      };
+      const raw = docSnap.data();
+      const orgId = raw.orgId || DEFAULT_ORG_ID;
+      const row = toSupabaseRow(name, orgId, docSnap.id, raw);
       buffer.push(row);
       if (buffer.length >= PAGE) await flush();
     }
@@ -184,8 +109,8 @@ async function backfillCollection(db, sb, name) {
 
 // ── main ───────────────────────────────────────────────────────────────────────
 async function main() {
-  const names = (ONLY.length ? ONLY : Object.keys(PLAN)).filter((n) => {
-    if (!PLAN[n]) { console.warn(`⚠️  unknown collection "${n}" — skipping`); return false; }
+  const names = (ONLY.length ? ONLY : Object.keys(SUPABASE_TABLE)).filter((n) => {
+    if (!SUPABASE_TABLE[n]) { console.warn(`⚠️  unknown collection "${n}" — skipping`); return false; }
     return true;
   });
 
