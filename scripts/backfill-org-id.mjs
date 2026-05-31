@@ -59,29 +59,28 @@
  */
 import admin from 'firebase-admin';
 import { orgDocId } from '../src/utils/orgDocId.js';
+// Collection-treatment contract — unit-tested in scripts/__tests__/backfillPlan.test.js.
+// Imported (not re-declared) so the tests guard THIS script's behaviour.
+import {
+  MIGRATE as MIGRATE_LIST,
+  STAMP as STAMP_LIST,
+  CONFIG_SINGLETONS,
+  SPECIAL as SPECIAL_LIST,
+} from './backfillPlan.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const ORG_ID   = process.env.BACKFILL_ORG_ID   || 'mg-executive-org';
 const ORG_NAME = process.env.BACKFILL_ORG_NAME || 'Micromobility Greece';
 const PAGE = 200;           // docs per page; MIGRATE = 2 ops/doc → 400 ops < 450 batch limit
 
-// Deterministic-id collections → COPY to `${orgId}_${oldId}` + DELETE old.
-const MIGRATE = new Set([
-  'scooters', 'maintenanceTickets', 'maintenanceParts', 'revenue',
-  'scooterTrips', 'telemetryEvents', 'sprEvents', 'sprWeather',
-]);
-// Auto/unique-id collections → add `orgId` field, keep id.
-const STAMP = new Set([
-  'costs', 'projects', 'decisionGates', 'brainstormIdeas', 'diary', 'issues',
-  'repairProcedures', 'repairSessions', 'notifications', 'syncLogs', 'briefs', 'pow_tasks',
-]);
-// Singleton config docs → copy to org-composite id + delete old.
-const CONFIG_SINGLETONS = [
-  ['config', 'fleet'], ['config', 'scooters'], ['config', 'maintenance'], ['config', 'spr'],
-  ['pow', 'config'],
-];
-// Handled specially or deliberately left alone.
-const SPECIAL = new Set(['users', 'organizations', 'config', 'pow', 'backfill_state']);
+// Sets built from the unit-tested contract in ./backfillPlan.js (single source of truth):
+//  MIGRATE — deterministic-id collections → COPY to `${orgId}_${oldId}` + DELETE old.
+//  STAMP   — auto/unique-id collections → add `orgId` field, keep id.
+//  SPECIAL — users/org handled specially; config/pow parents + backfill_state left alone.
+// CONFIG_SINGLETONS (imported above) — the singleton config docs to migrate.
+const MIGRATE = new Set(MIGRATE_LIST);
+const STAMP   = new Set(STAMP_LIST);
+const SPECIAL = new Set(SPECIAL_LIST);
 
 // ── Args ────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);

@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     css: false,
-    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    include: ['src/**/*.{test,spec}.{js,jsx}', 'scripts/**/*.{test,spec}.{js,jsx}'],
     // Rules tests need the Firestore emulator — run them via `npm run test:rules`
     // (vitest.rules.config.js), not in the default jsdom unit run.
     exclude: [...configDefaults.exclude, '**/*.rules.test.js'],
