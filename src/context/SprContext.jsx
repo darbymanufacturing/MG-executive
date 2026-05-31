@@ -9,13 +9,16 @@ import {
   NAFPLIO_CITY_CENTER,
 } from '../utils/nafplioSprData.js';
 import { useOrg } from './OrgContext.jsx';
-import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgTable } from '../hooks/useSupabaseTable.js';
+import { dualWriteSupabase } from '../lib/supabase.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const EVENTS_COL   = 'sprEvents';
+const SB_EVENTS    = 'spr_events';
 const WEATHER_COL  = 'sprWeather';
+const SB_WEATHER   = 'spr_weather';
 const CONFIG_COL   = 'config';     // org-scoped singleton: config/${orgId}_spr (was config/spr)
 const BATCH_SIZE   = 450;
 const MAX_EVENTS   = 15000;
@@ -37,8 +40,15 @@ export function SprProvider({ children }) {
   const configDocId = orgId ? `${orgId}_spr` : null;
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
-  const { items: events, loading, error } = useOrgCollection(EVENTS_COL, { limit: MAX_EVENTS });
-  const { items: weather } = useOrgCollection(WEATHER_COL, { limit: MAX_WEATHER });
+  // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
+  const { items: events, loading, error } = useOrgTable(EVENTS_COL, SB_EVENTS, {
+    firestore: { limit: MAX_EVENTS },
+    supabase: { limit: MAX_EVENTS },
+  });
+  const { items: weather } = useOrgTable(WEATHER_COL, SB_WEATHER, {
+    firestore: { limit: MAX_WEATHER },
+    supabase: { limit: MAX_WEATHER },
+  });
   const { item: configItem, loading: configLoading } = useOrgDoc(CONFIG_COL, configDocId);
 
   const sprConfig = useMemo(() => {
@@ -99,15 +109,20 @@ export function SprProvider({ children }) {
   const importEvents = useCallback(async (rows, city) => {
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    const sbEntries = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const chunk = rows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((row) => {
         const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
-        batch.set(doc(db, EVENTS_COL, docId), { ...row, city: city || row.city || null, orgId, createdByUid: uid });
+        const rowData = { ...row, city: city || row.city || null, orgId, createdByUid: uid };
+        batch.set(doc(db, EVENTS_COL, docId), rowData);
+        sbEntries.push({ id: docId, data: rowData });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(EVENTS_COL, orgId, sbEntries);
   }, [orgId]);
 
   const clearEvents = useCallback(async (city = null) => {
@@ -126,15 +141,20 @@ export function SprProvider({ children }) {
   const importWeather = useCallback(async (days, city) => {
     if (!orgId) throw new Error('importWeather: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    const sbEntries = [];
     for (let i = 0; i < days.length; i += BATCH_SIZE) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
         const docId = orgDocId(orgId, day.date, city);
-        batch.set(doc(db, WEATHER_COL, docId), { ...day, city, orgId, createdByUid: uid });
+        const rowData = { ...day, city, orgId, createdByUid: uid };
+        batch.set(doc(db, WEATHER_COL, docId), rowData);
+        sbEntries.push({ id: docId, data: rowData });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(WEATHER_COL, orgId, sbEntries);
   }, [orgId]);
 
   const clearWeather = useCallback(async (city = null) => {

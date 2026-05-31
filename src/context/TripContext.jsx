@@ -9,10 +9,12 @@ import { collection, doc, writeBatch, getDocs, query, where, serverTimestamp } f
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
-import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgTable } from '../hooks/useSupabaseTable.js';
+import { dualWriteSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const TRIPS_COL  = 'scooterTrips';
+const SB_TABLE   = 'scooter_trips';
 const BATCH_SIZE = 450;
 const MAX_TRIPS  = 10000;
 
@@ -20,13 +22,18 @@ const TripContext = createContext(null);
 
 export function TripProvider({ children }) {
   const { orgId } = useOrg();
-  const { items: trips, loading } = useOrgCollection(TRIPS_COL, { limit: MAX_TRIPS });
+  // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
+  const { items: trips, loading } = useOrgTable(TRIPS_COL, SB_TABLE, {
+    firestore: { limit: MAX_TRIPS },
+    supabase: { limit: MAX_TRIPS },
+  });
 
   /** Batch-upsert trip rows from parseTripLogCsv output. Returns { written }. */
   const importTrips = useCallback(async (rows) => {
     if (!orgId) throw new Error('importTrips: no active org');
     const uid = auth.currentUser?.uid ?? null;
     let written = 0;
+    const sbEntries = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
       rows.slice(i, i + BATCH_SIZE).forEach((row) => {
@@ -45,6 +52,7 @@ export function TripProvider({ children }) {
           { ...row, orgId, createdByUid: uid, _importedAt: serverTimestamp() },
           { merge: true },
         );
+        sbEntries.push({ id: docId, data: { ...row, orgId, createdByUid: uid } });
         written++;
       });
       await safeWrite(
@@ -52,6 +60,8 @@ export function TripProvider({ children }) {
         { rethrow: true, errorMessage: 'Trip import failed mid-batch' },
       );
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(TRIPS_COL, orgId, sbEntries);
     return { written };
   }, [orgId]);
 

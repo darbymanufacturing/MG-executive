@@ -5,11 +5,13 @@ import {
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
-import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgTable } from '../hooks/useSupabaseTable.js';
+import { dualWriteSupabase } from '../lib/supabase.js';
 import { orgDelete } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const REVENUE_COL = 'revenue';
+const SB_TABLE    = 'revenue_days';
 const BATCH_SIZE  = 450; // Firestore batch limit is 500; stay safe
 // Hard cap on revenue snapshot — Phase 1 free-tier defense. 2000 daily rows ≈ 5 years per city.
 const MAX_REVENUE_ROWS = 2000;
@@ -19,10 +21,10 @@ const RevenueContext = createContext(null);
 export function RevenueProvider({ children }) {
   const { orgId } = useOrg();
 
-  // ── Real-time listener (ADR-0003 org-scoped) ──────────────────────────────
-  const { items, loading: revenueLoading, error } = useOrgCollection(REVENUE_COL, {
-    orderBy: ['date', 'desc'],
-    limit: MAX_REVENUE_ROWS,
+  // ── Org-scoped listener (ADR-0003); ADR-0013: Firestore OR Supabase per flag ──
+  const { items, loading: revenueLoading, error } = useOrgTable(REVENUE_COL, SB_TABLE, {
+    firestore: { orderBy: ['date', 'desc'], limit: MAX_REVENUE_ROWS },
+    supabase: { orderBy: ['revenue_date', 'desc'], limit: MAX_REVENUE_ROWS },
   });
 
   // Preserve the public shape: consumers read `_docId`. Client re-sort keeps
@@ -36,6 +38,7 @@ export function RevenueProvider({ children }) {
   const importRevenueDays = useCallback(async (days) => {
     if (!orgId) throw new Error('importRevenueDays: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    const sbEntries = [];
     for (let i = 0; i < days.length; i += BATCH_SIZE) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
@@ -43,14 +46,16 @@ export function RevenueProvider({ children }) {
         // Org-prefixed deterministic id (ADR-0002): every org has the same dates,
         // so the date alone would collide across orgs.
         const docId = orgDocId(orgId, day.date, day.location || 'global');
-        const ref = doc(db, REVENUE_COL, docId);
-        batch.set(ref, { ...day, orgId, createdByUid: uid }); // setDoc via batch → overwrites existing doc
+        batch.set(doc(db, REVENUE_COL, docId), { ...day, orgId, createdByUid: uid }); // setDoc via batch → overwrites
+        sbEntries.push({ id: docId, data: { ...day, orgId, createdByUid: uid } });
       });
       await safeWrite(
         () => batch.commit(),
         { rethrow: true, errorMessage: 'Revenue import failed mid-batch' },
       );
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(REVENUE_COL, orgId, sbEntries);
   }, [orgId]);
 
   // ── Delete a single day ───────────────────────────────────────────────────

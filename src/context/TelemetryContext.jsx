@@ -13,10 +13,12 @@ import { db, auth } from '../lib/firebase.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
-import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgTable } from '../hooks/useSupabaseTable.js';
+import { dualWriteSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const EVENTS_COL = 'telemetryEvents';
+const SB_TABLE = 'telemetry_events';
 const BATCH_SIZE = 450;
 const MAX_EVENTS = 20000;
 
@@ -25,7 +27,11 @@ const TelemetryContext = createContext(null);
 export function TelemetryProvider({ children }) {
   const { orgId } = useOrg();
   // Phase 2 (ADR-0003): org-scoped read. Kept route-scoped to /scooters + /pme.
-  const { items, loading } = useOrgCollection(EVENTS_COL, { limit: MAX_EVENTS });
+  // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
+  const { items, loading } = useOrgTable(EVENTS_COL, SB_TABLE, {
+    firestore: { limit: MAX_EVENTS },
+    supabase: { limit: MAX_EVENTS },
+  });
 
   // Re-classify on load so data ingested under older classifier rules picks up the
   // latest logic without re-upload. Preserves the `_docId` + `eventType` shape.
@@ -56,6 +62,7 @@ export function TelemetryProvider({ children }) {
 
     let written = 0;
     const total = newRows.length;
+    const sbEntries = [];
     for (let i = 0; i < total; i += BATCH_SIZE) {
       const chunk = newRows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
@@ -63,8 +70,9 @@ export function TelemetryProvider({ children }) {
         const { _docId, ...data } = ev;
         // Org-prefix the parser's fingerprint id (ADR-0002): future non-Hopp imports
         // can't assume globally-unique scooter ids, so prefix unconditionally.
-        const ref = doc(db, EVENTS_COL, orgDocId(orgId, _docId));
-        batch.set(ref, { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp() });
+        const fullId = orgDocId(orgId, _docId);
+        batch.set(doc(db, EVENTS_COL, fullId), { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp() });
+        sbEntries.push({ id: fullId, data: { ...data, orgId, createdByUid: uid } });
       });
       await safeWrite(
         () => batch.commit(),
@@ -73,6 +81,8 @@ export function TelemetryProvider({ children }) {
       written += chunk.length;
       if (onProgress) onProgress(Math.round((written / total) * 100));
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(EVENTS_COL, orgId, sbEntries);
     return { written, duplicates };
   }, [events, orgId]);
 

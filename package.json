@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
     "@sentry/react": "^10.55.0",
+    "@supabase/supabase-js": "^2.106.2",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.10.0",
     "html2canvas": "^1.4.1",

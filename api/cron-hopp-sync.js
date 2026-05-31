@@ -15,8 +15,14 @@
 import { getDb, verifyIdToken, FieldValue } from './_lib/firebase-admin.js';
 import { callHoppTool } from './_lib/hopp-mcp-client.js';
 import { rollupTripsToRevenue } from '../src/utils/hoppSyncRollup.js';
+import { createClient } from '@supabase/supabase-js';
+import { toSupabaseRow } from '../src/lib/supabaseRowMap.js';
 
 export const maxDuration = 60;
+
+// ADR-0013: the cron also dual-writes trips + revenue to Supabase (service-role,
+// bypasses RLS). Single-tenant cron stamps a fixed org; override via OMNI_ORG_ID.
+const ORG_ID = process.env.OMNI_ORG_ID || 'mg-executive-org';
 
 const BATCH_SIZE = 450;
 // Sync window starts at 00:00 UTC this many days back. The revenue rollup only
@@ -192,6 +198,27 @@ export default async function handler(req, res) {
       revenueRows.map((r) => ({ ...r.data, _docId: r.docId })),
       { merge: true, stampField: 'lastSyncedAt' },
     );
+
+    // ── ADR-0013: best-effort dual-write trips + revenue to Supabase ─────
+    // Inner try → a Supabase hiccup never fails the authoritative Firestore sync.
+    // source_doc_id = the raw Firestore doc id, so this dedups against the backfill.
+    try {
+      const supa = supabaseAdmin();
+      if (supa) {
+        await upsertSupabase(supa, 'scooter_trips', aggregated.trips
+          .map((t) => {
+            const { _docId, ...data } = t;
+            return _docId
+              ? toSupabaseRow('scooterTrips', ORG_ID, String(_docId), { ...data, orgId: ORG_ID })
+              : null;
+          })
+          .filter(Boolean));
+        await upsertSupabase(supa, 'revenue_days', revenueRows
+          .map((r) => toSupabaseRow('revenue', ORG_ID, String(r.docId), { ...r.data, orgId: ORG_ID })));
+      }
+    } catch (e) {
+      console.warn('[cron-hopp-sync] Supabase dual-write skipped:', e?.message || e);
+    }
   } catch (err) {
     return finalize(res, db, {
       trigger, triggeredByUid, startedAt, since, until,
@@ -229,6 +256,25 @@ async function writeBatch(db, collection, items, { merge, stampField }) {
     await batch.commit();
   }
   return total;
+}
+
+// ADR-0013 — lazy service-role Supabase client (null when env unset → dual-write no-ops).
+let _supa = null;
+function supabaseAdmin() {
+  if (_supa) return _supa;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  _supa = createClient(url, key, { auth: { persistSession: false } });
+  return _supa;
+}
+
+async function upsertSupabase(supa, table, rows) {
+  if (!rows || !rows.length) return;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supa.from(table).upsert(rows.slice(i, i + 500), { onConflict: 'source_doc_id' });
+    if (error) { console.warn(`[cron-hopp-sync] supabase ${table}: ${error.message}`); break; }
+  }
 }
 
 function escapeHtml(s) {
