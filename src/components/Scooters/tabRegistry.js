@@ -7,13 +7,14 @@
  */
 
 import { lazy } from 'react';
-import { Info, MapPin, Activity, Wrench, TrendingUp, BarChart2 } from 'lucide-react';
+import { Info, MapPin, Activity, Wrench, TrendingUp, BarChart2, History } from 'lucide-react';
 
 // Lazy-load tab components to keep initial bundle small
 const DetailsTab  = lazy(() => import('./tabs/DetailsTab.jsx'));
 const TripsTab    = lazy(() => import('./tabs/TripsTab.jsx'));
 const EventsTab   = lazy(() => import('./tabs/EventsTab.jsx'));
 const RepairsTab  = lazy(() => import('./tabs/RepairsTab.jsx'));
+const ServiceHistoryTab = lazy(() => import('./tabs/ServiceHistoryTab.jsx'));
 const FinanceTab  = lazy(() => import('./tabs/FinanceTab.jsx'));
 const AnalyticsTab = lazy(() => import('./tabs/AnalyticsTab.jsx'));
 
@@ -22,6 +23,9 @@ export const TAB_REGISTRY = {
   trips:     { component: TripsTab,     label: 'Trips',     icon: MapPin },
   events:    { component: EventsTab,    label: 'Events',    icon: Activity },
   repairs:   { component: RepairsTab,   label: 'Repairs',   icon: Wrench },
+  // Phase 2.5 F4 — completed-repair audit timeline (cost + KM + who), distinct
+  // from the `repairs` ticket-queue tab.
+  servicehistory: { component: ServiceHistoryTab, label: 'Service History', icon: History },
   finance:   { component: FinanceTab,   label: 'Finance',   icon: TrendingUp },
   analytics: { component: AnalyticsTab, label: 'Analytics', icon: BarChart2 },
 };

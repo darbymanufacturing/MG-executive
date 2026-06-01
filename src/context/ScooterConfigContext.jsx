@@ -13,12 +13,14 @@ import { orgWrite } from '../hooks/orgWrite.js';
 const CONFIG_COL = 'config';
 
 const DEFAULT_TABS = [
-  { id: 'details',   label: 'Details',   enabled: true,  order: 0 },
-  { id: 'trips',     label: 'Trips',     enabled: true,  order: 1 },
-  { id: 'events',    label: 'Events',    enabled: true,  order: 2 },
-  { id: 'repairs',   label: 'Repairs',   enabled: true,  order: 3 },
-  { id: 'finance',   label: 'Finance',   enabled: true,  order: 4 },
-  { id: 'analytics', label: 'Analytics', enabled: false, order: 5 },
+  { id: 'details',        label: 'Details',         enabled: true,  order: 0 },
+  { id: 'trips',          label: 'Trips',           enabled: true,  order: 1 },
+  { id: 'events',         label: 'Events',          enabled: true,  order: 2 },
+  { id: 'repairs',        label: 'Repairs',         enabled: true,  order: 3 },
+  // Phase 2.5 F4 — completed-repair audit timeline (cost + KM + who).
+  { id: 'servicehistory', label: 'Service History', enabled: true,  order: 4 },
+  { id: 'finance',        label: 'Finance',         enabled: true,  order: 5 },
+  { id: 'analytics',      label: 'Analytics',       enabled: false, order: 6 },
 ];
 
 const ScooterConfigContext = createContext(null);

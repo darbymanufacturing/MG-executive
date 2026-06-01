@@ -26,6 +26,14 @@ import { resolve } from 'path';
 
 const PAGE_SIZE = 500;
 
+// --skip <coll,coll> — exclude collections from the backup (e.g. the huge
+// telemetryEvents when the Spark read quota is tight). Skipped collections are
+// recorded in the manifest as { skipped: true } so the backup is self-describing.
+const SKIP = (() => {
+  const i = process.argv.indexOf('--skip');
+  return i >= 0 && process.argv[i + 1] ? new Set(process.argv[i + 1].split(',').map((s) => s.trim())) : new Set();
+})();
+
 function initAdmin() {
   if (admin.apps.length) return;
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -106,15 +114,22 @@ async function main() {
   const cols = await db.listCollections();
   const manifest = { createdAt: now.toISOString(), project: 'mg-executive', format: 'jsonl', collections: {}, totalDocs: 0 };
 
+  if (SKIP.size) console.log(`(skipping: ${[...SKIP].join(', ')})\n`);
   for (const col of cols) {
+    if (SKIP.has(col.id)) {
+      manifest.collections[col.id] = { skipped: true };
+      console.log(`  ${col.id.padEnd(24)} SKIPPED`);
+      continue;
+    }
     const count = await backupCollection(col, tmpDir, manifest.collections);
     manifest.totalDocs += count;
     console.log(`  ${col.id.padEnd(24)} ${count} docs`);
   }
 
+  manifest.skipped = [...SKIP];
   writeFileSync(resolve(tmpDir, '_manifest.json'), JSON.stringify(manifest, null, 2));
   renameSync(tmpDir, dir);
-  console.log(`\n✓ Backup complete: ${manifest.totalDocs} docs across ${cols.length} collections`);
+  console.log(`\n✓ Backup complete: ${manifest.totalDocs} docs across ${cols.length} collections` + (SKIP.size ? ` (${SKIP.size} skipped)` : ''));
   console.log(`  → ${dir}`);
   console.log(`  (consumed ~${manifest.totalDocs} Firestore reads against the Spark 50K/day quota)`);
   process.exit(0);

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronRight, CheckCircle2, Plus, Minus,
@@ -8,8 +8,10 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useRepairProcedures } from '../../context/RepairProcedureContext.jsx';
 import PhotoUpload from './PhotoUpload.jsx';
+import SignaturePad from './SignaturePad.jsx';
 import { completeRepairSession } from '../../utils/repairSessionWriter.js';
 import { computeRepairPay } from '../../utils/repairPayCalc.js';
+import { uploadToCloudinary } from '../../utils/cloudinaryUpload.js';
 import styles from './RepairSession.module.css';
 
 const FALLBACK_PROCEDURE = {
@@ -169,6 +171,7 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
 function SummaryScreen({
   procedure, stepData, startedAt, onComplete, completing, completeErr,
   labourRatePerHour, extraMinutes, extraWorkNote, onExtraMinutes, onExtraWorkNote,
+  signatureRef, signed, onSignedChange,
 }) {
   const allParts = {};
   stepData.forEach((s) => {
@@ -265,6 +268,12 @@ function SummaryScreen({
         </p>
       </div>
 
+      {/* Phase 2.5 F3 — digital sign-off (required before submit) */}
+      <div className={styles.summaryCard}>
+        <p className={styles.summarySection}>Your signature</p>
+        <SignaturePad ref={signatureRef} onSignedChange={onSignedChange} />
+      </div>
+
       {/* #99: show write failure so user can retry */}
       {completeErr && (
         <div style={{ color: 'var(--status-red)', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>
@@ -274,11 +283,13 @@ function SummaryScreen({
       <button
         className={styles.completeBtn}
         onClick={onComplete}
-        disabled={completing}
+        disabled={completing || !signed}
       >
         {completing
           ? <><Loader2 size={18} className={styles.spin} /> Saving…</>
-          : completeErr ? 'Retry' : 'Complete Repair'}
+          : completeErr ? 'Retry'
+          : signed ? 'Complete Repair'
+          : 'Sign to complete'}
       </button>
     </div>
   );
@@ -340,6 +351,9 @@ export default function RepairSession() {
   // Phase 2.5 F1 — technician-logged extra work (beyond the procedure estimate).
   const [extraMinutes,  setExtraMinutes]  = useState(0);
   const [extraWorkNote, setExtraWorkNote] = useState('');
+  // Phase 2.5 F3 — digital sign-off. signatureRef exposes toBlob()/isEmpty().
+  const signatureRef = useRef(null);
+  const [signed, setSigned] = useState(false);
 
   // #419 — Per-step state: { notes, partsUsed, photoUrls, completedAt }
   // Initialise from sessionStorage so that closing the tab mid-repair preserves
@@ -426,6 +440,23 @@ export default function RepairSession() {
   async function handleComplete() {
     setCompleting(true);
     try {
+      // Phase 2.5 F3 — upload the signature PNG (best-effort). The button is gated
+      // on `signed`, so there's ink to capture; a Cloudinary failure shouldn't lose
+      // the completed repair, so we persist with signatureUrl:null + log it.
+      let signatureUrl = null;
+      try {
+        const blob = await signatureRef.current?.toBlob();
+        if (blob) {
+          signatureUrl = await uploadToCloudinary(blob, {
+            folder: `repair-signatures/${sessionId}`,
+            publicId: `sig-${Date.now()}`,
+            context: `sessionId=${sessionId}`,
+          });
+        }
+      } catch (sigErr) {
+        console.error('Signature upload failed (saving repair without it):', sigErr);
+      }
+
       await completeRepairSession({
         ticketDocId:    ticketId,
         sessionId,
@@ -441,6 +472,9 @@ export default function RepairSession() {
         labourRatePerHour,
         extraMinutes,
         extraWorkNote,
+        // Phase 2.5 F3 — digital sign-off.
+        signatureUrl,
+        signedByName: userProfile?.displayName ?? '',
       });
       // #403 — clear the persisted session ID on success so re-opening this ticket
       // (if ever re-opened) gets a fresh session rather than the completed one.
@@ -511,6 +545,9 @@ export default function RepairSession() {
           extraWorkNote={extraWorkNote}
           onExtraMinutes={setExtraMinutes}
           onExtraWorkNote={setExtraWorkNote}
+          signatureRef={signatureRef}
+          signed={signed}
+          onSignedChange={setSigned}
         />
       </div>
     );
