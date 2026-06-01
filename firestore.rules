@@ -46,9 +46,12 @@ service cloud.firestore {
     function isOrgManager() {
       return hasRole(['owner', 'admin', 'staff']);
     }
-    // Crew/technician (the /crew shell).
+    // Crew/technician/contractor (the /crew shell). Phase 2.5 F5: external
+    // contractors are crew-tier — org-isolated, may write only tickets +
+    // repairSessions (their assigned-scooter VIEW is a UI filter, not a rules
+    // boundary; the hard boundary is org + write-scope, enforced below).
     function isCrew() {
-      return hasRole(['crew', 'technician']);
+      return hasRole(['crew', 'technician', 'contractor']);
     }
 
     // ── Standard org-scoped collection: manager full access; crew read-only ──
@@ -204,6 +207,16 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if isSignedIn() && claims().orgId == orgId && hasRole(['owner','admin']);
       allow delete: if isSignedIn() && claims().orgId == orgId && hasRole(['owner']);
+    }
+
+    // ── invites/{token} — contractor invitations (Phase 2.5 F6) ──
+    // Issued + redeemed ONLY through the Admin-SDK serverless endpoints
+    // (api/create-invite, api/accept-invite), which bypass these rules. Clients
+    // never create/accept directly. An org owner/admin MAY read their own org's
+    // invites (to show the roster's pending state); all client writes are denied.
+    match /invites/{token} {
+      allow read: if hasRole(['owner', 'admin']) && resource.data.orgId == claims().orgId;
+      allow write: if false;
     }
 
     // Default deny — anything not matched above is closed (no catch-all allow).

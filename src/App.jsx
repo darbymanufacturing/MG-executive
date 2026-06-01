@@ -34,6 +34,7 @@ import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
+import AcceptInvite from './pages/AcceptInvite.jsx';
 import Onboarding from './pages/Onboarding.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
@@ -223,8 +224,9 @@ function AppShell() {
   }, []);
 
   /* Redirect crew to /crew shell */
-  // #185 — 'staff' intentionally stays in the admin shell (full ops access); only technician/crew go to /crew
-  if (userRole === 'technician' || userRole === 'crew') {
+  // #185 — 'staff' intentionally stays in the admin shell (full ops access); only technician/crew/contractor go to /crew
+  // Phase 2.5 F5 — 'contractor' (external tech) is crew-tier: same focused /crew portal.
+  if (userRole === 'technician' || userRole === 'crew' || userRole === 'contractor') {
     return <Navigate to="/crew" replace />;
   }
 
@@ -337,6 +339,8 @@ export default function App() {
               {/* Public */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              {/* Phase 2.5 F6 — contractor invite acceptance (public; token in query) */}
+              <Route path="/accept-invite" element={<AcceptInvite />} />
 
               {/* Crew routes — lightweight shell, no heavy admin contexts */}
               <Route

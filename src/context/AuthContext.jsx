@@ -220,7 +220,7 @@ export function AuthProvider({ children }) {
       const code = data.error?.message ?? '';
       throw new Error(friendlyError(code));
     }
-    const validRoles = ['crew', 'staff', 'admin', 'technician'];
+    const validRoles = ['crew', 'staff', 'admin', 'technician', 'contractor'];
     const assignedRole = validRoles.includes(role) ? role : 'crew';
     // #362 — route through safeWrite so a Firestore failure surfaces (toast) instead of
     // silently orphaning the just-created Auth account. rethrow so the caller still sees it.

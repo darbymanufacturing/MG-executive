@@ -120,7 +120,7 @@ export default function Settings() {
     if (!userProfile?.orgId) return;
     const q = query(
       collection(db, 'users'),
-      where('role', 'in', ['technician', 'crew', 'staff']),
+      where('role', 'in', ['technician', 'crew', 'staff', 'contractor']),
       where('orgId', '==', userProfile.orgId),
     );
     // #210: add onError callback so listener failures surface rather than silently dying
@@ -154,7 +154,8 @@ export default function Settings() {
     setInviteLoading(true);
     try {
       await createTechnicianAccount(inviteEmail.trim(), invitePassword, inviteName.trim(), inviteRole);
-      const roleLabel = inviteRole === 'crew' ? 'Crew' : inviteRole === 'staff' ? 'Staff' : 'Admin';
+      const ROLE_LABELS = { crew: 'Crew', contractor: 'Contractor', staff: 'Staff', admin: 'Admin' };
+      const roleLabel = ROLE_LABELS[inviteRole] ?? 'Crew';
       // #361 — use toast instead of inline status state
       toastSuccess(`${roleLabel} account created for ${inviteEmail.trim()}.`);
       setInviteEmail('');
@@ -625,6 +626,8 @@ export default function Settings() {
                   style={{ cursor: 'pointer' }}
                 >
                   <option value="crew">Crew — repairs, tickets, procedures only</option>
+                  {/* Phase 2.5 F5 — external contractor: crew-tier, scoped to assigned scooters */}
+                  <option value="contractor">Contractor — external; assigned scooters only</option>
                   <option value="staff">Staff — full ops, no financial details</option>
                   {/* #452 — only owners may mint admins; hide option from non-owners */}
                   {isOwner && <option value="admin">Admin — full access</option>}

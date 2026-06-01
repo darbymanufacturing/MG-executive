@@ -113,18 +113,29 @@ export default function TechnicianDashboard() {
     };
   }, []);
 
-  // Admin sees all open tickets; technician sees only their own + unassigned
+  // Phase 2.5 F5 — a contractor (external) is scoped to their assigned scooters only:
+  // they see tickets for those scooters, and NOT the org's unassigned pool. crew/
+  // technician keep the prior behavior (their own + unassigned). Admin sees all.
+  // (This is the assignment VIEW; org isolation + write-scope are enforced by rules.)
+  const assignedScooterIds = useMemo(
+    () => new Set((userProfile?.assignedScooterIds ?? []).map(String)),
+    [userProfile],
+  );
+
   const myTickets = useMemo(() =>
     tickets.filter((t) => {
       if (t.status === 'Completed') return false;
       if (userRole === 'admin') return true;
+      if (userRole === 'contractor') {
+        return t.assignedTo === uid || assignedScooterIds.has(String(t.scooterId));
+      }
       return t.assignedTo === uid || !t.assignedTo;
     }).sort((a, b) => {
       // Assigned-to-me first, then unassigned, then others; within group sort by days open desc
       const rank = (t) => (t.assignedTo === uid ? 0 : !t.assignedTo ? 1 : 2);
       return rank(a) - rank(b) || b.daysOpen - a.daysOpen;
     }),
-  [tickets, uid, userRole]);
+  [tickets, uid, userRole, assignedScooterIds]);
 
   // Phase 2.5 F2 — the tech's own completed jobs + their cost-approval status,
   // so they can see whether they'll be paid (pending / approved / rejected).

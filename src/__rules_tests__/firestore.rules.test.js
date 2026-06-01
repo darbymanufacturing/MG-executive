@@ -142,6 +142,65 @@ describe('config singleton + users + organizations', () => {
   });
 });
 
+// Phase 2.5 F5 — contractor is crew-tier: org-isolated, may write tickets/repairSessions
+// but NOT business data; cannot touch another org.
+describe('F5 — contractor role (crew-tier)', () => {
+  it('contractor CAN create a ticket in their own org', async () => {
+    const db = ctx('uK', 'orgA', 'contractor').firestore();
+    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'orgA_ktix'), { orgId: 'orgA', status: 'Active' }));
+  });
+
+  it('contractor CAN create a repair session in their own org', async () => {
+    const db = ctx('uK', 'orgA', 'contractor').firestore();
+    await assertSucceeds(setDoc(doc(db, 'repairSessions', 'orgA_ksession'), { orgId: 'orgA', scooterId: '70055' }));
+  });
+
+  it('contractor CANNOT create a cost (managers only)', async () => {
+    const db = ctx('uK', 'orgA', 'contractor').firestore();
+    await assertFails(setDoc(doc(db, 'costs', 'orgA_kcost'), { orgId: 'orgA', amount: 5 }));
+  });
+
+  it('contractor can READ their own org data but NOT another org', async () => {
+    await assertSucceeds(getDoc(doc(ctx('uK', 'orgA', 'contractor').firestore(), 'costs', 'orgA_cost1')));
+    await assertFails(getDoc(doc(ctx('uK', 'orgA', 'contractor').firestore(), 'costs', 'orgB_cost1')));
+  });
+
+  it('contractor CANNOT write a ticket into another org', async () => {
+    const db = ctx('uK', 'orgA', 'contractor').firestore();
+    await assertFails(setDoc(doc(db, 'maintenanceTickets', 'sneaky'), { orgId: 'orgB', status: 'Active' }));
+  });
+});
+
+// Phase 2.5 F6 — invites: same-org owner/admin may READ; ALL client writes denied
+// (issue/redeem go through the Admin-SDK endpoints, which bypass rules).
+describe('F6 — invites collection', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), 'invites', 'tok_A'), {
+        orgId: 'orgA', email: 'x@y.com', role: 'contractor', status: 'pending',
+      });
+    });
+  });
+
+  it('an org admin reads their own org invite', async () => {
+    await assertSucceeds(getDoc(doc(ctx('uA', 'orgA', 'admin').firestore(), 'invites', 'tok_A')));
+  });
+
+  it("another org's admin CANNOT read the invite", async () => {
+    await assertFails(getDoc(doc(ctx('uB', 'orgB', 'admin').firestore(), 'invites', 'tok_A')));
+  });
+
+  it('crew/contractor CANNOT read invites (managers only)', async () => {
+    await assertFails(getDoc(doc(ctx('uK', 'orgA', 'contractor').firestore(), 'invites', 'tok_A')));
+  });
+
+  it('NO client may create or update an invite (server-only)', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'invites', 'tok_new'), { orgId: 'orgA', email: 'z@z.com', role: 'contractor', status: 'pending' }));
+    await assertFails(updateDoc(doc(db, 'invites', 'tok_A'), { status: 'accepted' }));
+  });
+});
+
 describe('default deny', () => {
   it('an unknown collection is closed even to an authed user', async () => {
     const db = ctx('uA', 'orgA', 'admin').firestore();
