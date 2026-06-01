@@ -30,7 +30,20 @@ const flag = (n, d = null) => { const i = args.indexOf(n); const v = args[i + 1]
 const ORG_ID = flag('--org-id', 'mg-executive-org');
 const BATCH = Number(flag('--batch', '500'));
 if (!Number.isFinite(BATCH) || BATCH <= 0) throw new Error('--batch must be a positive integer');
-const ONLY = (flag('--only') || 'scooterTrips,sprEvents,sprWeather,revenue').split(',').map((s) => s.trim()).filter(Boolean);
+// Named collection presets. `operational` = the 14 ADR-0015 collections (config + pow
+// both fold into the app_config table). Reads LIVE Firestore so PoW is current.
+const PRESETS = {
+  operational: [
+    'pow_tasks', 'maintenanceTickets', 'maintenanceParts', 'scooters', 'repairSessions',
+    'repairProcedures', 'projects', 'decisionGates', 'brainstormIdeas', 'issues',
+    'notifications', 'diary', 'costs', 'config', 'pow',
+  ],
+  timeseries: ['scooterTrips', 'sprEvents', 'sprWeather', 'revenue'], // telemetry excluded (10K)
+};
+const COLLECTIONS_PRESET = flag('--collections'); // 'operational' | 'timeseries'
+const ONLY = (COLLECTIONS_PRESET && PRESETS[COLLECTIONS_PRESET])
+  ? PRESETS[COLLECTIONS_PRESET]
+  : (flag('--only') || 'scooterTrips,sprEvents,sprWeather,revenue').split(',').map((s) => s.trim()).filter(Boolean);
 
 // Column list + Postgres types per table (the jsonb_to_recordset AS-clause).
 // MUST match the live schema (migration omni_timeseries_data_layer). `data` last.
@@ -59,6 +72,18 @@ const COLS = {
     ['unique_vehicles_count', 'numeric'], ['data', 'jsonb'],
   ],
 };
+
+// Operational tables (ADR-0015): only { org_id, source_doc_id, data } are exported —
+// the typed/indexed columns (created_at_ts, scooter_id, completed_at) are re-derived
+// from `data` by per-table DB triggers on insert, so they must NOT be in the COLS list.
+const OPERATIONAL_COLS = [['org_id', 'text'], ['source_doc_id', 'text'], ['data', 'jsonb']];
+for (const t of [
+  'pow_tasks', 'maintenance_tickets', 'maintenance_parts', 'scooters', 'repair_sessions',
+  'repair_procedures', 'projects', 'decision_gates', 'brainstorm_ideas', 'issues',
+  'notifications', 'diary', 'costs', 'app_config',
+]) {
+  COLS[t] = OPERATIONAL_COLS;
+}
 
 function initAdmin() {
   if (admin.apps.length) return;
@@ -108,8 +133,9 @@ async function main() {
   mkdirSync(dir, { recursive: true });
 
   console.log(`\nExporting → ${dir}\n  org_id=${ORG_ID}  batch=${BATCH}  collections=${ONLY.join(', ')}\n`);
-  const summary = [];
-
+  // Pass 1: read each collection from LIVE Firestore, group rows by Supabase table
+  // (config + pow both map to app_config, so their rows merge into one file set).
+  const rowsByTable = {};
   for (const coll of ONLY) {
     const table = SUPABASE_TABLE[coll];
     if (!table) { console.warn(`⚠️  unknown collection "${coll}" — skipping`); continue; }
@@ -120,18 +146,24 @@ async function main() {
       if (!docData.orgId) console.warn(`⚠️  doc ${d.id} missing orgId field — falling back to CLI flag "${ORG_ID}"`);
       return normalizeDates(toSupabaseRow(coll, effectiveOrgId, d.id, docData), COLS[table]);
     });
+    (rowsByTable[table] ??= []).push(...rows);
+    console.log(`  read ${coll.padEnd(18)} → ${table.padEnd(20)} ${String(rows.length).padStart(6)} docs`);
+  }
+
+  // Pass 2: write batched, idempotent .sql files per table.
+  const summary = [];
+  for (const [table, rows] of Object.entries(rowsByTable)) {
     let files = 0;
     for (let i = 0; i < rows.length; i += BATCH) {
       const part = String(files).padStart(3, '0');
       writeFileSync(resolve(dir, `${table}.${part}.sql`), buildSql(table, rows.slice(i, i + BATCH)));
       files++;
     }
-    summary.push({ coll, table, docs: rows.length, files });
-    console.log(`  ${coll.padEnd(16)} → ${table.padEnd(16)} ${String(rows.length).padStart(6)} docs · ${files} file(s)`);
+    summary.push({ table, docs: rows.length, files });
   }
 
   const total = summary.reduce((s, r) => s + r.docs, 0);
-  console.log(`\n✓ ${total} docs across ${summary.length} collections → ${dir}`);
+  console.log(`\n✓ ${total} docs across ${summary.length} tables → ${dir}`);
   console.log(`  (consumed ~${total} Firestore reads against the Spark 50K/day quota)`);
   console.log(`  Next: run each .sql via the Supabase MCP execute_sql (idempotent, ON CONFLICT DO NOTHING).\n`);
   console.log(`OUTDIR=${dir}`);
