@@ -29,6 +29,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
+import { layerFor } from '../lib/dataLayerConfig.js';
+import { sbWrite, sbUpsertMerge, sbUpdate, sbDelete, sbTransaction } from '../lib/supabaseWrite.js';
 
 let _orgId = null;
 let _userUid = null;
@@ -74,6 +76,16 @@ export async function orgWrite(collectionName, data, opts = {}) {
   const orgId = requireOrg(`create in ${collectionName}`);
   const { id, merge = false, ...writeOpts } = opts;
   const uid = _userUid;
+  // ADR-0015 seam: Supabase create / upsert. merge:true at an explicit id =
+  // create-or-shallow-merge (Firestore setDoc merge parity, no jsonb clobber).
+  if (layerFor(collectionName) === 'supabase') {
+    return safeWrite(
+      () => (id && merge
+        ? sbUpsertMerge(collectionName, orgId, uid, id, data)
+        : sbWrite(collectionName, orgId, uid, data, { id })),
+      { errorMessage: `Failed to save ${collectionName}`, ...writeOpts },
+    );
+  }
   const payload = {
     ...data,
     orgId,
@@ -90,7 +102,14 @@ export async function orgWrite(collectionName, data, opts = {}) {
 }
 
 export async function orgUpdate(collectionName, docId, patch, opts = {}) {
-  requireOrgDoc(`update ${collectionName}/${docId}`, docId);
+  const orgId = requireOrgDoc(`update ${collectionName}/${docId}`, docId);
+  // ADR-0015 seam: Supabase patch (shallow data||patch, arrayUnion→$append).
+  if (layerFor(collectionName) === 'supabase') {
+    return safeWrite(
+      () => sbUpdate(collectionName, orgId, docId, patch),
+      { errorMessage: `Failed to update ${collectionName}`, ...opts },
+    );
+  }
   // orgId is NOT re-stamped here (the doc already carries it from create); the
   // Firestore rules block patching another org's doc. We only guard that a write
   // never happens with no org in context.
@@ -101,7 +120,13 @@ export async function orgUpdate(collectionName, docId, patch, opts = {}) {
 }
 
 export async function orgDelete(collectionName, docId, opts = {}) {
-  requireOrgDoc(`delete ${collectionName}/${docId}`, docId);
+  const orgId = requireOrgDoc(`delete ${collectionName}/${docId}`, docId);
+  if (layerFor(collectionName) === 'supabase') {
+    return safeWrite(
+      () => sbDelete(collectionName, orgId, docId),
+      { errorMessage: `Failed to delete ${collectionName}`, ...opts },
+    );
+  }
   return safeWrite(
     () => deleteDoc(doc(db, collectionName, docId)),
     { errorMessage: `Failed to delete ${collectionName}`, ...opts },
@@ -119,7 +144,11 @@ export async function orgDelete(collectionName, docId, opts = {}) {
  * Throws on network failure (matches orgUpdate rethrow:true behaviour).
  */
 export async function orgTransaction(collectionName, docId, mutator) {
-  requireOrgDoc(`transaction on ${collectionName}/${docId}`, docId);
+  const orgId = requireOrgDoc(`transaction on ${collectionName}/${docId}`, docId);
+  // ADR-0015 seam: Supabase optimistic RMW (rmw_read → mutator → rmw_commit CAS).
+  if (layerFor(collectionName) === 'supabase') {
+    return sbTransaction(collectionName, orgId, docId, mutator);
+  }
   const ref = doc(db, collectionName, docId);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);

@@ -174,13 +174,21 @@ describe('toSupabaseRow', () => {
     expect(row.battery_level).toBe(87.5);
   });
 
-  it('SUPABASE_TABLE covers exactly the five time-series collections', () => {
+  it('SUPABASE_TABLE maps the 5 time-series + 14 operational collections (ADR-0013/0015)', () => {
+    // time-series (ADR-0013)
     expect(SUPABASE_TABLE.telemetryEvents).toBe('telemetry_events');
     expect(SUPABASE_TABLE.scooterTrips).toBe('scooter_trips');
     expect(SUPABASE_TABLE.sprEvents).toBe('spr_events');
     expect(SUPABASE_TABLE.sprWeather).toBe('spr_weather');
     expect(SUPABASE_TABLE.revenue).toBe('revenue_days');
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(5);
+    // operational (ADR-0015) — `config` + `pow` both fold into app_config
+    expect(SUPABASE_TABLE.maintenanceTickets).toBe('maintenance_tickets');
+    expect(SUPABASE_TABLE.pow_tasks).toBe('pow_tasks');
+    expect(SUPABASE_TABLE.repairSessions).toBe('repair_sessions');
+    expect(SUPABASE_TABLE.config).toBe('app_config');
+    expect(SUPABASE_TABLE.pow).toBe('app_config');
+    // 5 time-series + 13 operational + config + pow = 20 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(20);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

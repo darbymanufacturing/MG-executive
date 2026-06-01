@@ -19,10 +19,43 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useOrg } from '../context/OrgContext.jsx';
+import { layerFor } from '../lib/dataLayerConfig.js';
+import { SUPABASE_TABLE, SUPABASE_QUERY_MAP } from '../lib/supabaseRowMap.js';
+import { useSupabaseCollectionLive } from './useSupabaseLive.js';
 
 const DEFAULT_LIMIT = 50;
 
+/** Translate a Firestore-style {where,orderBy,limit} to the snake_case Supabase
+ *  columns (ADR-0015). Only fields with a SUPABASE_QUERY_MAP entry are remapped. */
+function toSupabaseOpts(collectionName, opts) {
+  const map = SUPABASE_QUERY_MAP[collectionName] ?? {};
+  const tr = (f) => map[f] ?? f;
+  const out = {};
+  if (opts.limit != null) out.limit = opts.limit;
+  if (opts.orderBy) {
+    const [f, dir] = Array.isArray(opts.orderBy) ? opts.orderBy : [opts.orderBy, 'desc'];
+    out.orderBy = [tr(f), dir];
+  }
+  if (opts.where) out.where = opts.where.map(([f, op, v]) => [tr(f), op, v]);
+  return out;
+}
+
+/**
+ * ADR-0015 seam: route to Supabase Realtime or Firestore per layerFor(collection).
+ * layerFor() is a build-time constant for a given collection, so the same branch is
+ * taken on every render — rules-of-hooks holds in practice (the same waiver
+ * useOrgTable relies on). The Firestore path below is unchanged.
+ */
 export function useOrgCollection(collectionName, opts = {}) {
+  if (layerFor(collectionName) === 'supabase') {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useSupabaseCollectionLive(SUPABASE_TABLE[collectionName], toSupabaseOpts(collectionName, opts));
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useFirestoreCollection(collectionName, opts);
+}
+
+function useFirestoreCollection(collectionName, opts = {}) {
   const { orgId, loading: orgLoading, hasUser } = useOrg();
   const orderByOpt = opts.orderBy ?? null;
   const baseLimit = opts.limit ?? DEFAULT_LIMIT;

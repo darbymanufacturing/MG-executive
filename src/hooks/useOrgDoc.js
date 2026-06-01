@@ -12,8 +12,24 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { useOrg } from '../context/OrgContext.jsx';
+import { layerFor } from '../lib/dataLayerConfig.js';
+import { SUPABASE_TABLE } from '../lib/supabaseRowMap.js';
+import { useSupabaseDocLive } from './useSupabaseLive.js';
 
+/**
+ * ADR-0015 seam: route to Supabase Realtime or Firestore per layerFor(collection).
+ * `config`/`pow` both map to the app_config table; docId is the source_doc_id.
+ */
 export function useOrgDoc(collectionName, docId) {
+  if (layerFor(collectionName) === 'supabase') {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useSupabaseDocLive(SUPABASE_TABLE[collectionName], docId);
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useFirestoreDoc(collectionName, docId);
+}
+
+function useFirestoreDoc(collectionName, docId) {
   const { orgId, loading: orgLoading, hasUser } = useOrg();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
