@@ -1,6 +1,7 @@
 import { doc, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { getActiveOrg } from '../hooks/orgWrite.js';
+import { computeRepairPay } from './repairPayCalc.js';
 
 /**
  * Writes back a completed repair session in one atomic batch:
@@ -18,6 +19,14 @@ export async function completeRepairSession({
   startedAt,       // Date
   completedAt,     // Date
   steps,           // [{ stepNumber, notes, partsUsed: [{partId, partName, quantity, unitCost}], photoUrls }]
+  // ── Phase 2.5 F1 — pay inputs (all optional; default to a zero-pay record) ──
+  estimatedMinutes = 0,    // procedure estimate — the basis for labour pay
+  labourRatePerHour = 0,   // org labour rate snapshot at completion
+  extraMinutes = 0,        // technician-logged extra work
+  extraWorkNote = '',      // why the extra work was needed
+  // ── Phase 2.5 F3 — digital sign-off (optional; set once F3 ships) ──
+  signatureUrl = null,
+  signedByName = null,
 }) {
   // ADR-0003: every write must be scoped to an org
   const orgId = getActiveOrg();
@@ -88,6 +97,12 @@ export async function completeRepairSession({
       (sum, p) => sum + p.quantity * (p.unitCost ?? 0), 0
     );
 
+    // Phase 2.5 F1 — pay breakdown (pure, shared with the SummaryScreen preview).
+    // Pays on the procedure ESTIMATE + logged extra work; rate is snapshotted here.
+    const pay = computeRepairPay({
+      estimatedMinutes, labourRatePerHour, extraMinutes, partsUsed: aggregatedPartsUsed,
+    });
+
     // All stock checks passed — decrement each part
     partSnaps.forEach((snap, idx) => {
       const { quantity } = aggregatedPartsUsed[idx];
@@ -102,6 +117,17 @@ export async function completeRepairSession({
       completedBy:    technicianUid,
       partsUsed:      aggregatedPartsUsed,
       labourMinutes,
+      // Phase 2.5 F1 — pay snapshot on the ticket for at-a-glance review.
+      estimatedMinutes,
+      labourRatePerHour,
+      extraMinutes,
+      extraWorkNote,
+      labourCost:     pay.labourCost,
+      extraCost:      pay.extraCost,
+      totalPartsCost,
+      totalCost:      pay.totalCost,
+      // Phase 2.5 F2 — every completed repair starts PENDING admin cost-approval.
+      costStatus:     'pending',
       sessionId,
       updatedAt:      completedAt.toISOString(),
       activityLog:    arrayUnion({
@@ -131,6 +157,22 @@ export async function completeRepairSession({
       })),
       aggregatedPartsUsed,
       totalPartsCost,
+      // Phase 2.5 F1 — full pay breakdown on the permanent audit doc.
+      estimatedMinutes,
+      labourRatePerHour,
+      extraMinutes,
+      extraWorkNote,
+      labourCost:  pay.labourCost,
+      extraCost:   pay.extraCost,
+      totalCost:   pay.totalCost,
+      // Phase 2.5 F2 — admin cost-approval state (pending until reviewed).
+      costStatus:  'pending',
+      approvedBy:  null,
+      approvedAt:  null,
+      rejectionReason: null,
+      // Phase 2.5 F3 — digital sign-off (null until F3 wires the signature pad).
+      signatureUrl,
+      signedByName,
       createdAt: serverTimestamp(),
     });
   });

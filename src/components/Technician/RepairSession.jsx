@@ -9,6 +9,7 @@ import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useRepairProcedures } from '../../context/RepairProcedureContext.jsx';
 import PhotoUpload from './PhotoUpload.jsx';
 import { completeRepairSession } from '../../utils/repairSessionWriter.js';
+import { computeRepairPay } from '../../utils/repairPayCalc.js';
 import styles from './RepairSession.module.css';
 
 const FALLBACK_PROCEDURE = {
@@ -165,7 +166,10 @@ function StepPartsEditor({ partsUsed, onUpdate, allParts }) {
 }
 
 // ── Summary screen ────────────────────────────────────────────────────────────
-function SummaryScreen({ procedure: _procedure, stepData, startedAt, onComplete, completing, completeErr }) {
+function SummaryScreen({
+  procedure, stepData, startedAt, onComplete, completing, completeErr,
+  labourRatePerHour, extraMinutes, extraWorkNote, onExtraMinutes, onExtraWorkNote,
+}) {
   const allParts = {};
   stepData.forEach((s) => {
     (s.partsUsed ?? []).forEach(({ partId, partName, quantity, unitCost }) => {
@@ -174,7 +178,15 @@ function SummaryScreen({ procedure: _procedure, stepData, startedAt, onComplete,
     });
   });
   const aggregated = Object.values(allParts);
-  const totalCost  = aggregated.reduce((s, p) => s + p.quantity * p.unitCost, 0);
+
+  // Phase 2.5 F1 — pay breakdown previewed with the SAME pure fn the writer persists.
+  const estimatedMinutes = procedure?.estimatedMinutes ?? 0;
+  const pay = computeRepairPay({
+    estimatedMinutes,
+    labourRatePerHour,
+    extraMinutes,
+    partsUsed: aggregated,
+  });
 
   return (
     <div className={styles.summary}>
@@ -199,12 +211,58 @@ function SummaryScreen({ procedure: _procedure, stepData, startedAt, onComplete,
             </div>
           ))
         )}
-        {aggregated.length > 0 && (
-          <div className={styles.summaryTotal}>
-            <span>Total parts cost</span>
-            <span>€{totalCost.toFixed(2)}</span>
+      </div>
+
+      {/* Phase 2.5 F1 — extra-work entry (optional) */}
+      <div className={styles.summaryCard}>
+        <p className={styles.summarySection}>Extra work (optional)</p>
+        <div className={styles.field}>
+          <label className={styles.fieldLabel}>Extra minutes beyond the estimate</label>
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            className={styles.notesInput}
+            placeholder="0"
+            value={extraMinutes || ''}
+            onChange={(e) => onExtraMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+          />
+        </div>
+        {extraMinutes > 0 && (
+          <div className={styles.field}>
+            <label className={styles.fieldLabel}>Reason for extra work</label>
+            <textarea
+              className={styles.notesInput}
+              rows={2}
+              placeholder="Why the job took longer than estimated…"
+              value={extraWorkNote}
+              onChange={(e) => onExtraWorkNote(e.target.value)}
+            />
           </div>
         )}
+      </div>
+
+      {/* Phase 2.5 F1 — pay breakdown */}
+      <div className={styles.summaryCard}>
+        <p className={styles.summarySection}>Pay breakdown</p>
+        <div className={styles.summaryPartRow}>
+          <span>Parts</span><span /><span className={styles.summaryPartCost}>€{pay.partsCost.toFixed(2)}</span>
+        </div>
+        <div className={styles.summaryPartRow}>
+          <span>Labour ({estimatedMinutes} min est.)</span><span /><span className={styles.summaryPartCost}>€{pay.labourCost.toFixed(2)}</span>
+        </div>
+        {pay.extraCost > 0 && (
+          <div className={styles.summaryPartRow}>
+            <span>Extra ({extraMinutes} min)</span><span /><span className={styles.summaryPartCost}>€{pay.extraCost.toFixed(2)}</span>
+          </div>
+        )}
+        <div className={styles.summaryTotal}>
+          <span>Total</span>
+          <span>€{pay.totalCost.toFixed(2)}</span>
+        </div>
+        <p className={styles.summaryNone} style={{ marginTop: 6, fontSize: 12 }}>
+          Subject to admin approval before payment.
+        </p>
       </div>
 
       {/* #99: show write failure so user can retry */}
@@ -231,8 +289,9 @@ export default function RepairSession() {
   const { ticketId } = useParams();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
-  const { tickets, parts } = useMaintenance();
+  const { tickets, parts, config } = useMaintenance();
   const { procedures } = useRepairProcedures();
+  const labourRatePerHour = config?.labourRatePerHour ?? 0;
 
   const ticket    = useMemo(() => tickets.find((t) => t._docId === ticketId), [tickets, ticketId]);
 
@@ -278,6 +337,9 @@ export default function RepairSession() {
   const [completing,   setCompleting]   = useState(false);
   const [completeErr,  setCompleteErr]  = useState(null);
   const [stepError,    setStepError]    = useState(null);
+  // Phase 2.5 F1 — technician-logged extra work (beyond the procedure estimate).
+  const [extraMinutes,  setExtraMinutes]  = useState(0);
+  const [extraWorkNote, setExtraWorkNote] = useState('');
 
   // #419 — Per-step state: { notes, partsUsed, photoUrls, completedAt }
   // Initialise from sessionStorage so that closing the tab mid-repair preserves
@@ -374,6 +436,11 @@ export default function RepairSession() {
         startedAt,
         completedAt:    new Date(),
         steps:          stepData,
+        // Phase 2.5 F1 — pay inputs (estimate from the procedure, rate from org config).
+        estimatedMinutes:  procedure.estimatedMinutes ?? 0,
+        labourRatePerHour,
+        extraMinutes,
+        extraWorkNote,
       });
       // #403 — clear the persisted session ID on success so re-opening this ticket
       // (if ever re-opened) gets a fresh session rather than the completed one.
@@ -439,6 +506,11 @@ export default function RepairSession() {
           onComplete={handleComplete}
           completing={completing}
           completeErr={completeErr}
+          labourRatePerHour={labourRatePerHour}
+          extraMinutes={extraMinutes}
+          extraWorkNote={extraWorkNote}
+          onExtraMinutes={setExtraMinutes}
+          onExtraWorkNote={setExtraWorkNote}
         />
       </div>
     );

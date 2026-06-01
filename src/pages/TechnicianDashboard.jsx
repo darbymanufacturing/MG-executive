@@ -8,6 +8,27 @@ import styles from './TechnicianDashboard.module.css';
 const CATEGORY_LABEL = { Q: 'Quick', M: 'Medium', C: 'Complex', B: 'Blocked', F: 'Finished' };
 const CATEGORY_COLOR = { Q: '#00C896', M: '#F5A623', C: '#E84545', B: '#888', F: '#4CAF50' };
 
+// Phase 2.5 F2 — cost-approval status badge for the tech's completed jobs.
+const COST_STATUS = {
+  pending:  { label: 'Pending approval', color: '#D97706' },
+  approved: { label: 'Approved',         color: '#15803D' },
+  rejected: { label: 'Rejected',         color: '#DC2626' },
+};
+
+function CostStatusBadge({ status }) {
+  const s = COST_STATUS[status] ?? COST_STATUS.pending;
+  return (
+    <span
+      style={{
+        display: 'inline-block', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+        background: `${s.color}1a`, color: s.color, border: `1px solid ${s.color}40`,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 function TicketCard({ ticket, techUid, onClaim }) {
   const navigate = useNavigate();
   const _isAssignedToMe = ticket.assignedTo === techUid;
@@ -105,6 +126,15 @@ export default function TechnicianDashboard() {
     }),
   [tickets, uid, userRole]);
 
+  // Phase 2.5 F2 — the tech's own completed jobs + their cost-approval status,
+  // so they can see whether they'll be paid (pending / approved / rejected).
+  const myCompleted = useMemo(() =>
+    tickets
+      .filter((t) => t.status === 'Completed' && t.completedBy === uid)
+      .sort((a, b) => String(b.dateCompleted ?? '').localeCompare(String(a.dateCompleted ?? '')))
+      .slice(0, 20),
+  [tickets, uid]);
+
   async function handleClaim(docId) {
     await assignTicket(docId, uid, userProfile?.displayName ?? '');
   }
@@ -156,6 +186,37 @@ export default function TechnicianDashboard() {
               ))}
             </div>
           </>
+        )}
+
+        {/* Phase 2.5 F2 — the tech's completed jobs + cost-approval status */}
+        {myCompleted.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <p className={styles.queueCount}>Completed by you</p>
+            <div className={styles.ticketList}>
+              {myCompleted.map((t) => (
+                <div key={t._docId} className={styles.card}>
+                  <div className={styles.cardHeader}>
+                    <div className={styles.scooterRow}>
+                      <span className={styles.scooterId}>{t.scooterId || '—'}</span>
+                      <CostStatusBadge status={t.costStatus} />
+                    </div>
+                    <p className={styles.issueDesc}>{t.issueDescription || 'No description'}</p>
+                  </div>
+                  <div className={styles.cardMeta}>
+                    {t.dateCompleted && (
+                      <span className={styles.metaItem}><Clock size={12} />{t.dateCompleted}</span>
+                    )}
+                    {typeof t.totalCost === 'number' && (
+                      <span className={styles.metaItem}>€{t.totalCost.toFixed(2)}</span>
+                    )}
+                  </div>
+                  {t.costStatus === 'rejected' && t.rejectionReason && (
+                    <p className={styles.issueDesc} style={{ color: '#DC2626' }}>Reason: {t.rejectionReason}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </main>
     </div>

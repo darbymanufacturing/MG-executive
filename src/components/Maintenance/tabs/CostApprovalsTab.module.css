@@ -1,0 +1,59 @@
+.wrap { display: flex; flex-direction: column; gap: 12px; }
+
+.loading { padding: 32px; text-align: center; color: var(--fg-muted); }
+
+.count {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--fg-muted); margin: 0 0 4px;
+}
+
+.list { display: flex; flex-direction: column; gap: 12px; }
+
+.card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-md, 10px);
+  padding: 14px 16px;
+}
+
+.cardHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+
+.scooter { display: block; font-weight: 700; color: var(--fg-strong, #0F172A); font-size: 15px; }
+.meta { display: block; font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+
+.total {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-weight: 700; font-size: 16px; color: var(--accent, #A0521D);
+  white-space: nowrap;
+}
+
+.breakdownToggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-muted); font-size: 12px; padding: 8px 0 4px;
+}
+
+.breakdown { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--fg, #334155); }
+.rowTotal { font-weight: 700; color: var(--fg-strong, #0F172A); border-top: 1px solid var(--border, #e2e8f0); padding-top: 4px; margin-top: 2px; }
+
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+.approveBtn, .rejectBtn, .rejectConfirmBtn, .cancelBtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 14px; border-radius: var(--radius-sm, 6px);
+  font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent;
+}
+.approveBtn { background: var(--status-green, #15803D); color: #fff; }
+.rejectBtn { background: none; border-color: var(--border, #e2e8f0); color: var(--status-red, #DC2626); }
+.rejectConfirmBtn { background: var(--status-red, #DC2626); color: #fff; }
+.cancelBtn { background: none; border-color: var(--border, #e2e8f0); color: var(--fg-muted); }
+.approveBtn:disabled, .rejectBtn:disabled, .rejectConfirmBtn:disabled, .cancelBtn:disabled { opacity: 0.5; cursor: default; }
+
+.rejectBox { margin-top: 8px; }
+.reasonInput {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  padding: 8px 10px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--border, #e2e8f0); border-radius: var(--radius-sm, 6px);
+  background: var(--surface, #fff); color: var(--fg, #334155);
+}

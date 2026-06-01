@@ -29,6 +29,9 @@ const orgKey = orgDocId;
 
 const DEFAULT_CONFIG = {
   revenueRatePerDay: 3.67,
+  // Phase 2.5 F1 — contractor labour rate (€/hour) used to compute repair pay
+  // from a procedure's estimatedMinutes. Admin sets it in Settings → Maintenance.
+  labourRatePerHour: 25,
   maxActiveTickets:  3,
   customPrimaryTags:   [],
   customSecondaryTags: [],

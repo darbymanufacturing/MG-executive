@@ -12,7 +12,9 @@ export default defineConfig([
     files: ['**/*.{js,jsx,mjs}'],
     plugins: {
       react: reactPlugin,
-      'jsx-a11y': a11y,
+      // NOTE: do NOT also register 'jsx-a11y' here — a11y.flatConfigs.recommended
+      // (in `extends` below) already declares the plugin; registering it in both
+      // places throws "Cannot redefine plugin jsx-a11y" and breaks all linting.
     },
     extends: [
       js.configs.recommended,

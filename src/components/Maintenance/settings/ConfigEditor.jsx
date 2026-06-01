@@ -8,6 +8,8 @@ export default function ConfigEditor() {
 
   const [rate, setRate] = useState('');
   const [maxActive, setMaxActive] = useState('');
+  // Phase 2.5 F1 — contractor labour rate (€/hour) for repair pay.
+  const [labourRate, setLabourRate] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -19,13 +21,15 @@ export default function ConfigEditor() {
     if (!dirtyRef.current) {
       setRate(config.revenueRatePerDay ?? '');
       setMaxActive(config.maxActiveTickets ?? '');
+      setLabourRate(config.labourRatePerHour ?? '');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.revenueRatePerDay, config.maxActiveTickets]);
+  }, [config.revenueRatePerDay, config.maxActiveTickets, config.labourRatePerHour]);
 
   async function handleSave() {
     // #228: guard against NaN before writing to Firestore
-    if (!Number.isFinite(parseFloat(rate)) || !Number.isFinite(parseFloat(maxActive))) {
+    if (!Number.isFinite(parseFloat(rate)) || !Number.isFinite(parseFloat(maxActive))
+        || !Number.isFinite(parseFloat(labourRate))) {
       setError('Please enter valid numbers');
       return;
     }
@@ -36,6 +40,7 @@ export default function ConfigEditor() {
       await updateConfig({
         revenueRatePerDay: parseFloat(rate),
         maxActiveTickets: parseInt(maxActive, 10),
+        labourRatePerHour: parseFloat(labourRate),
       });
       dirtyRef.current = false; // #227: reset after successful save
       setSaved(true);
@@ -47,7 +52,8 @@ export default function ConfigEditor() {
 
   const dirty =
     parseFloat(rate) !== config.revenueRatePerDay ||
-    parseInt(maxActive, 10) !== config.maxActiveTickets;
+    parseInt(maxActive, 10) !== config.maxActiveTickets ||
+    parseFloat(labourRate) !== config.labourRatePerHour;
 
   return (
     <div className={styles.card}>
@@ -85,6 +91,25 @@ export default function ConfigEditor() {
           />
           <span className={styles.hint}>
             Current effective value: {config.maxActiveTickets} tickets
+          </span>
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label}>Contractor Labour Rate (€ / hour)</label>
+          <div className={styles.inputWrap}>
+            <span className={styles.prefix}>€</span>
+            <input
+              className={styles.input}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.50"
+              value={labourRate}
+              onChange={(e) => { dirtyRef.current = true; setLabourRate(e.target.value); }}
+            />
+          </div>
+          <span className={styles.hint}>
+            Repair pay = procedure estimate × this rate. Current: €{Number(config.labourRatePerHour ?? 0).toFixed(2)}/hr
           </span>
         </div>
       </div>
