@@ -31,11 +31,47 @@ const bool = (v) => (typeof v === 'boolean' ? v : null);
 
 /** Firestore collection name → Supabase table name. */
 export const SUPABASE_TABLE = Object.freeze({
+  // Time-series (ADR-0013)
   telemetryEvents: 'telemetry_events',
   scooterTrips: 'scooter_trips',
   sprEvents: 'spr_events',
   sprWeather: 'spr_weather',
   revenue: 'revenue_days',
+  // Operational (ADR-0015) — full doc lives in `data`; typed/indexed cols are
+  // re-derived from `data` by per-table DB triggers, so the extractors below
+  // return {} (single source of truth = the trigger, no JS/SQL drift).
+  pow_tasks: 'pow_tasks',
+  maintenanceTickets: 'maintenance_tickets',
+  maintenanceParts: 'maintenance_parts',
+  scooters: 'scooters',
+  repairSessions: 'repair_sessions',
+  repairProcedures: 'repair_procedures',
+  projects: 'projects',
+  decisionGates: 'decision_gates',
+  brainstormIdeas: 'brainstorm_ideas',
+  issues: 'issues',
+  notifications: 'notifications',
+  diary: 'diary',
+  costs: 'costs',
+  // The two singleton-config collections both fold into one app_config table
+  // (source_doc_id keeps the existing composite ids, which are globally unique).
+  config: 'app_config',
+  pow: 'app_config',
+});
+
+/**
+ * Per-collection camelCase→snake_case translation for server-side where/orderBy
+ * fields, used by the data-layer seam (useOrgCollection's Supabase branch) to
+ * map a Firestore-style query onto the typed Supabase columns. Only the fields
+ * actually queried server-side need an entry (verified by grepping every
+ * useOrgCollection({where,orderBy}) call); unmapped fields pass through as-is.
+ */
+export const SUPABASE_QUERY_MAP = Object.freeze({
+  repairSessions: { completedAt: 'completed_at', scooterId: 'scooter_id' },
+  issues: { createdAt: 'created_at_ts' },
+  diary: { createdAt: 'created_at_ts' },
+  notifications: { createdAt: 'created_at_ts' },
+  repairProcedures: { createdAt: 'created_at_ts' },
 });
 
 /** Per-collection extractor of the typed/indexed columns (camelCase doc → snake_case cols). */
@@ -82,6 +118,24 @@ const TYPED_COLUMNS = Object.freeze({
     unique_users_count: num(d.uniqueUsersCount),
     unique_vehicles_count: num(d.uniqueVehiclesCount),
   }),
+  // Operational (ADR-0015): typed/indexed cols are re-derived from `data` by
+  // per-table DB triggers (omni_sync_created_at_ts / omni_sync_repair_sessions),
+  // so the row only carries { org_id, source_doc_id, data } — no typed cols here.
+  pow_tasks: () => ({}),
+  maintenanceTickets: () => ({}),
+  maintenanceParts: () => ({}),
+  scooters: () => ({}),
+  repairSessions: () => ({}),
+  repairProcedures: () => ({}),
+  projects: () => ({}),
+  decisionGates: () => ({}),
+  brainstormIdeas: () => ({}),
+  issues: () => ({}),
+  notifications: () => ({}),
+  diary: () => ({}),
+  costs: () => ({}),
+  config: () => ({}),
+  pow: () => ({}),
 });
 
 /** Drop undefined + Firestore sentinels (e.g. serverTimestamp) so `data` is valid jsonb. */
