@@ -242,6 +242,9 @@ export default async function handler(req, res) {
 
   // ── Write to Firestore ───────────────────────────────────────────
   const written = { trips: 0, events: 0, tickets: 0, revenueDays: 0 };
+  // #486 — collect the Supabase dual-write result so syncLogs reports TRUTHFUL parity
+  // (writtenChunks / failedChunks) instead of always implying success.
+  const supaResult = { trips: null, revenue: null };
 
   try {
     // BUG #382 — stamp orgId into every Firestore doc so docs are org-scoped (SCHEMA.md: orgId field).
@@ -273,7 +276,7 @@ export default async function handler(req, res) {
     try {
       const supa = supabaseAdmin();
       if (supa) {
-        await upsertSupabase(supa, 'scooter_trips', aggregated.trips
+        supaResult.trips = await upsertSupabase(supa, 'scooter_trips', aggregated.trips
           .map((t) => {
             const { _docId, ...data } = t;
             return _docId
@@ -281,11 +284,12 @@ export default async function handler(req, res) {
               : null;
           })
           .filter(Boolean));
-        await upsertSupabase(supa, 'revenue_days', revenueRows
+        supaResult.revenue = await upsertSupabase(supa, 'revenue_days', revenueRows
           .map((r) => toSupabaseRow('revenue', ORG_ID, String(r.docId), { ...r.data, orgId: ORG_ID })));
       }
     } catch (e) {
       console.warn('[cron-hopp-sync] Supabase dual-write skipped:', e?.message || e);
+      supaResult.error = String(e?.message || e);
     }
   } catch (err) {
     return finalize(res, db, {
@@ -299,6 +303,7 @@ export default async function handler(req, res) {
     trigger, triggeredByUid, startedAt, since, until,
     ok: true,
     written,
+    supabaseWritten: supaResult,
     errors: aggregated.errors,
     scooterCount: scooters.length,
   });
@@ -338,12 +343,17 @@ function supabaseAdmin() {
 }
 
 async function upsertSupabase(supa, table, rows) {
-  if (!rows || !rows.length) return;
+  // #486 — return per-chunk outcome so the cron can report honest Supabase parity.
+  if (!rows || !rows.length) return { writtenChunks: 0, failedChunks: 0, totalRows: 0 };
+  let writtenChunks = 0, failedChunks = 0, totalRows = 0;
   for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await supa.from(table).upsert(rows.slice(i, i + 500), { onConflict: 'source_doc_id' });
+    const chunk = rows.slice(i, i + 500);
+    const { error } = await supa.from(table).upsert(chunk, { onConflict: 'source_doc_id' });
     // #379 — continue (not break) so a transient chunk failure doesn't drop subsequent chunks
-    if (error) { console.warn(`[cron-hopp-sync] supabase ${table} chunk ${i}: ${error.message}`); continue; }
+    if (error) { console.warn(`[cron-hopp-sync] supabase ${table} chunk ${i}: ${error.message}`); failedChunks++; continue; }
+    writtenChunks++; totalRows += chunk.length;
   }
+  return { writtenChunks, failedChunks, totalRows };
 }
 
 function escapeHtml(s) {
@@ -406,6 +416,7 @@ async function finalize(res, db, summary) {
       ? { since: summary.since.toISOString(), until: summary.until.toISOString() }
       : null,
     written:         summary.written || summary.partialWritten || null,
+    supabaseWritten: summary.supabaseWritten || null, // #486 — truthful Supabase parity per run
     duplicates:      summary.duplicates || null,
     errors:          summary.errors || (summary.errorMessage ? [{ error: summary.errorMessage }] : []),
     scooterCount:    summary.scooterCount ?? 0,
