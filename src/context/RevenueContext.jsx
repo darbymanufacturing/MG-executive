@@ -6,7 +6,7 @@ import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
-import { dualWriteSupabase } from '../lib/supabase.js';
+import { dualWriteSupabase, dualDeleteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDelete } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
@@ -54,14 +54,17 @@ export function RevenueProvider({ children }) {
         { rethrow: true, errorMessage: 'Revenue import failed mid-batch' },
       );
     }
-    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
-    await dualWriteSupabase(REVENUE_COL, orgId, sbEntries);
+    // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
+    void dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
+      .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
   }, [orgId]);
 
   // ── Delete a single day ───────────────────────────────────────────────────
   const deleteRevenueDay = useCallback(async (docId) => {
     await orgDelete(REVENUE_COL, docId, { rethrow: true, errorMessage: 'Failed to delete revenue entry' });
-  }, []);
+    // #479 — mirror the delete to Supabase so the stores don't drift after the flip.
+    await dualDeleteSupabase(REVENUE_COL, orgId, docId);
+  }, [orgId]);
 
   // ── Clear all revenue data (THIS org only) ────────────────────────────────
   const clearAllRevenue = useCallback(async () => {
@@ -81,6 +84,8 @@ export function RevenueProvider({ children }) {
       );
       more = snap.docs.length === BATCH_SIZE;
     }
+    // #479 — mirror the full clear to Supabase so the stores don't drift after the flip.
+    await dualClearSupabase(REVENUE_COL, orgId);
   }, [orgId]);
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects

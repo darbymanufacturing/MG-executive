@@ -14,7 +14,7 @@ import { classifyEventType } from '../utils/classifyEventType.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
-import { dualWriteSupabase } from '../lib/supabase.js';
+import { dualWriteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const EVENTS_COL = 'telemetryEvents';
@@ -30,7 +30,9 @@ export function TelemetryProvider({ children }) {
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
   const { items, loading, loadMore, hasMore } = useOrgTable(EVENTS_COL, SB_TABLE, {
     firestore: { limit: MAX_EVENTS, orderBy: ['timestamp', 'desc'] },
-    supabase: { limit: MAX_EVENTS, orderBy: ['timestamp', 'desc'] },
+    // #477/#478 — the Supabase typed column is `event_ts` (supabaseRowMap), NOT `timestamp`;
+    // ordering by a non-existent column errors the query the moment the flag flips.
+    supabase: { limit: MAX_EVENTS, orderBy: ['event_ts', 'desc'] },
   });
 
   // Re-classify on load so data ingested under older classifier rules picks up the
@@ -88,8 +90,10 @@ export function TelemetryProvider({ children }) {
       written += chunk.length;
       if (onProgress) onProgress(Math.round((written / total) * 100));
     }
-    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
-    await dualWriteSupabase(EVENTS_COL, orgId, sbEntries);
+    // ADR-0013: mirror to Supabase — #481 fire-and-forget so the success toast isn't
+    // blocked by the Supabase round-trip (best-effort; Firestore is authoritative).
+    void dualWriteSupabase(EVENTS_COL, orgId, sbEntries)
+      .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written, duplicates };
   }, [events, orgId]);
 
@@ -105,6 +109,8 @@ export function TelemetryProvider({ children }) {
         { rethrow: true, errorMessage: 'Failed to clear telemetry events' },
       );
     }
+    // #479 — mirror the clear to Supabase so the stores don't drift after the flip.
+    await dualClearSupabase(EVENTS_COL, orgId);
   }, [orgId]);
 
   const value = useMemo(() => ({

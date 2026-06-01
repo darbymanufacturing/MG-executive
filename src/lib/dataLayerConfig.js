@@ -16,7 +16,13 @@
  * stable and rules-of-hooks holds (same waiver useOrgTable already relies on).
  */
 
-const GLOBAL = (import.meta.env.VITE_DATA_LAYER ?? 'firestore').toLowerCase();
+const VALID_LAYERS = ['firestore', 'supabase'];
+const _rawGlobal = (import.meta.env.VITE_DATA_LAYER ?? 'firestore').toLowerCase().trim();
+if (!VALID_LAYERS.includes(_rawGlobal)) {
+  // #492 — a typo (e.g. "supabse") must not silently fall through to firestore unnoticed.
+  console.error(`[dataLayer] VITE_DATA_LAYER must be "firestore" or "supabase", got "${_rawGlobal}" — falling back to "firestore".`);
+}
+const GLOBAL = VALID_LAYERS.includes(_rawGlobal) ? _rawGlobal : 'firestore';
 
 function parseOverrides(raw) {
   const map = {};

@@ -77,8 +77,9 @@ export function useSupabaseTable(table, opts = {}) {
       if (prev.filterKey === filterKey) return prev; // loadMore path — no reset needed
       return { filterKey, offset: 0 };
     });
-    setItems([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // #490 — do NOT clear items here; keep the stale page visible until the new fetch
+    // lands (matches Firestore onSnapshot UX — no flash of empty state on filter change).
+    // The `loading` flag drives any overlay; offset===0 below replaces the items.
   }, [filterKey]);
 
   useEffect(() => {

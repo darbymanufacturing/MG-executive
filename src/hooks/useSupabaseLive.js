@@ -164,6 +164,7 @@ export function useSupabaseDocLive(table, sourceDocId) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset to loading when the doc target / org changes
     if (orgLoading || !orgId || !sourceDocId) { setLoading(true); return undefined; }
     if (!isSupabaseConfigured || !supabase) {
       setError(new Error('Supabase not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'));

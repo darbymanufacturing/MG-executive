@@ -114,7 +114,9 @@ describe('TelemetryContext (bug #378)', () => {
 
     const [, , perLayer] = mockUseOrgTable.mock.calls[0];
     expect(perLayer.firestore.orderBy[0]).toBe('timestamp');
-    expect(perLayer.supabase.orderBy[0]).toBe('timestamp');
+    // #477/#478 — the Supabase typed column is `event_ts`, not `timestamp`
+    // (ordering by a non-existent column would error the query on flip).
+    expect(perLayer.supabase.orderBy[0]).toBe('event_ts');
   });
 
   it('exposes loadMore function on the context value', async () => {

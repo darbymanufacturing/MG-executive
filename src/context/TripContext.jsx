@@ -10,7 +10,7 @@ import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
-import { dualWriteSupabase } from '../lib/supabase.js';
+import { dualWriteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
 
 const TRIPS_COL  = 'scooterTrips';
@@ -25,7 +25,9 @@ export function TripProvider({ children }) {
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
   const { items: trips, loading } = useOrgTable(TRIPS_COL, SB_TABLE, {
     firestore: { limit: MAX_TRIPS },
-    supabase: { limit: MAX_TRIPS },
+    // #478 — order the Supabase read (Postgres needs no index for this); the Firestore
+    // side stays orderless to avoid requiring a new (orgId, startedAt) composite index.
+    supabase: { limit: MAX_TRIPS, orderBy: ['started_at', 'desc'] },
   });
 
   /** Batch-upsert trip rows from parseTripLogCsv output. Returns { written }. */
@@ -60,8 +62,9 @@ export function TripProvider({ children }) {
         { rethrow: true, errorMessage: 'Trip import failed mid-batch' },
       );
     }
-    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
-    await dualWriteSupabase(TRIPS_COL, orgId, sbEntries);
+    // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
+    void dualWriteSupabase(TRIPS_COL, orgId, sbEntries)
+      .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written };
   }, [orgId]);
 
@@ -85,6 +88,8 @@ export function TripProvider({ children }) {
         { rethrow: true, errorMessage: 'Failed to clear trips for scooter' },
       );
     }
+    // #479 — mirror the per-scooter clear to Supabase (scooter_id typed column).
+    await dualClearSupabase(TRIPS_COL, orgId, [['scooter_id', '==', String(scooterId)]]);
     return snap.docs.length;
   }, [orgId]);
 
