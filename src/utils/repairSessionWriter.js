@@ -1,5 +1,7 @@
 import { doc, increment, arrayUnion, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { supabase } from '../lib/supabase.js';
+import { layerFor } from '../lib/dataLayerConfig.js';
 import { getActiveOrg } from '../hooks/orgWrite.js';
 import { computeRepairPay } from './repairPayCalc.js';
 
@@ -52,6 +54,36 @@ export async function completeRepairSession({
   // #445 — totalPartsCost is re-computed inside the transaction after live
   // unitCost fixup; this placeholder is replaced by the inner const.
   let totalPartsCost = 0;
+
+  // ADR-0015 seam: when maintenance data is on Supabase, the whole atomic
+  // completion (lock ticket + all parts, validate stock before any write, live
+  // unitCost #445, decrement, update ticket + costStatus pending, insert audit
+  // session) runs server-side in the complete_repair_session RPC. Pay is computed
+  // inside the RPC after the live-unitCost fixup. maintenanceTickets / parts /
+  // repairSessions are transactionally coupled → they cut over together.
+  if (layerFor('maintenanceTickets') === 'supabase') {
+    const completedIso = new Date(completedAt).toISOString();
+    const { error } = await supabase.rpc('complete_repair_session', {
+      p_payload: {
+        ticketDocId, sessionId, scooterId, procedureId: procedureId ?? null,
+        technicianUid, technicianName,
+        startedAt: new Date(startedAt).toISOString(),
+        completedAt: completedIso,
+        labourMinutes, estimatedMinutes, labourRatePerHour, extraMinutes, extraWorkNote,
+        signatureUrl, signedByName,
+        steps: steps.map((s) => ({
+          stepNumber: s.stepNumber,
+          completedAt: s.completedAt ?? completedIso,
+          partsUsed: s.partsUsed ?? [],
+          notes: s.notes ?? '',
+          photoUrls: s.photoUrls ?? [],
+        })),
+        aggregatedPartsUsed,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return;
+  }
 
   // #402/#23/#24 — All writes happen in ONE transaction so the entire operation is
   // atomic. If the ticket update or session doc write fails, the stock decrements are

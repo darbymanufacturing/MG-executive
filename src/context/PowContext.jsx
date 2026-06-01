@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { runTransaction, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { supabase } from '../lib/supabase.js';
+import { layerFor } from '../lib/dataLayerConfig.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
@@ -108,6 +110,16 @@ export function PowProvider({ children }) {
    *  Uses a Firestore transaction to read the document fresh (not from stale React state),
    *  so rapid concurrent clicks cannot clobber each other's assignee writes. */
   const toggleAssignee = useCallback(async (taskId, person, stepIndices = null) => {
+    // ADR-0015 seam: Supabase runs the same read-modify-write atomically in the
+    // toggle_assignee RPC (FOR UPDATE row lock) — same concurrency guarantee.
+    if (layerFor(TASKS_COL) === 'supabase') {
+      const { error } = await supabase.rpc('toggle_assignee', {
+        p_task_source_id: taskId, p_person: person,
+        p_step_indices: stepIndices, p_current_week: currentWeek,
+      });
+      if (error) throw new Error(error.message);
+      return;
+    }
     const ref = doc(db, TASKS_COL, taskId);
     await runTransaction(db, async (txn) => {
       const snap = await txn.get(ref);
