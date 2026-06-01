@@ -7,10 +7,11 @@ import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './ScooterLedgerDetail.module.css';
 
 export default function ScooterLedgerDetail({ row, onClose, hideClose = false, revenueNote = null }) {
-  if (!row) return null;
-
-  // Build monthly chart data: merge revenue + repair months
+  // Build monthly chart data: merge revenue + repair months. This hook MUST run on
+  // every render (before any early return) — react-hooks/rules-of-hooks; the previous
+  // `if (!row) return null` above it made the hook conditional (crash when row toggled).
   const chartData = useMemo(() => {
+    if (!row) return [];
     const keys = new Set([
       ...row.revenueMonthly.map((m) => m.key),
       ...row.repairMonthly.map((m) => m.key),
@@ -21,6 +22,8 @@ export default function ScooterLedgerDetail({ row, onClose, hideClose = false, r
       repair:  row.repairMonthly.find((m) => m.key === key)?.cost    || 0,
     }));
   }, [row]);
+
+  if (!row) return null;
 
   const netColor = row.netPosition >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
 
