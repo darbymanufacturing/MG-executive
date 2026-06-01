@@ -23,11 +23,14 @@ vi.mock('../firebase-admin.js', () => ({
 
 import { requireCronOrUser } from '../require-auth.js';
 
-/** Build a minimal request object with a Bearer token in Authorization. */
-function makeReq(token) {
+/** Build a minimal request object with a Bearer token in Authorization.
+ *  Pass extraHeaders to add additional headers (e.g. { 'x-vercel-cron': '1' }).
+ */
+function makeReq(token, extraHeaders = {}) {
   return {
     headers: {
       authorization: token ? `Bearer ${token}` : '',
+      ...extraHeaders,
     },
   };
 }
@@ -62,7 +65,8 @@ describe('requireCronOrUser — constant-time CRON_SECRET comparison (bug #407)'
   });
 
   test('correct secret returns { trigger: "cron", uid: null, role: null }', async () => {
-    const req = makeReq(CORRECT_SECRET);
+    // Vercel cron invocations always carry x-vercel-cron: 1.
+    const req = makeReq(CORRECT_SECRET, { 'x-vercel-cron': '1' });
     const res = makeRes();
     const result = await requireCronOrUser(req, res);
     expect(result).toEqual({ trigger: 'cron', uid: null, role: null });
@@ -97,15 +101,29 @@ describe('requireCronOrUser — constant-time CRON_SECRET comparison (bug #407)'
     expect(res._status).toBe(401);
   });
 
-  test('empty/missing CRON_SECRET env var falls through to user auth path (401)', async () => {
+  test('empty/missing CRON_SECRET env var with x-vercel-cron header returns 503 (misconfiguration)', async () => {
     delete process.env.CRON_SECRET;
 
+    // Simulate a real Vercel cron invocation: infrastructure sets x-vercel-cron: 1.
+    const req = makeReq(CORRECT_SECRET, { 'x-vercel-cron': '1' });
+    const res = makeRes();
+    const result = await requireCronOrUser(req, res);
+
+    // CRON_SECRET not configured → operator must see 503, not a confusing 401.
+    expect(result).toBeNull();
+    expect(res._status).toBe(503);
+    expect(res._body).toMatchObject({ error: expect.stringContaining('CRON_SECRET') });
+  });
+
+  test('no x-vercel-cron header + no CRON_SECRET + any token falls through to user auth (401)', async () => {
+    delete process.env.CRON_SECRET;
+
+    // No cron header — manual trigger path; should behave exactly as before.
     const req = makeReq(CORRECT_SECRET);
     const res = makeRes();
     const result = await requireCronOrUser(req, res);
 
-    // Without CRON_SECRET set, the cron branch is skipped entirely; Firebase
-    // token verification fails → 401.
+    // Firebase token verification fails → 401. Non-cron paths are unaffected.
     expect(result).toBeNull();
     expect(res._status).toBe(401);
   });

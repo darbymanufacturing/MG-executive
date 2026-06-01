@@ -93,9 +93,12 @@ export function jsonbSafe(value) {
   if (Array.isArray(value)) return value.map(jsonbSafe);
   if (typeof value === 'object') {
     const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      const cleaned = jsonbSafe(v);
-      if (cleaned !== undefined) out[k] = cleaned;
+    // Use Object.keys (not Object.entries) so keys whose value is `undefined`
+    // are visited — jsonbSafe(undefined) returns null, preserving the key.
+    // Object.entries silently skips own properties with undefined values, which
+    // would silently drop them instead of converting them to null (BUG #466).
+    for (const k of Object.keys(value)) {
+      out[k] = jsonbSafe(value[k]); // always null (never undefined), no guard needed
     }
     return out;
   }

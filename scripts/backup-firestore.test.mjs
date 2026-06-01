@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { tmpdir } from 'os';
-import { mkdirSync, readFileSync, readdirSync, existsSync, rmSync } from 'fs';
+import { mkdirSync, readFileSync, readdirSync, existsSync, rmSync, writeFileSync, renameSync } from 'fs';
 import { resolve, join } from 'path';
 
 // ---------------------------------------------------------------------------
@@ -212,6 +212,100 @@ describe('backup-firestore — paginated streaming (BUG #324)', () => {
     expect(manifest.format).toBe('jsonl');
     expect(manifest.collections.myCollection).toBe(1100);
     expect(manifest.totalDocs).toBe(1100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG #325 — partial-failure cleanup: .tmp → .FAILED on error, .tmp → final on
+// success. These tests exercise the same logic that main() and the .catch handler
+// use, isolated to just the fs operations so no Firebase connection is needed.
+// ---------------------------------------------------------------------------
+
+/**
+ * Simulates what the updated main() does: write to tmpDir, then on success
+ * rename to finalDir. On failure the catch handler renames tmpDir → .FAILED.
+ *
+ * @param {string} backupsDir  The base backups directory (created by caller)
+ * @param {string} stamp       Timestamp string like "20260101-120000"
+ * @param {boolean} fail       If true, throw after writing the first collection
+ */
+async function simulateBackup(backupsDir, stamp, fail) {
+  const finalDir = join(backupsDir, `firestore-${stamp}`);
+  const tmpDir = finalDir + '.tmp';
+  mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    // Simulate writing first collection
+    writeFileSync(join(tmpDir, 'col1.jsonl'), '{"id":"doc0","data":{}}\n');
+
+    if (fail) {
+      throw new Error('Simulated Firestore failure on second collection');
+    }
+
+    // Simulate writing second collection and manifest
+    writeFileSync(join(tmpDir, 'col2.jsonl'), '{"id":"doc0","data":{}}\n');
+    writeFileSync(join(tmpDir, '_manifest.json'), JSON.stringify({ totalDocs: 2 }, null, 2));
+
+    // Success: rename .tmp → final
+    renameSync(tmpDir, finalDir);
+  } catch (e) {
+    // Failure cleanup: rename .tmp → .FAILED (mirrors main().catch handler)
+    const entries = existsSync(backupsDir) ? readdirSync(backupsDir) : [];
+    for (const entry of entries) {
+      if (entry.endsWith('.tmp')) {
+        const tmpPath = join(backupsDir, entry);
+        const failedPath = tmpPath.replace(/\.tmp$/, '.FAILED');
+        try {
+          renameSync(tmpPath, failedPath);
+        } catch {
+          rmSync(tmpPath, { recursive: true, force: true });
+        }
+      }
+    }
+    throw e;
+  }
+}
+
+describe('backup-firestore — partial-failure cleanup (BUG #325)', () => {
+  let sandboxDir;
+
+  beforeEach(() => {
+    sandboxDir = join(tmpdir(), `backup-bug325-${Date.now()}`);
+    mkdirSync(sandboxDir, { recursive: true });
+  });
+
+  it('failure: no final dir exists, .FAILED dir exists with first collection, no _manifest.json', async () => {
+    const stamp = '20260101-120000';
+    const finalDir = join(sandboxDir, `firestore-${stamp}`);
+    const failedDir = finalDir + '.FAILED';
+
+    await expect(simulateBackup(sandboxDir, stamp, true)).rejects.toThrow('Simulated Firestore failure');
+
+    // (a) No clean final directory
+    expect(existsSync(finalDir)).toBe(false);
+    // (b) .FAILED directory exists and contains the first collection's file
+    expect(existsSync(failedDir)).toBe(true);
+    expect(existsSync(join(failedDir, 'col1.jsonl'))).toBe(true);
+    // (c) No _manifest.json in the .FAILED dir
+    expect(existsSync(join(failedDir, '_manifest.json'))).toBe(false);
+    // (d) No .tmp dir left over
+    expect(existsSync(finalDir + '.tmp')).toBe(false);
+  });
+
+  it('success: final dir with _manifest.json exists, no .tmp or .FAILED siblings', async () => {
+    const stamp = '20260101-130000';
+    const finalDir = join(sandboxDir, `firestore-${stamp}`);
+    const tmpDir = finalDir + '.tmp';
+    const failedDir = finalDir + '.FAILED';
+
+    await simulateBackup(sandboxDir, stamp, false);
+
+    // Final dir exists and has _manifest.json
+    expect(existsSync(finalDir)).toBe(true);
+    expect(existsSync(join(finalDir, '_manifest.json'))).toBe(true);
+    // No .tmp or .FAILED siblings
+    expect(existsSync(tmpDir)).toBe(false);
+    expect(existsSync(failedDir)).toBe(false);
   });
 });
 

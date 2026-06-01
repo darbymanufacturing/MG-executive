@@ -43,15 +43,23 @@ describe('useOrgCollection', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('fails loud (throws) when the org resolved but is absent', () => {
-    useOrg.mockReturnValue({ orgId: null, loading: false });
+  it('fails loud (throws) when the org resolved but is absent and user is signed in', () => {
+    useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: true });
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => renderHook(() => useOrgCollection('costs'))).toThrow(/requires an orgId/);
     spy.mockRestore();
   });
 
   it('stays loading (no query) while the org is still resolving', () => {
-    useOrg.mockReturnValue({ orgId: null, loading: true });
+    useOrg.mockReturnValue({ orgId: null, loading: true, hasUser: false });
+    const { result } = renderHook(() => useOrgCollection('costs'));
+    expect(result.current.loading).toBe(true);
+    expect(where).not.toHaveBeenCalled();
+  });
+
+  it('does NOT throw (stays loading) when orgId is null but no user is signed in yet (bug #454)', () => {
+    // Race window: auth resolved (loading=false) but userProfile hasn't populated yet
+    useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: false });
     const { result } = renderHook(() => useOrgCollection('costs'));
     expect(result.current.loading).toBe(true);
     expect(where).not.toHaveBeenCalled();
@@ -79,11 +87,18 @@ describe('useOrgDoc', () => {
     expect(result.current.item).toBe(null);
   });
 
-  it('fails loud (throws) when the org resolved but is absent', () => {
-    useOrg.mockReturnValue({ orgId: null, loading: false });
+  it('fails loud (throws) when the org resolved but is absent and user is signed in', () => {
+    useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: true });
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => renderHook(() => useOrgDoc('config', 'whatever'))).toThrow(/requires an orgId/);
     spy.mockRestore();
+  });
+
+  it('does NOT throw (stays loading) when orgId is null but no user is signed in yet (bug #454)', () => {
+    // Race window: auth resolved (loading=false) but userProfile hasn't populated yet
+    useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: false });
+    const { result } = renderHook(() => useOrgDoc('config', 'whatever'));
+    expect(result.current.loading).toBe(true);
   });
 
   it('never initiates a Firestore subscription for a cross-org prefixed docId (pre-read block)', () => {

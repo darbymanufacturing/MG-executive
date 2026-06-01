@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * backfill-hopp-history.mjs — one-time historical backfill of ALL Hopp data into Firestore.
  *
@@ -53,6 +52,15 @@ const COLLECTIONS = {
   events: 'telemetryEvents',
   revenue: 'revenue',
 };
+
+// ── Auth-error detection ──────────────────────────────────────────────────
+/**
+ * Matches any error string that indicates the Hopp token is dead / invalid.
+ * Covers: legacy strings observed 2026-05-29, HTTP 401/403, gRPC UNAUTHENTICATED (16)
+ * and PERMISSION_DENIED (7), common OAuth codes, and Hopp GraphQL errorCodes.
+ * Exported so tests can verify coverage without importing Firebase.
+ */
+export const HOPP_AUTH_ERROR_RE = /refresh token|NOT_AUTHORIZED|AUTHENTICATION_ERROR|Unauthorized|forbidden|token_expired|UNAUTHENTICATED|401|403|All \d+ refresh|code:\s*(7|16)/i;
 
 // ── Args ──────────────────────────────────────────────────────────────────
 /**
@@ -292,7 +300,7 @@ async function main() {
       } catch (err) {
         console.error(`  !! ${key}: ${err.message}`);
         // Stop cleanly (don't spin through errors) on the two expected fatal conditions — both resumable.
-        if (/refresh token|NOT_AUTHORIZED|401|All \d+ refresh/i.test(err.message)) {
+        if (HOPP_AUTH_ERROR_RE.test(err.message)) {
           console.error('  Hopp token appears dead (#316). Re-seed a fresh token and re-run — progress is saved.');
           stopped = true; break outer;
         }
@@ -311,4 +319,11 @@ async function main() {
   else console.log('(dry-run: skipping revenue rollup; run with --commit, or --rollup-revenue after.)');
 }
 
-main().then(() => process.exit(0)).catch((e) => { console.error('FATAL', e); process.exit(1); });
+// Guard: only run when executed directly (not when imported by tests or other modules).
+const isMain = process.argv[1] && (
+  process.argv[1].endsWith('backfill-hopp-history.mjs') ||
+  process.argv[1].endsWith('backfill-hopp-history')
+);
+if (isMain) {
+  main().then(() => process.exit(0)).catch((e) => { console.error('FATAL', e); process.exit(1); });
+}

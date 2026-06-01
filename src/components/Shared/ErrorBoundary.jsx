@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import * as Sentry from '@sentry/react';
+import { isSentryEnabled } from '../../lib/sentry.js';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import styles from './ErrorBoundary.module.css';
 
@@ -36,10 +36,18 @@ export class ErrorBoundary extends Component {
     if (typeof console !== 'undefined') {
       console.error('[ErrorBoundary]', error, errorInfo);
     }
-    // Report to Sentry — a no-op if Sentry was never initialised (dev / no DSN).
-    Sentry.captureException(error, {
-      contexts: { react: { componentStack: errorInfo?.componentStack } },
-    });
+    // Report to Sentry only when the SDK was actually initialised (DSN present,
+    // prod build). The dynamic import is free at runtime when Sentry is enabled
+    // because the chunk is already loaded by initSentry(). When DSN is unset,
+    // isSentryEnabled() is false and the import() is never called, so Rollup
+    // can emit Sentry as a lazy chunk that never lands in the initial bundle.
+    if (isSentryEnabled()) {
+      import('@sentry/react').then(Sentry => {
+        Sentry.captureException(error, {
+          contexts: { react: { componentStack: errorInfo?.componentStack } },
+        });
+      });
+    }
     if (this.props.onError) {
       try { this.props.onError(error, errorInfo); } catch { /* swallow */ }
     }

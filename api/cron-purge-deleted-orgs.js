@@ -32,8 +32,11 @@ const ORG_DATA_COLLECTIONS = [
   'costs', 'revenue', 'maintenanceTickets', 'maintenanceParts', 'scooters',
   'projects', 'decisionGates', 'brainstormIdeas', 'diary', 'telemetryEvents',
   'scooterTrips', 'sprEvents', 'sprWeather', 'issues', 'repairProcedures',
-  'repairSessions', 'pow_tasks', 'notifications', 'briefs', 'syncLogs',
+  'repairSessions', 'pow_tasks', 'notifications', 'syncLogs',
 ];
+// Collections that store createdByUid instead of orgId (BUG #397/#400 — orgId was never stamped
+// on these). Purged by querying createdByUid in memberUids. Must be deleted separately.
+const UID_SCOPED_COLLECTIONS = ['briefs', 'bankTransactions'];
 // Org-scoped singleton config docs (composite ids ${orgId}_*).
 const CONFIG_SINGLETONS = [
   ['config', '_fleet'], ['config', '_scooters'], ['config', '_maintenance'], ['config', '_spr'],
@@ -69,6 +72,15 @@ export default async function handler(req, res) {
       let orgDeletes = 0;
       let exhaustedBudget = false;
 
+      // Re-verify deleteAt is still due (cancel-delete may have cleared it since the initial query).
+      const freshDoc = await orgDoc.ref.get();
+      if (!freshDoc.exists) continue; // already deleted by a concurrent run
+      const freshDeleteAt = freshDoc.data().deleteAt;
+      if (!freshDeleteAt || freshDeleteAt > nowIso) continue; // cancel-delete cleared or postponed it
+
+      // Stamp purgeStartedAt so cancel-delete can refuse while purge is in flight.
+      await orgDoc.ref.update({ purgeStartedAt: nowIso });
+
       // 1. Org-scoped data collections.
       for (const col of ORG_DATA_COLLECTIONS) {
         while (deletesThisRun < MAX_DELETES_PER_RUN) {
@@ -90,8 +102,53 @@ export default async function handler(req, res) {
       }
 
       if (exhaustedBudget) {
+        // Clear the in-flight stamp so cancel-delete can still act before the next cron tick.
+        await orgDoc.ref.update({ purgeStartedAt: FieldValue.delete() });
         report.push({ orgId, status: 'partial', deleted: orgDeletes });
         break; // resume next run; deleteAt stays set
+      }
+
+      // 1b. UID-scoped collections (briefs, bankTransactions) — never received an orgId stamp
+      //     (BUG #397/#400). Purge by createdByUid for every member of this org.
+      //     Firestore `in` supports up to 30 items — chunk memberUids if needed.
+      const membersForUidSnap = await db.collection('users').where('orgId', '==', orgId).get();
+      const memberUids = membersForUidSnap.docs.map((d) => d.id);
+
+      if (memberUids.length > 0) {
+        // Split into groups of 30 (Firestore `in` limit).
+        const UID_IN_LIMIT = 30;
+        const uidChunks = [];
+        for (let i = 0; i < memberUids.length; i += UID_IN_LIMIT) {
+          uidChunks.push(memberUids.slice(i, i + UID_IN_LIMIT));
+        }
+
+        for (const col of UID_SCOPED_COLLECTIONS) {
+          for (const chunk of uidChunks) {
+            while (deletesThisRun < MAX_DELETES_PER_RUN) {
+              const remaining = MAX_DELETES_PER_RUN - deletesThisRun;
+              const pageSize = Math.min(BATCH_SIZE, remaining);
+              const snap = await db.collection(col)
+                .where('createdByUid', 'in', chunk)
+                .limit(pageSize)
+                .get();
+              if (snap.empty) break;
+              const batch = db.batch();
+              snap.docs.forEach((d) => batch.delete(d.ref));
+              await batch.commit();
+              orgDeletes += snap.size;
+              deletesThisRun += snap.size;
+              if (snap.size < pageSize) break; // chunk drained
+            }
+            if (deletesThisRun >= MAX_DELETES_PER_RUN) { exhaustedBudget = true; break; }
+          }
+          if (exhaustedBudget) break;
+        }
+      }
+
+      if (exhaustedBudget) {
+        await orgDoc.ref.update({ purgeStartedAt: FieldValue.delete() });
+        report.push({ orgId, status: 'partial', deleted: orgDeletes });
+        break;
       }
 
       // 2. Config singletons.
@@ -102,9 +159,8 @@ export default async function handler(req, res) {
       await cfgBatch.commit();
       deletesThisRun += CONFIG_SINGLETONS.length;
 
-      // 3. Members: users/{uid} docs + Auth accounts.
-      const membersSnap = await db.collection('users').where('orgId', '==', orgId).get();
-      for (const m of membersSnap.docs) {
+      // 3. Members: users/{uid} docs + Auth accounts (reuse membersForUidSnap from step 1b).
+      for (const m of membersForUidSnap.docs) {
         await m.ref.delete();
         await getAuth().deleteUser(m.id).catch(() => {}); // best-effort
         deletesThisRun += 1;
@@ -113,7 +169,7 @@ export default async function handler(req, res) {
       // 4. Finally the org doc itself.
       await orgDoc.ref.delete();
       deletesThisRun += 1;
-      report.push({ orgId, status: 'purged', deleted: orgDeletes + membersSnap.size + 1 });
+      report.push({ orgId, status: 'purged', deleted: orgDeletes + membersForUidSnap.size + 1 });
     }
 
     return res.status(200).json({
@@ -125,6 +181,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error('cron-purge-deleted-orgs error:', err);
-    return res.status(500).json({ ok: false, error: err.message || 'Purge failed', report });
+    return res.status(500).json({ ok: false, error: 'Purge failed', report });
   }
 }

@@ -55,6 +55,21 @@ function requireOrg(op) {
   return _orgId;
 }
 
+/**
+ * Verifies that `docId` belongs to the active org using the composite-id
+ * convention (orgId + '_' + localId) established across the codebase.
+ * Throws loudly if the prefix doesn't match — same pattern as requireOrg.
+ * This is a synchronous, free check (no Firestore round-trip) that catches
+ * cross-org writes before they reach the network (bug #424 / ADR-0003).
+ */
+function requireOrgDoc(op, docId) {
+  const orgId = requireOrg(op);
+  if (!docId.startsWith(orgId + '_')) {
+    throw new Error(`orgWrite: docId "${docId}" does not belong to active org "${orgId}" — "${op}" blocked (ADR-0003).`);
+  }
+  return orgId;
+}
+
 export async function orgWrite(collectionName, data, opts = {}) {
   const orgId = requireOrg(`create in ${collectionName}`);
   const { id, merge = false, ...writeOpts } = opts;
@@ -75,7 +90,7 @@ export async function orgWrite(collectionName, data, opts = {}) {
 }
 
 export async function orgUpdate(collectionName, docId, patch, opts = {}) {
-  requireOrg(`update ${collectionName}/${docId}`);
+  requireOrgDoc(`update ${collectionName}/${docId}`, docId);
   // orgId is NOT re-stamped here (the doc already carries it from create); the
   // Firestore rules block patching another org's doc. We only guard that a write
   // never happens with no org in context.
@@ -86,7 +101,7 @@ export async function orgUpdate(collectionName, docId, patch, opts = {}) {
 }
 
 export async function orgDelete(collectionName, docId, opts = {}) {
-  requireOrg(`delete ${collectionName}/${docId}`);
+  requireOrgDoc(`delete ${collectionName}/${docId}`, docId);
   return safeWrite(
     () => deleteDoc(doc(db, collectionName, docId)),
     { errorMessage: `Failed to delete ${collectionName}`, ...opts },
@@ -104,7 +119,7 @@ export async function orgDelete(collectionName, docId, opts = {}) {
  * Throws on network failure (matches orgUpdate rethrow:true behaviour).
  */
 export async function orgTransaction(collectionName, docId, mutator) {
-  requireOrg(`transaction on ${collectionName}/${docId}`);
+  requireOrgDoc(`transaction on ${collectionName}/${docId}`, docId);
   const ref = doc(db, collectionName, docId);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);

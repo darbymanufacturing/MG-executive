@@ -34,8 +34,19 @@ export default async function handler(req, res) {
   }
   // #89/#17 — env-var origin; only honor a caller-supplied redirect_url if it points
   // at our own origin (prevents open-redirect / host-header injection).
+  // Use URL-parsed origin equality (not startsWith) to prevent subdomain confusion:
+  // e.g. https://omni.mgexecutive.app.evil.com starts with our origin string but
+  // has a different parsed origin.
   const origin = process.env.APP_ORIGIN || 'https://omni.mgexecutive.app';
-  const redirectTo = (redirect_url && redirect_url.startsWith(origin)) ? redirect_url : `${origin}/settings`;
+  let redirectTo = `${origin}/settings`;
+  if (redirect_url) {
+    try {
+      const u = new URL(redirect_url);
+      if (u.origin === origin) redirectTo = redirect_url;
+    } catch {
+      // malformed URL — fall through to default
+    }
+  }
 
   try {
     // 1. Create customer if this is the first connect
@@ -75,6 +86,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ connect_url: sessionData.data.connect_url, customer_id });
   } catch (err) {
     console.error('[bank-session]', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Bank session error' });
   }
 }

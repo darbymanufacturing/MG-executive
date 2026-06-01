@@ -9,13 +9,14 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,jsx,mjs}'],
     plugins: {
       react: reactPlugin,
       'jsx-a11y': a11y,
     },
     extends: [
       js.configs.recommended,
+      reactPlugin.configs.flat.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
       a11y.flatConfigs.recommended,
@@ -32,14 +33,13 @@ export default defineConfig([
     rules: {
       // #258 — only ignore underscore-prefixed vars, not all uppercase (was '^[A-Z_]')
       'no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-      // #312 — mark JSX-referenced imports as used so no-unused-vars doesn't flag them
-      'react/jsx-uses-vars': 'error',
+      // #312 — react/jsx-uses-vars and all other React rules now covered by reactPlugin.configs.flat.recommended above
       // #257 — jsx-a11y rules enabled via a11y.flatConfigs.recommended above
     },
   },
   // Node.js globals override for serverless API files and Vite config (#312)
   {
-    files: ['api/**/*.js', 'vite.config.js'],
+    files: ['api/**/*.js', 'vite.config.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
     },

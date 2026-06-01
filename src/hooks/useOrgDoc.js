@@ -14,13 +14,16 @@ import { db } from '../lib/firebase.js';
 import { useOrg } from '../context/OrgContext.jsx';
 
 export function useOrgDoc(collectionName, docId) {
-  const { orgId, loading: orgLoading } = useOrg();
+  const { orgId, loading: orgLoading, hasUser } = useOrg();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Fail loud (ADR-0003): org resolved but absent.
-  if (!orgLoading && !orgId) {
+  // Guard with hasUser: during the transient sign-in race where userProfile hasn't
+  // populated yet (orgId=null, hasUser=false), suppress the throw and stay loading
+  // (bug #454). Only throw when a real user is signed in but has no orgId.
+  if (!orgLoading && !orgId && hasUser) {
     throw new Error(`useOrgDoc('${collectionName}') requires an orgId — none in context.`);
   }
 

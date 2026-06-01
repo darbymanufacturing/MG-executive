@@ -23,7 +23,7 @@ import { useOrg } from '../context/OrgContext.jsx';
 const DEFAULT_LIMIT = 50;
 
 export function useOrgCollection(collectionName, opts = {}) {
-  const { orgId, loading: orgLoading } = useOrg();
+  const { orgId, loading: orgLoading, hasUser } = useOrg();
   const orderByOpt = opts.orderBy ?? null;
   const baseLimit = opts.limit ?? DEFAULT_LIMIT;
   const extraWhere = opts.where ?? [];
@@ -37,7 +37,10 @@ export function useOrgCollection(collectionName, opts = {}) {
   const [hasMore, setHasMore] = useState(false);
 
   // Fail loud (ADR-0003): org resolved but absent → never query unscoped.
-  if (!orgLoading && !orgId) {
+  // Guard with hasUser: during the transient sign-in race where userProfile hasn't
+  // populated yet (orgId=null, hasUser=false), suppress the throw and stay loading
+  // (bug #454). Only throw when a real user is signed in but has no orgId.
+  if (!orgLoading && !orgId && hasUser) {
     throw new Error(`useOrgCollection('${collectionName}') requires an orgId — none in context.`);
   }
 

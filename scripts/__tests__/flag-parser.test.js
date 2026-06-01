@@ -7,6 +7,7 @@
  *     return i >= 0 && v !== undefined && !v.startsWith('--') ? v : d; }
  */
 import { describe, it, expect } from 'vitest';
+import { HOPP_AUTH_ERROR_RE } from '../backfill-hopp-history.mjs';
 
 /**
  * Inline the corrected flag() so this test file has zero external dependencies
@@ -72,5 +73,35 @@ describe('Number.isFinite guard for numeric flags (bug #415)', () => {
 
     // Negative — should throw
     expect(() => parsePageFlag(['--page', '-5'])).toThrow('--page must be a positive integer');
+  });
+});
+
+// ── Bug #322: HOPP_AUTH_ERROR_RE coverage ────────────────────────────────
+describe('HOPP_AUTH_ERROR_RE — broader auth-failure detection (bug #322)', () => {
+  // (a) Legacy strings that were already matched before the fix
+  it('matches legacy auth-error strings', () => {
+    expect(HOPP_AUTH_ERROR_RE.test('Error: refresh token invalid')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('NOT_AUTHORIZED: access denied')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('Request failed with status code 401')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('All 3 refresh attempts failed')).toBe(true);
+  });
+
+  // (b) Newly added strings — would have been missed before the fix
+  it('matches newly covered auth-error strings', () => {
+    expect(HOPP_AUTH_ERROR_RE.test('Request failed with status code 403')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('Unauthorized')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('403 forbidden')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('token_expired')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('AUTHENTICATION_ERROR')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('Error: 16 UNAUTHENTICATED: token expired')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('gRPC error code: 16')).toBe(true);
+    expect(HOPP_AUTH_ERROR_RE.test('gRPC error code:7')).toBe(true);
+  });
+
+  // (c) Unrelated error strings — must NOT match
+  it('does NOT match unrelated errors', () => {
+    expect(HOPP_AUTH_ERROR_RE.test('RESOURCE_EXHAUSTED: quota exceeded')).toBe(false);
+    expect(HOPP_AUTH_ERROR_RE.test('network timeout after 30s')).toBe(false);
+    expect(HOPP_AUTH_ERROR_RE.test('Request failed with status code 500')).toBe(false);
   });
 });

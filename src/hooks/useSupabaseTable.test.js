@@ -40,6 +40,17 @@ vi.mock('../lib/supabase.js', () => {
 vi.mock('../context/OrgContext.jsx', () => ({ useOrg: vi.fn() }));
 vi.mock('./useOrgCollection.js', () => ({ useOrgCollection: vi.fn(() => ({ items: [], loading: false, error: null, loadMore: vi.fn(), hasMore: false })) }));
 
+// Mock ToastContext so useToast() works inside useSupabaseTable (bug-386).
+const mockToastError = vi.fn();
+vi.mock('../context/ToastContext.jsx', () => ({
+  useToast: vi.fn(() => ({ error: mockToastError, success: vi.fn(), info: vi.fn(), warning: vi.fn() })),
+}));
+
+// Mock Sentry so captureException calls can be asserted (bug-386).
+vi.mock('@sentry/react', () => ({
+  captureException: vi.fn(),
+}));
+
 // These two module-level variables let individual tests override the mock behaviour.
 let _mockIsConfigured = true;
 let _mockDataLayer = 'supabase';
@@ -49,6 +60,7 @@ import { toSupabaseRow, SUPABASE_TABLE, jsonbSafe } from '../lib/supabaseRowMap.
 import { useOrg } from '../context/OrgContext.jsx';
 import { useOrgCollection } from './useOrgCollection.js';
 import { dualWriteSupabase } from '../lib/supabase.js';
+import * as Sentry from '@sentry/react';
 
 describe('mapRow', () => {
   it('reconstructs the Firestore shape {_docId, ...data}', () => {
@@ -62,6 +74,13 @@ describe('mapRow', () => {
   it('handles null and empty data', () => {
     expect(mapRow(null)).toBeNull();
     expect(mapRow({ source_doc_id: 'x' })).toEqual({ _docId: 'x' });
+  });
+
+  // BUG #392 — explicit data:null must be treated like missing data (not crash).
+  it('handles explicit data:null gracefully (BUG #392)', () => {
+    // data ?? {} → spread of {} → only _docId surfaces, no crash.
+    const result = mapRow({ source_doc_id: 'x', data: null });
+    expect(result).toEqual({ _docId: 'x' });
   });
 
   it('drops the snake_case typed columns — only data + _docId surface', () => {
@@ -98,6 +117,18 @@ describe('toSupabaseRow', () => {
     expect(row.unique_users_count).toBe(10);
     expect(row.total_trips).toBe(20);
     expect(row.data.extra).toBe('keep-me'); // nothing lost
+  });
+
+  // BUG #464 — jsonbSafe sentinel stripping is wired up in toSupabaseRow.
+  // Removing `jsonbSafe(data)` from supabaseRowMap.js:115 must fail this test.
+  it('strips Firestore serverTimestamp sentinels from data via jsonbSafe', () => {
+    const doc = {
+      date: '2026-04-08', location: 'Nafplio', totalPaidRevenue: 10,
+      totalTrips: 1, uniqueUsersCount: 1,
+      _meta: { ts: { _methodName: 'serverTimestamp' } },
+    };
+    const row = toSupabaseRow('revenue', 'org1', 'org1_x', doc);
+    expect(row.data._meta.ts).toBeNull();
   });
 
   it('maps telemetry camelCase → snake_case typed columns', () => {
@@ -151,6 +182,73 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.revenue).toBe('revenue_days');
     expect(Object.keys(SUPABASE_TABLE)).toHaveLength(5);
   });
+
+  // BUG #465 — scooterTrips / bool() contract tests
+  it('maps a scooterTrips doc to typed columns including is_paid bool', () => {
+    const doc = {
+      scooterId: '70055', startedAt: '2026-05-01T09:00:00', endedAt: '2026-05-01T09:30:00',
+      durationMinutes: 30, distanceKm: 5.2, cost: 1.5, isPaid: true, city: 'Nafplio',
+    };
+    const row = toSupabaseRow('scooterTrips', 'org1', 'org1_trip_001', doc);
+    expect(row.scooter_id).toBe('70055');
+    expect(row.started_at).toBe('2026-05-01T09:00:00');
+    expect(row.ended_at).toBe('2026-05-01T09:30:00');
+    expect(row.duration_minutes).toBe(30);
+    expect(row.distance_km).toBe(5.2);
+    expect(row.cost).toBe(1.5);
+    expect(row.is_paid).toBe(true);  // bool(true) must equal true, not null
+    expect(row.city).toBe('Nafplio');
+  });
+
+  it('maps is_paid=false correctly (not coerced to null)', () => {
+    const doc = { scooterId: '70055', isPaid: false };
+    const row = toSupabaseRow('scooterTrips', 'org1', 'org1_trip_002', doc);
+    expect(row.is_paid).toBe(false); // false !== null
+  });
+
+  it('maps is_paid to null when value is a non-boolean string', () => {
+    const doc = { scooterId: '70055', isPaid: 'true' };
+    const row = toSupabaseRow('scooterTrips', 'org1', 'org1_trip_003', doc);
+    expect(row.is_paid).toBeNull(); // string 'true' is NOT a boolean
+  });
+
+  it('maps is_paid to null when value is a number', () => {
+    const doc = { scooterId: '70055', isPaid: 1 };
+    const row = toSupabaseRow('scooterTrips', 'org1', 'org1_trip_004', doc);
+    expect(row.is_paid).toBeNull(); // number 1 is NOT a boolean
+  });
+
+  it('maps is_paid to null when value is null', () => {
+    const doc = { scooterId: '70055', isPaid: null };
+    const row = toSupabaseRow('scooterTrips', 'org1', 'org1_trip_005', doc);
+    expect(row.is_paid).toBeNull();
+  });
+
+  // BUG #465 — sprEvents mapping test
+  it('maps a sprEvents doc to typed columns', () => {
+    const doc = {
+      scooterId: '70055', datetime: '2026-05-01T10:00:00', city: 'Nafplio',
+      zone: 'Zone-A', lat: 37.57, lon: 22.8, afterState: 'Active', action: 'Deploy',
+    };
+    const row = toSupabaseRow('sprEvents', 'org1', 'org1_spr_001', doc);
+    expect(row.scooter_id).toBe('70055');
+    expect(row.datetime).toBe('2026-05-01T10:00:00');
+    expect(row.city).toBe('Nafplio');
+    expect(row.zone).toBe('Zone-A');
+    expect(row.lat).toBe(37.57);
+    expect(row.lon).toBe(22.8);
+    expect(row.after_state).toBe('Active');
+    expect(row.action).toBe('Deploy');
+  });
+
+  // BUG #465 — sprWeather mapping test
+  it('maps a sprWeather doc to typed columns', () => {
+    const doc = { date: '2026-05-01', city: 'Nafplio', tempMax: 28.5 };
+    const row = toSupabaseRow('sprWeather', 'org1', 'org1_weather_001', doc);
+    expect(row.weather_date).toBe('2026-05-01');
+    expect(row.city).toBe('Nafplio');
+    expect(row.data.tempMax).toBe(28.5); // extra fields preserved in data blob
+  });
 });
 
 describe('jsonbSafe', () => {
@@ -163,6 +261,27 @@ describe('jsonbSafe', () => {
   it('converts Timestamp-like {toDate} values to ISO strings', () => {
     const ts = { toDate: () => new Date('2026-01-01T00:00:00Z') };
     expect(jsonbSafe({ when: ts }).when).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  // BUG #466 — top-level undefined must return null (not undefined).
+  it('returns null for top-level undefined input', () => {
+    expect(jsonbSafe(undefined)).toBeNull();
+  });
+
+  // BUG #466 — undefined values inside objects must be converted to null, not dropped.
+  // With Object.entries (old code) the key `a` was silently dropped → {b:1}.
+  // With Object.keys (fixed code) the key is visited → {a:null, b:1}.
+  it('converts undefined object values to null (not dropped)', () => {
+    expect(jsonbSafe({ a: undefined, b: 1 })).toEqual({ a: null, b: 1 });
+  });
+
+  // BUG #393 — sentinel detection contract: any object with _methodName is null;
+  // plain objects with other keys must pass through unchanged.
+  it('filters out any object with _methodName (FieldValue sentinel contract — BUG #393)', () => {
+    expect(jsonbSafe({ _methodName: 'serverTimestamp' })).toBeNull();
+    expect(jsonbSafe({ _methodName: 'deleteField' })).toBeNull();
+    // A plain object with a DIFFERENT key must NOT be stripped.
+    expect(jsonbSafe({ _otherKey: 'serverTimestamp' })).toEqual({ _otherKey: 'serverTimestamp' });
   });
 });
 
@@ -241,7 +360,8 @@ describe('useSupabaseTable', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('loadMore increments page and re-fetches', async () => {
+  // BUG #385 — loadMore must fetch ONLY the next page, not re-fetch from row 0.
+  it('loadMore fetches only the next page (offset-based, not 0-based)', async () => {
     const { result } = renderHook(() => useSupabaseTable('telemetry_events', { limit: 50 }));
     await act(async () => {});
     // First fetch: range(0, 50)
@@ -249,8 +369,99 @@ describe('useSupabaseTable', () => {
     mockRange.mockClear();
     // Trigger loadMore
     await act(async () => { result.current.loadMore(); });
-    // Second fetch: range(0, 100)
-    expect(mockRange).toHaveBeenCalledWith(0, 100);
+    // Second fetch must be offset-based: range(50, 100), NOT range(0, 100)
+    expect(mockRange).toHaveBeenCalledWith(50, 100);
+  });
+
+  // BUG #385 — loadMore appends rows, does not replace them.
+  it('loadMore appends rows, does not replace', async () => {
+    const page1 = [
+      { source_doc_id: 'p1_a', org_id: 'org-1', data: { scooterId: 'S1' } },
+      { source_doc_id: 'p1_b', org_id: 'org-1', data: { scooterId: 'S2' } },
+    ];
+    const page2 = [
+      { source_doc_id: 'p2_a', org_id: 'org-1', data: { scooterId: 'S3' } },
+      { source_doc_id: 'p2_b', org_id: 'org-1', data: { scooterId: 'S4' } },
+    ];
+    mockRange.mockResolvedValueOnce({ data: page1, error: null });
+    const { result } = renderHook(() => useSupabaseTable('telemetry_events', { limit: 50 }));
+    await act(async () => {});
+    expect(result.current.items).toHaveLength(2);
+
+    mockRange.mockResolvedValueOnce({ data: page2, error: null });
+    await act(async () => { result.current.loadMore(); });
+    // Items must be page1 + page2 concatenated, not replaced.
+    expect(result.current.items).toHaveLength(4);
+    expect(result.current.items[0]._docId).toBe('p1_a');
+    expect(result.current.items[2]._docId).toBe('p2_a');
+  });
+
+  // BUG #385 — filter change resets offset and replaces items.
+  it('filter change resets offset and replaces items', async () => {
+    const page1 = [
+      { source_doc_id: 'p1_a', org_id: 'org-1', data: { scooterId: 'S1' } },
+      { source_doc_id: 'p1_b', org_id: 'org-1', data: { scooterId: 'S2' } },
+    ];
+    const page2 = [
+      { source_doc_id: 'p2_a', org_id: 'org-1', data: { scooterId: 'S3' } },
+      { source_doc_id: 'p2_b', org_id: 'org-1', data: { scooterId: 'S4' } },
+    ];
+    const filteredPage = [
+      { source_doc_id: 'pf_x', org_id: 'org-1', data: { scooterId: 'SX' } },
+    ];
+    // Initial fetch (offset=0) → page1
+    mockRange.mockResolvedValueOnce({ data: page1, error: null });
+    // Render with initial filter (no where)
+    const { result, rerender } = renderHook(
+      ({ where }) => useSupabaseTable('telemetry_events', { limit: 50, where }),
+      { initialProps: { where: [] } }
+    );
+    await act(async () => {});
+    expect(result.current.items).toHaveLength(2);
+
+    // loadMore → offset=50, fetch page2; items become page1+page2=4
+    mockRange.mockResolvedValueOnce({ data: page2, error: null });
+    await act(async () => { result.current.loadMore(); });
+    expect(result.current.items).toHaveLength(4);
+
+    // Change the filter — reset effect sets offset=0 + clears items, then
+    // the fetch effect runs with offset=0 and new whereKey → fetch filteredPage.
+    mockRange.mockResolvedValueOnce({ data: filteredPage, error: null });
+    await act(async () => {
+      rerender({ where: [['city', '==', 'Nafplio']] });
+    });
+    expect(mockRange).toHaveBeenLastCalledWith(0, 50);
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0]._docId).toBe('pf_x');
+  });
+
+  // BUG #386 — errors must fire a toast and Sentry, not just setError.
+  it('fires a toast and Sentry on Supabase query error', async () => {
+    const qErr = { message: 'db error' };
+    mockRange.mockResolvedValue({ data: null, error: qErr });
+    const { result } = renderHook(() => useSupabaseTable('telemetry_events'));
+    await act(async () => {});
+    expect(result.current.error).toBeTruthy();
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('db error'));
+    expect(Sentry.captureException).toHaveBeenCalledWith(qErr, expect.any(Object));
+  });
+
+  it('fires a toast and Sentry on thrown fetch error', async () => {
+    const netErr = new Error('network fail');
+    mockRange.mockRejectedValue(netErr);
+    const { result } = renderHook(() => useSupabaseTable('telemetry_events'));
+    await act(async () => {});
+    expect(result.current.error).toBeTruthy();
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('network fail'));
+    expect(Sentry.captureException).toHaveBeenCalledWith(netErr, expect.any(Object));
+  });
+
+  // BUG #386 — not-configured path must also toast.
+  it('fires a toast when Supabase is not configured', async () => {
+    _mockIsConfigured = false;
+    renderHook(() => useSupabaseTable('telemetry_events'));
+    await act(async () => {});
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('not configured'));
   });
 });
 
@@ -288,6 +499,18 @@ describe('useOrgTable', () => {
     );
     expect(useOrgCollection).toHaveBeenCalledWith('revenue', { orderBy: ['date', 'desc'] });
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('throws (not silently falls back) when DATA_LAYER=supabase but Supabase is not configured (BUG #384)', () => {
+    _mockDataLayer = 'supabase';
+    _mockIsConfigured = false;
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() =>
+      renderHook(() => useOrgTable('revenue', 'revenue_days', {}))
+    ).toThrow(/VITE_SUPABASE_URL/);
+    // Must NOT silently fall back to Firestore
+    expect(useOrgCollection).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });
 

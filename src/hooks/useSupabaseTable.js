@@ -14,11 +14,19 @@
  * Unlike useOrgCollection this is fetch-on-change, not a live onSnapshot — these
  * five collections are bulk-imported analytical data, not multi-user live-edited
  * documents, so a re-fetch on mount / loadMore is the right cost/behaviour trade.
+ *
+ * Pagination design (bug-385 fix):
+ *   State holds a `fetchSpec` object: { filterKey, offset }. loadMore increments
+ *   offset by baseLimit; a filter change resets offset to 0 — both happen in a
+ *   single setState call so React only ever schedules ONE effect run per logical
+ *   action, preventing the double-fetch that occurred with separate state values.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, DATA_LAYER } from '../lib/supabase.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { useOrgCollection } from './useOrgCollection.js';
+import { useToast } from '../context/ToastContext.jsx';
+import * as Sentry from '@sentry/react';
 
 const DEFAULT_LIMIT = 50;
 
@@ -39,16 +47,22 @@ export function mapRow(row) {
 
 export function useSupabaseTable(table, opts = {}) {
   const { orgId, loading: orgLoading } = useOrg();
+  const { error: toastError } = useToast();
   const orderByOpt = opts.orderBy ?? null;
   const baseLimit = opts.limit ?? DEFAULT_LIMIT;
   const extraWhere = opts.where ?? [];
   const whereKey = JSON.stringify(extraWhere);
   const orderKey = JSON.stringify(orderByOpt);
 
+  // A single state object bundles the filter identity and the pagination offset.
+  // Updating both together in one setState ensures a single effect run, preventing
+  // the double-fetch that arose from two separate state updates (bug-385).
+  const filterKey = `${table}:${orgId}:${orderKey}:${whereKey}`;
+  const [fetchSpec, setFetchSpec] = useState({ filterKey, offset: 0 });
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pageLimit, setPageLimit] = useState(baseLimit);
   const [hasMore, setHasMore] = useState(false);
 
   // Fail loud (ADR-0003 parity): org resolved but absent → never query unscoped.
@@ -56,13 +70,32 @@ export function useSupabaseTable(table, opts = {}) {
     throw new Error(`useSupabaseTable('${table}') requires an orgId — none in context.`);
   }
 
+  // When the filter/table changes, reset offset to 0 and clear items in a single
+  // state update — this guarantees only ONE effect run for a filter change.
+  useEffect(() => {
+    setFetchSpec((prev) => {
+      if (prev.filterKey === filterKey) return prev; // loadMore path — no reset needed
+      return { filterKey, offset: 0 };
+    });
+    setItems([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
   useEffect(() => {
     if (orgLoading || !orgId) { setLoading(true); return undefined; }
     if (!isSupabaseConfigured || !supabase) {
-      setError(new Error('Supabase not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'));
+      const cfgErr = new Error('Supabase not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
+      setError(cfgErr);
       setLoading(false);
+      toastError('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.');
       return undefined;
     }
+    // If the fetchSpec's filterKey doesn't match the current filter, a reset is in
+    // flight — skip this stale fetch; the reset effect will update fetchSpec and
+    // trigger this effect again with the correct (reset) offset.
+    if (fetchSpec.filterKey !== filterKey) { return undefined; }
+
+    const { offset } = fetchSpec;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -78,24 +111,47 @@ export function useSupabaseTable(table, opts = {}) {
           const [f, dir] = Array.isArray(orderByOpt) ? orderByOpt : [orderByOpt, 'desc'];
           q = q.order(f, { ascending: dir === 'asc' });
         }
-        q = q.range(0, pageLimit); // inclusive both ends → pageLimit+1 rows = hasMore sentinel
+        // Fetch only the new page: range(offset, offset + baseLimit) inclusive.
+        // The extra row (baseLimit+1 total) is the hasMore sentinel.
+        q = q.range(offset, offset + baseLimit);
         const { data, error: qErr } = await q;
         if (cancelled) return;
-        if (qErr) { setError(qErr); setLoading(false); return; }
+        if (qErr) {
+          setError(qErr);
+          setLoading(false);
+          toastError(qErr.message || 'Failed to load data from Supabase.');
+          Sentry.captureException(qErr, { extra: { table, orgId, offset, opts } });
+          return;
+        }
         const rows = data ?? [];
-        setHasMore(rows.length > pageLimit);
-        setItems(rows.slice(0, pageLimit).map(mapRow));
+        setHasMore(rows.length > baseLimit);
+        const pageRows = rows.slice(0, baseLimit).map(mapRow);
+        if (offset === 0) {
+          // Initial load or filter reset: replace items.
+          setItems(pageRows);
+        } else {
+          // loadMore: append new page to existing items.
+          setItems((prev) => [...prev, ...pageRows]);
+        }
         setLoading(false);
       } catch (err) {
-        if (!cancelled) { setError(err); setLoading(false); }
+        if (!cancelled) {
+          setError(err);
+          setLoading(false);
+          toastError(err.message || 'Unexpected error loading data.');
+          Sentry.captureException(err, { extra: { table, orgId, offset, opts } });
+        }
       }
     })();
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, orgId, orgLoading, orderKey, pageLimit, whereKey]);
+  }, [fetchSpec, orgLoading]);
 
-  const loadMore = useCallback(() => setPageLimit((p) => p + baseLimit), [baseLimit]);
+  const loadMore = useCallback(
+    () => setFetchSpec((prev) => ({ ...prev, offset: prev.offset + baseLimit })),
+    [baseLimit]
+  );
 
   return { items, loading, error, loadMore, hasMore };
 }
@@ -115,7 +171,13 @@ export function useSupabaseTable(table, opts = {}) {
  * though the linter can't prove the constant.
  */
 export function useOrgTable(firestoreCollection, supabaseTable, perLayer = {}) {
-  if (DATA_LAYER === 'supabase' && isSupabaseConfigured) {
+  if (DATA_LAYER === 'supabase') {
+    if (!isSupabaseConfigured) {
+      throw new Error(
+        'useOrgTable: VITE_DATA_LAYER=supabase but Supabase is not configured. ' +
+        'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or set VITE_DATA_LAYER=firestore.'
+      );
+    }
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useSupabaseTable(supabaseTable, perLayer.supabase ?? {});
   }

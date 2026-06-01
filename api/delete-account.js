@@ -172,6 +172,10 @@ export default async function handler(req, res) {
 
       case 'cancel-delete': {
         if (!isOwner) return res.status(403).json({ error: 'Only the owner can cancel deletion.' });
+        // Refuse if the cron purge is already in flight (purgeStartedAt is set).
+        if (org?.purgeStartedAt) {
+          return res.status(409).json({ error: 'Purge already in flight — cannot cancel. Contact support if data has not yet been deleted.' });
+        }
         await orgRef.update({
           deleteAt: FieldValue.delete(),
           deleteRequestedBy: FieldValue.delete(),
@@ -188,6 +192,6 @@ export default async function handler(req, res) {
     // Transaction aborts throw errors with a .status field (403/400) when the business
     // invariant check fails inside the transaction — propagate those as-is.
     const httpStatus = typeof err.status === 'number' ? err.status : 500;
-    return res.status(httpStatus).json({ error: err.message || 'Account deletion failed' });
+    return res.status(httpStatus).json({ error: 'Account deletion failed' });
   }
 }

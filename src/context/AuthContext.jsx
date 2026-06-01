@@ -41,10 +41,19 @@ export function AuthProvider({ children }) {
   // without needing to be re-created when syncClaims is redefined below.
   const syncClaimsRef = useRef(null);
 
+  // #451 — generation counter to discard stale async onSnapshot callbacks after signOut.
+  // Incremented at the top of each onAuthStateChanged callback; captured into a local
+  // `epoch` const so any in-flight async closure can detect it has been superseded.
+  const authEpoch = useRef(0);
+
   useEffect(() => {
     let profileUnsub = null;
 
     const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
+      // #451 — bump the epoch so any in-flight onSnapshot async callback from the
+      // previous auth state will see authEpoch.current !== epoch and self-abort.
+      const epoch = ++authEpoch.current;
+
       setUser(firebaseUser);
 
       if (profileUnsub) {
@@ -60,6 +69,9 @@ export function AuthProvider({ children }) {
 
       const userRef = doc(db, 'users', firebaseUser.uid);
       profileUnsub = onSnapshot(userRef, async (snap) => {
+        // #451 — discard this callback if a newer auth state has since fired.
+        if (authEpoch.current !== epoch) return;
+
         // #15 — never auto-provision a role. A signed-in user with no users/{uid}
         // doc gets userProfile=null → no access (gated in App.jsx). Accounts are
         // created only by an admin via createTechnicianAccount. Clear authLoading
@@ -77,6 +89,11 @@ export function AuthProvider({ children }) {
         // every useOrgCollection Firestore query to be rejected by security rules.
         try {
           const tokenResult = await firebaseUser.getIdTokenResult();
+
+          // #451 — re-check after the await: signOut may have fired while we were
+          // waiting for getIdTokenResult(), making this callback stale.
+          if (authEpoch.current !== epoch) return;
+
           const { orgId: claimOrgId, role: claimRole } = tokenResult.claims;
           const { orgId: profileOrgId, role: profileRole } = snap.data();
 
@@ -108,6 +125,8 @@ export function AuthProvider({ children }) {
           );
         }
 
+        // #451 — final guard before writing authLoading (covers the catch-branch path).
+        if (authEpoch.current !== epoch) return;
         setAuthLoading(false);
       });
     });
@@ -179,7 +198,12 @@ export function AuthProvider({ children }) {
   // role: 'crew' (default, formerly 'technician') | 'staff' | 'admin'
   const createTechnicianAccount = async (email, password, displayName, role = 'crew') => {
     // BUG #19 — client-side admin guard (server-side enforcement is Phase 2)
-    if (userProfile?.role !== 'admin') throw new Error('Only admins can create accounts');
+    if (userProfile?.role !== 'admin' && userProfile?.role !== 'owner')
+      throw new Error('Only admins can create accounts');
+    // #452 — only the org owner can mint another admin; regular admins can only
+    // create crew/staff (prevents privilege-escalation chains with no audit trail).
+    if (role === 'admin' && userProfile?.role !== 'owner')
+      throw new Error('Only the organisation owner can create admin accounts');
     // Phase 2 (ADR-0002): new accounts join the creating admin's org.
     if (!userProfile?.orgId) throw new Error("Your account isn't linked to an organization yet.");
     const apiKey = import.meta.env.VITE_FIREBASE_WEB_API_KEY;

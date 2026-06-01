@@ -32,6 +32,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--fg-strong);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .pendingBannerSub {
   font-size: 12px;
@@ -105,6 +107,9 @@
   .table th:nth-child(6), .table td:nth-child(6) { display: none; }
   .td { padding: var(--space-3); }
   .costNotes { max-width: 160px; }
+  /* Pending banner: wrap title + sub onto separate lines on narrow viewports */
+  .pendingBannerHeader { flex-wrap: wrap; gap: 6px; }
+  .pendingBannerSub { flex: none; }
 }
 
 .toolbar {

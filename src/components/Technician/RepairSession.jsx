@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronRight, CheckCircle2, Plus, Minus,
@@ -235,10 +235,23 @@ export default function RepairSession() {
   const { procedures } = useRepairProcedures();
 
   const ticket    = useMemo(() => tickets.find((t) => t._docId === ticketId), [tickets, ticketId]);
+
+  // #bug-449 — collect ALL procedures matching this ticket's category
+  const matchingProcedures = useMemo(() => {
+    if (!ticket) return [];
+    return procedures.filter((p) => p.category === ticket.category);
+  }, [ticket, procedures]);
+
+  const [selectedProcedureId, setSelectedProcedureId] = useState(null);
+
+  // #bug-449 — resolve the single active procedure:
+  // 0 matches → FALLBACK, 1 match → auto-select, 2+ → null until tech chooses
   const procedure = useMemo(() => {
     if (!ticket) return FALLBACK_PROCEDURE;
-    return procedures.find((p) => p.category === ticket.category) ?? FALLBACK_PROCEDURE;
-  }, [ticket, procedures]);
+    if (matchingProcedures.length === 0) return FALLBACK_PROCEDURE;
+    if (matchingProcedures.length === 1) return matchingProcedures[0];
+    return matchingProcedures.find((p) => p.id === selectedProcedureId) ?? null;
+  }, [ticket, matchingProcedures, selectedProcedureId]);
 
   // #403 — persist sessionId in sessionStorage so navigate-away + return reuses the same
   // session ID rather than generating a new one (which would duplicate stock decrements).
@@ -266,29 +279,55 @@ export default function RepairSession() {
   const [completeErr,  setCompleteErr]  = useState(null);
   const [stepError,    setStepError]    = useState(null);
 
-  // Per-step state: { notes, partsUsed, photoUrls, completedAt }
-  const [stepData, setStepData] = useState(() =>
-    (procedure.steps ?? []).map((s) => ({
-      stepNumber: s.stepNumber,
-      notes:      '',
-      photoUrls:  [],
-      partsUsed:  (procedure.commonParts ?? []).map((cp) => ({
-        partId:   cp.partId,
-        partName: cp.partName,
-        quantity: cp.defaultQty ?? 1,
-        unitCost: parts.find((p) => p._docId === cp.partId)?.unitCost ?? 0,
-      })),
-      completedAt: null,
-    }))
-  );
+  // #419 — Per-step state: { notes, partsUsed, photoUrls, completedAt }
+  // Initialise from sessionStorage so that closing the tab mid-repair preserves
+  // notes, photos, and partsUsed. Procedure may be null (disambiguation screen),
+  // so we start with [] and populate via useEffect once procedure is resolved.
+  const [stepData, setStepData] = useState(() => {
+    const key = `omni_repair_steps_${ticketId}`;
+    const stored = sessionStorage.getItem(key);
+    if (stored) {
+      try { return JSON.parse(stored); } catch { /* ignore corrupt cache */ }
+    }
+    return [];
+  });
 
-  const steps = procedure.steps ?? [];
+  // #419 — when procedure becomes available (including disambiguation resolution),
+  // populate stepData if it is still empty (first load or after cache miss).
+  useEffect(() => {
+    if (!procedure) return;
+    setStepData((prev) => {
+      if (prev.length > 0) return prev; // already hydrated from sessionStorage or prior effect
+      const initial = (procedure.steps ?? []).map((s) => ({
+        stepNumber: s.stepNumber,
+        notes:      '',
+        photoUrls:  [],
+        partsUsed:  (procedure.commonParts ?? []).map((cp) => ({
+          partId:   cp.partId,
+          partName: cp.partName,
+          quantity: cp.defaultQty ?? 1,
+          unitCost: parts.find((p) => p._docId === cp.partId)?.unitCost ?? 0,
+        })),
+        completedAt: null,
+      }));
+      sessionStorage.setItem(`omni_repair_steps_${ticketId}`, JSON.stringify(initial));
+      return initial;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [procedure]);
+
+  const steps = procedure ? (procedure.steps ?? []) : [];
   const step  = steps[currentStep];
   const data  = stepData[currentStep] ?? { notes: '', partsUsed: [], photoUrls: [] };
 
+  // #419 — updateData now also persists to sessionStorage on every call
   const updateData = useCallback((key, val) => {
-    setStepData((prev) => prev.map((d, i) => i === currentStep ? { ...d, [key]: val } : d));
-  }, [currentStep]);
+    setStepData((prev) => {
+      const next = prev.map((d, i) => i === currentStep ? { ...d, [key]: val } : d);
+      sessionStorage.setItem(`omni_repair_steps_${ticketId}`, JSON.stringify(next));
+      return next;
+    });
+  }, [currentStep, ticketId]);
 
   function handleMarkDone() {
     // #101: enforce photo requirement before advancing
@@ -297,13 +336,28 @@ export default function RepairSession() {
       return;
     }
     setStepError(null);
-    setStepData((prev) => prev.map((d, i) =>
-      i === currentStep ? { ...d, completedAt: new Date().toISOString() } : d
-    ));
+    // #419 — persist completedAt stamp to sessionStorage as well
+    setStepData((prev) => {
+      const next = prev.map((d, i) =>
+        i === currentStep ? { ...d, completedAt: new Date().toISOString() } : d
+      );
+      sessionStorage.setItem(`omni_repair_steps_${ticketId}`, JSON.stringify(next));
+      return next;
+    });
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
       setShowSummary(true);
+    }
+  }
+
+  // #450 — back navigation within session; only exit to /technician from step 0
+  function handleBack() {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+      setStepError(null);
+    } else {
+      navigate('/technician');
     }
   }
 
@@ -326,6 +380,8 @@ export default function RepairSession() {
       sessionStorage.removeItem(`omni_repair_session_${ticketId}`);
       // #418 — clear the persisted startedAt so a re-opened ticket gets a fresh start.
       sessionStorage.removeItem(`omni_repair_started_${ticketId}`);
+      // #419 — clear the persisted step data after a successful commit.
+      sessionStorage.removeItem(`omni_repair_steps_${ticketId}`);
       navigate('/technician');
     } catch (err) {
       console.error('Failed to complete repair session:', err);
@@ -343,6 +399,28 @@ export default function RepairSession() {
           <span className={styles.headerTitle}>Repair</span>
         </header>
         <div className={styles.notFound}>Ticket not found or already removed.</div>
+      </div>
+    );
+  }
+
+  // #bug-449 — disambiguation screen when multiple procedures share this ticket's category
+  if (!procedure) {
+    return (
+      <div className={styles.shell}>
+        <header className={styles.header}>
+          <button className={styles.backBtn} onClick={() => navigate('/technician')} aria-label="Back">
+            <ArrowLeft size={20} />
+          </button>
+          <span className={styles.headerTitle}>Choose Procedure</span>
+        </header>
+        <div className={styles.procedurePicker}>
+          <p className={styles.procedurePickerHint}>Multiple SOPs match this ticket. Select the correct one:</p>
+          {matchingProcedures.map((p) => (
+            <button key={p.id} className={styles.procedurePickerBtn} onClick={() => setSelectedProcedureId(p.id)}>
+              {p.title ?? p.name}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
@@ -366,13 +444,12 @@ export default function RepairSession() {
     );
   }
 
-  const progress = ((currentStep + 1) / steps.length) * 100;
-
   return (
     <div className={styles.shell}>
       {/* Header */}
       <header className={styles.header}>
-        <button className={styles.backBtn} onClick={() => navigate('/technician')} aria-label="Back">
+        {/* #450 — back goes to previous step (not exit) when currentStep > 0 */}
+        <button className={styles.backBtn} onClick={handleBack} aria-label="Back">
           <ArrowLeft size={20} />
         </button>
         <div className={styles.headerCenter}>
@@ -382,9 +459,24 @@ export default function RepairSession() {
         <span className={styles.stepCounter}>{currentStep + 1}/{steps.length}</span>
       </header>
 
-      {/* Progress bar */}
+      {/* Progress bar — #450: each completed segment is clickable to jump back */}
       <div className={styles.progressBar}>
-        <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+        {steps.map((_, i) => (
+          <button
+            key={i}
+            className={
+              i < currentStep
+                ? `${styles.progressSegment} ${styles.progressSegmentCompleted}`
+                : i === currentStep
+                  ? `${styles.progressSegment} ${styles.progressSegmentCurrent}`
+                  : styles.progressSegment
+            }
+            style={{ width: `${100 / steps.length}%` }}
+            onClick={() => { if (i <= currentStep) { setCurrentStep(i); setStepError(null); } }}
+            aria-label={`Go to step ${i + 1}`}
+            disabled={i > currentStep}
+          />
+        ))}
       </div>
 
       {/* Step content */}

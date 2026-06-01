@@ -10,9 +10,14 @@
  *     date:            "YYYY-MM-DD",
  *     attachmentUrl:   string,        // Firebase Storage public URL
  *     attachmentName:  string,        // filename, e.g. "invoice_2024_01.pdf"
- *     senderEmail:     string,        // logged-in user's email (for Reply-To)
+ *     senderEmail:     string,        // logged-in user's email (for Reply-To); MUST match authUser.email
  *     senderName:      string,
  *   }
+ *
+ * NOTE: accountantEmail and fromEmail are NOT accepted from the request body.
+ * Recipient is always process.env.ACCOUNTANT_EMAIL; sender is always
+ * process.env.RESEND_FROM_EMAIL (or the hardcoded default). This prevents
+ * authenticated staff from turning this endpoint into a spam relay.
  *
  * Returns:
  *   { success: true, messageId } | { error }
@@ -90,19 +95,16 @@ export default async function handler(req, res) {
     costId, vendor, amount, date,
     attachmentUrl, attachmentName,
     senderEmail, senderName = 'Omni Team',
-    /* accountantEmail passed from frontend (stored in Settings localStorage) */
-    accountantEmail,
-    fromEmail,
   } = req.body || {};
 
-  /* Resolve recipient: body → env var → hardcoded default */
-  const ACCOUNTANT_EMAIL =
-    accountantEmail ||
-    process.env.ACCOUNTANT_EMAIL ||
-    'nsoukoulis@outlook.com';
+  /* Recipient is always the configured env var — body override removed (#431) */
+  const ACCOUNTANT_EMAIL = process.env.ACCOUNTANT_EMAIL;
+  if (!ACCOUNTANT_EMAIL) {
+    return res.status(500).json({ error: 'ACCOUNTANT_EMAIL not configured' });
+  }
 
+  /* Sender is always the configured env var — body override removed (#431) */
   const RESEND_FROM_EMAIL =
-    fromEmail ||
     process.env.RESEND_FROM_EMAIL ||
     'Omni <noreply@mgexecutive.app>';
 
@@ -129,8 +131,10 @@ export default async function handler(req, res) {
         // #374 — the allowlist only validates the INITIAL host, so do NOT follow 3xx to an
         // unvalidated (possibly internal) target. redirect:'manual' returns the 3xx unfollowed;
         // also cap the embedded body size to avoid an oversize-fetch memory DoS.
+        // #434 — use a streaming reader so the abort fires BEFORE the body is fully buffered.
         const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
-        const fileRes = await fetch(attachmentUrl, { redirect: 'manual' });
+        const controller = new AbortController();
+        const fileRes = await fetch(attachmentUrl, { redirect: 'manual', signal: controller.signal });
         if (fileRes.status >= 300 && fileRes.status < 400) {
           console.warn('Attachment URL returned a redirect; refusing to follow (SSRF guard).');
         } else if (fileRes.ok) {
@@ -138,11 +142,30 @@ export default async function handler(req, res) {
           if (declaredLen > MAX_ATTACHMENT_BYTES) {
             console.warn('Attachment exceeds 10 MB (content-length); skipping embed.');
           } else {
-            const buffer = await fileRes.arrayBuffer();
-            if (buffer.byteLength <= MAX_ATTACHMENT_BYTES) {
-              attachmentData = Buffer.from(buffer).toString('base64');
+            // Stream body incrementally — abort as soon as we exceed the size limit
+            // so we never buffer more than MAX_ATTACHMENT_BYTES (#434).
+            const reader = fileRes.body.getReader();
+            const chunks = [];
+            let totalBytes = 0;
+            let aborted = false;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              totalBytes += value.byteLength;
+              if (totalBytes > MAX_ATTACHMENT_BYTES) {
+                controller.abort();
+                aborted = true;
+                break;
+              }
+              chunks.push(value);
+            }
+            if (!aborted) {
+              const combined = new Uint8Array(totalBytes);
+              let offset = 0;
+              for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+              attachmentData = Buffer.from(combined).toString('base64');
             } else {
-              console.warn('Attachment exceeds 10 MB (actual); skipping embed.');
+              console.warn('Attachment exceeds 10 MB (streaming); skipping embed.');
             }
           }
         }
@@ -151,10 +174,14 @@ export default async function handler(req, res) {
       }
     }
 
+    /* Reply-To is only set when senderEmail matches the authenticated user's
+       own email — prevents impersonation via arbitrary reply-to (#431) */
+    const safeReplyTo = (senderEmail && senderEmail === authUser.email) ? senderEmail : null;
+
     const emailPayload = {
       from: RESEND_FROM_EMAIL || 'Omni <noreply@mgexecutive.app>',
       to: [ACCOUNTANT_EMAIL],
-      ...(senderEmail ? { replyTo: senderEmail } : {}),
+      ...(safeReplyTo ? { replyTo: safeReplyTo } : {}),
       subject: `Invoice: ${vendor || 'Unknown vendor'} — €${Number(amount || 0).toFixed(2)} (${date || 'no date'})`,
       html: buildEmailHtml({ vendor, amount, date, attachmentName, senderName }),
     };

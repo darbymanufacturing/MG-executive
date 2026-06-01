@@ -21,7 +21,7 @@
  *    aborts with a FATAL error (extend backupCollection() to recurse if needed).
  */
 import admin from 'firebase-admin';
-import { mkdirSync, writeFileSync, appendFileSync } from 'fs';
+import { mkdirSync, writeFileSync, appendFileSync, renameSync, rmSync, existsSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 
 const PAGE_SIZE = 500;
@@ -99,23 +99,52 @@ async function main() {
   const now = new Date();
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   const dir = resolve(process.cwd(), 'backups', `firestore-${stamp}`);
-  mkdirSync(dir, { recursive: true });
+  const tmpDir = dir + '.tmp';
+  mkdirSync(tmpDir, { recursive: true });
 
   console.log(`Backing up to ${dir}\n`);
   const cols = await db.listCollections();
   const manifest = { createdAt: now.toISOString(), project: 'mg-executive', format: 'jsonl', collections: {}, totalDocs: 0 };
 
   for (const col of cols) {
-    const count = await backupCollection(col, dir, manifest.collections);
+    const count = await backupCollection(col, tmpDir, manifest.collections);
     manifest.totalDocs += count;
     console.log(`  ${col.id.padEnd(24)} ${count} docs`);
   }
 
-  writeFileSync(resolve(dir, '_manifest.json'), JSON.stringify(manifest, null, 2));
+  writeFileSync(resolve(tmpDir, '_manifest.json'), JSON.stringify(manifest, null, 2));
+  renameSync(tmpDir, dir);
   console.log(`\n✓ Backup complete: ${manifest.totalDocs} docs across ${cols.length} collections`);
   console.log(`  → ${dir}`);
   console.log(`  (consumed ~${manifest.totalDocs} Firestore reads against the Spark 50K/day quota)`);
   process.exit(0);
 }
 
-main().catch((e) => { console.error('Backup FAILED:', e.message); process.exit(1); });
+main().catch((e) => {
+  console.error('Backup FAILED:', e.message);
+  const backupsDir = resolve(process.cwd(), 'backups');
+  let cleaned = false;
+  try {
+    const entries = existsSync(backupsDir) ? readdirSync(backupsDir) : [];
+    for (const entry of entries) {
+      if (entry.endsWith('.tmp')) {
+        const tmpPath = resolve(backupsDir, entry);
+        const failedPath = tmpPath.replace(/\.tmp$/, '.FAILED');
+        try {
+          renameSync(tmpPath, failedPath);
+          console.error(`Partial backup left at ${failedPath} — do not restore from it.`);
+        } catch {
+          rmSync(tmpPath, { recursive: true, force: true });
+          console.error(`Partial backup at ${tmpPath} could not be renamed — deleted.`);
+        }
+        cleaned = true;
+      }
+    }
+  } catch {
+    console.error('Could not clean up partial backup directory.');
+  }
+  if (!cleaned) {
+    console.error('No partial .tmp backup directory found to clean up.');
+  }
+  process.exit(1);
+});

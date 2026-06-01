@@ -20,7 +20,7 @@ import { orgDocId } from '../utils/orgDocId.js';
 const EVENTS_COL = 'telemetryEvents';
 const SB_TABLE = 'telemetry_events';
 const BATCH_SIZE = 450;
-const MAX_EVENTS = 20000;
+const MAX_EVENTS = 500;
 
 const TelemetryContext = createContext(null);
 
@@ -28,9 +28,9 @@ export function TelemetryProvider({ children }) {
   const { orgId } = useOrg();
   // Phase 2 (ADR-0003): org-scoped read. Kept route-scoped to /scooters + /pme.
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
-  const { items, loading } = useOrgTable(EVENTS_COL, SB_TABLE, {
-    firestore: { limit: MAX_EVENTS },
-    supabase: { limit: MAX_EVENTS },
+  const { items, loading, loadMore, hasMore } = useOrgTable(EVENTS_COL, SB_TABLE, {
+    firestore: { limit: MAX_EVENTS, orderBy: ['timestamp', 'desc'] },
+    supabase: { limit: MAX_EVENTS, orderBy: ['timestamp', 'desc'] },
   });
 
   // Re-classify on load so data ingested under older classifier rules picks up the
@@ -53,11 +53,18 @@ export function TelemetryProvider({ children }) {
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
 
-    // Dedup must compare like-for-like: stored events carry the ORG-PREFIXED doc id
-    // (`_docId` from useOrgCollection), while the parser emits the RAW fingerprint.
-    // Prefix the parser's id before comparing + writing so re-uploads still dedup.
-    const existingIds = new Set(events.map((e) => e._docId));
-    const newRows = parsedEvents.filter((e) => !existingIds.has(orgDocId(orgId, e._docId)));
+    // Normalize stored _docId to the base fingerprint: strip the "orgId_" prefix when
+    // present (Phase-2 docs) so pre-Phase-2 un-prefixed docs also dedup correctly.
+    // Parser always emits the raw fingerprint (e.g. `70055_2026-01-01T100000_Available`).
+    // Phase-2 stored docs have `acme_70055_...`; legacy docs have `70055_...`.
+    // Stripping the prefix from Phase-2 docs makes both reduce to the same base key.
+    const orgPrefix = orgId + '_';
+    const existingBaseIds = new Set(
+      events.map((e) =>
+        e._docId.startsWith(orgPrefix) ? e._docId.slice(orgPrefix.length) : e._docId
+      )
+    );
+    const newRows = parsedEvents.filter((e) => !existingBaseIds.has(e._docId));
     const duplicates = parsedEvents.length - newRows.length;
 
     let written = 0;
@@ -107,7 +114,9 @@ export function TelemetryProvider({ children }) {
     importEvents,
     clearAllEvents,
     hasData: events.length > 0,
-  }), [events, loading, importEvents, clearAllEvents]);
+    loadMore,
+    hasMore,
+  }), [events, loading, importEvents, clearAllEvents, loadMore, hasMore]);
 
   return (
     <TelemetryContext.Provider value={value}>
@@ -127,5 +136,5 @@ export function useTelemetry() {
 // scooters) rather than throwing and crashing the page via ErrorBoundary.
 export function useTelemetrySafe() {
   const ctx = useContext(TelemetryContext);
-  return ctx ?? { events: [], loading: false, count: 0, hasData: false, importEvents: async () => ({ written: 0, duplicates: 0 }), clearAllEvents: async () => {} };
+  return ctx ?? { events: [], loading: false, count: 0, hasData: false, importEvents: async () => ({ written: 0, duplicates: 0 }), clearAllEvents: async () => {}, loadMore: () => {}, hasMore: false };
 }

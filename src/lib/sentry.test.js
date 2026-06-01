@@ -14,17 +14,18 @@ vi.mock('@sentry/react', () => ({
   init: (options) => { capturedInit = options; },
 }));
 
-// Set Vite env vars BEFORE the module is imported.
-// vitest exposes import.meta.env as a plain object we can mutate.
-import.meta.env.VITE_SENTRY_DSN = 'https://fake@sentry.io/0';
-import.meta.env.VITE_SENTRY_FORCE = 'true';
-import.meta.env.PROD = false;
-import.meta.env.MODE = 'test';
+// Stub Vite env vars so sentry.js sees them when it evaluates import.meta.env.
+// vi.stubEnv propagates into imported modules; direct mutation of import.meta.env does not.
+vi.stubEnv('VITE_SENTRY_DSN', 'https://fake@sentry.io/0');
+vi.stubEnv('VITE_SENTRY_FORCE', 'true');
+
+// Reset the module registry so sentry.js is re-evaluated fresh with the stubbed env.
+vi.resetModules();
 
 const { initSentry } = await import('./sentry.js');
 
-beforeAll(() => {
-  initSentry();
+beforeAll(async () => {
+  await initSentry();
 });
 
 // Helper: run beforeSend with a deep-cloned event, return the result.

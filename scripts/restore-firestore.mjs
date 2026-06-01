@@ -63,7 +63,17 @@ async function main() {
   const commit = args.includes('--commit');
   const merge = args.includes('--merge');
   const onlyArg = args.find((a) => a.startsWith('--only'));
-  const only = onlyArg ? (onlyArg.split('=')[1] || args[args.indexOf(onlyArg) + 1] || '').split(',').filter(Boolean) : null;
+  let only = null;
+  if (onlyArg) {
+    const embedded = onlyArg.split('=')[1];          // --only=costs,revenue
+    const nextArg  = args[args.indexOf(onlyArg) + 1]; // --only costs,revenue
+    const raw = embedded ?? (nextArg && !nextArg.startsWith('--') ? nextArg : null);
+    if (!raw) {
+      console.error('ERROR: --only requires a value (e.g. --only costs,revenue or --only=costs,revenue).');
+      process.exit(1);
+    }
+    only = raw.split(',').filter(Boolean);
+  }
 
   if (!dir) {
     console.error('Usage: node scripts/restore-firestore.mjs <backup-dir> [--commit] [--merge] [--only col1,col2]');
@@ -76,6 +86,7 @@ async function main() {
   let manifestData = {};
   try { manifestData = JSON.parse(readFileSync(resolve(dir, '_manifest.json'), 'utf8')); } catch {}
   const isJsonl = manifestData.format === 'jsonl';
+  const manifestCounts = manifestData.collections || {};
 
   const files = readdirSync(resolve(dir)).filter((f) =>
     (f.endsWith('.json') || f.endsWith('.jsonl')) && f !== '_manifest.json'
@@ -125,12 +136,22 @@ async function main() {
         }
       }
 
+      const expectedJsonl = manifestCounts[collName];
+      if (expectedJsonl !== undefined && lineCount !== expectedJsonl) {
+        console.warn(`  ⚠️  ${collName}: manifest says ${expectedJsonl} docs, backup file has ${lineCount} — backup may be truncated!`);
+        if (commit) { console.error('Aborting restore — pass --skip-integrity to force.'); process.exit(1); }
+      }
       console.log(`  ${collName.padEnd(24)} ${lineCount} docs ${commit ? '→ written' : '(would write)'}`);
       grandTotal += lineCount;
     } else {
       // Legacy JSON path — backward compatible with all existing backups.
       const docs = JSON.parse(readFileSync(resolve(dir, file), 'utf8'));
       const ids = Object.keys(docs);
+      const expectedJson = manifestCounts[collName];
+      if (expectedJson !== undefined && ids.length !== expectedJson) {
+        console.warn(`  ⚠️  ${collName}: manifest says ${expectedJson} docs, backup file has ${ids.length} — backup may be truncated!`);
+        if (commit) { console.error('Aborting restore — pass --skip-integrity to force.'); process.exit(1); }
+      }
       console.log(`  ${collName.padEnd(24)} ${ids.length} docs ${commit ? '→ writing' : '(would write)'}`);
       grandTotal += ids.length;
 

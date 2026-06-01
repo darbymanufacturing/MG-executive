@@ -82,6 +82,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, uid: targetUid, orgId, role });
   } catch (err) {
     console.error('sync-claim error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to sync claims' });
+    return res.status(500).json({ error: 'Failed to sync claims' });
   }
 }

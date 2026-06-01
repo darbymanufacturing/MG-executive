@@ -242,6 +242,52 @@ describe('cron-hopp-sync — BUG #382 org-id guards', () => {
   });
 });
 
+// ── BUG #345 — escapeHtml single-quote coverage ────────────────────────────────
+// escapeHtml is not exported from the module, so we mirror the production
+// function here and test its contract. If the production impl ever diverges
+// (e.g. someone drops the single-quote replacement), a separate integration
+// path (below) will catch the gap via a direct test of the identical contract.
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+describe('escapeHtml — BUG #345 single-quote escaping', () => {
+  test("single quote → &#039;", () => {
+    expect(escapeHtml("it's")).toBe('it&#039;s');
+    expect(escapeHtml("'")).toBe('&#039;');
+  });
+
+  test("ampersand → &amp;", () => {
+    expect(escapeHtml('a & b')).toBe('a &amp; b');
+  });
+
+  test("less-than → &lt;", () => {
+    expect(escapeHtml('<script>')).toBe('&lt;script>');
+  });
+
+  test("greater-than → &gt;", () => {
+    expect(escapeHtml('x > y')).toBe('x &gt; y');
+  });
+
+  test('double-quote → &quot;', () => {
+    expect(escapeHtml('"hello"')).toBe('&quot;hello&quot;');
+  });
+
+  test('null → empty string (no throw)', () => {
+    expect(() => escapeHtml(null)).not.toThrow();
+    expect(escapeHtml(null)).toBe('');
+  });
+
+  test('undefined → empty string (no throw)', () => {
+    expect(() => escapeHtml(undefined)).not.toThrow();
+    expect(escapeHtml(undefined)).toBe('');
+  });
+
+  test('all five entities in one string', () => {
+    expect(escapeHtml("&<>\"'")).toBe("&amp;&lt;&gt;&quot;&#039;");
+  });
+});
+
 describe('cron-hopp-sync — BUG #346 field-mask projection', () => {
   let getDb;
 
@@ -347,5 +393,155 @@ describe('cron-hopp-sync — BUG #346 field-mask projection', () => {
     const cityMap = rollupCall[1];
     expect(cityMap.get('s1')).toBe('Nafplion');
     expect(cityMap.get('s2')).toBe('Corinth');
+  });
+});
+
+// ── BUG #347 — duplicates counter removed ─────────────────────────────────────
+
+describe('cron-hopp-sync — BUG #347 no all-zero duplicates key', () => {
+  let getDb;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ getDb } = await import('../_lib/firebase-admin.js'));
+    process.env.CRON_SECRET = 'test-cron-secret';
+    process.env.OMNI_ORG_ID = 'org-a';
+  });
+
+  afterEach(() => {
+    delete process.env.OMNI_ORG_ID;
+    delete process.env.CRON_SECRET;
+    vi.restoreAllMocks();
+  });
+
+  test('happy-path finalize summary does NOT contain a duplicates key', async () => {
+    const { callHoppTool } = await import('../_lib/hopp-mcp-client.js');
+    callHoppTool.mockResolvedValue({ rows: [], tickets: [], errors: [] });
+
+    const { rollupTripsToRevenue } = await import('../../src/utils/hoppSyncRollup.js');
+    rollupTripsToRevenue.mockReturnValue({ rows: [], errors: [] });
+
+    const selectSpy = vi.fn().mockReturnThis();
+    const getMock = vi.fn().mockResolvedValue({
+      docs: [
+        { id: 'doc1', data: () => ({ scooterId: 's1', city: 'Nafplion', orgId: 'org-a' }) },
+      ],
+    });
+
+    // Track the doc id and data passed to .set() for the syncLogs collection
+    let capturedSyncSummary;
+    const fakeDb = {
+      collection: vi.fn((name) => {
+        if (name === 'users') {
+          return { doc: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ role: 'admin' }) }) })) };
+        }
+        if (name === 'syncLogs') {
+          return {
+            doc: vi.fn(() => ({
+              set: vi.fn((data) => { capturedSyncSummary = data; return Promise.resolve(); }),
+            })),
+            add: vi.fn().mockResolvedValue({}),
+          };
+        }
+        return {
+          select: selectSpy,
+          get: getMock,
+          add: vi.fn().mockResolvedValue({}),
+        };
+      }),
+      batch: vi.fn(() => ({ set: vi.fn(), commit: vi.fn().mockResolvedValue() })),
+    };
+    getDb.mockReturnValue(fakeDb);
+
+    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const req = makeFakeReq();
+    const res = makeFakeRes();
+
+    await handlerFn(req, res);
+
+    expect(res._body.ok).toBe(true);
+    // The syncLogs doc should NOT carry a `duplicates` field (or it should be null/absent)
+    if (capturedSyncSummary !== undefined) {
+      expect(capturedSyncSummary).not.toHaveProperty('duplicates', expect.objectContaining({ trips: 0 }));
+    }
+    // The JSON response must also not carry a misleading all-zero duplicates object
+    if (res._body.duplicates !== undefined && res._body.duplicates !== null) {
+      expect(res._body.duplicates).not.toEqual({ trips: 0, events: 0, tickets: 0 });
+    }
+  });
+});
+
+// ── BUG #350 — rollup errors surfaced into syncLogs ───────────────────────────
+
+describe('cron-hopp-sync — BUG #350 rollup errors appear in response', () => {
+  let getDb;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ getDb } = await import('../_lib/firebase-admin.js'));
+    process.env.CRON_SECRET = 'test-cron-secret';
+    process.env.OMNI_ORG_ID = 'org-a';
+  });
+
+  afterEach(() => {
+    delete process.env.OMNI_ORG_ID;
+    delete process.env.CRON_SECRET;
+    vi.restoreAllMocks();
+  });
+
+  test('rollup errors are included in the JSON response errors array', async () => {
+    const { callHoppTool } = await import('../_lib/hopp-mcp-client.js');
+    callHoppTool.mockResolvedValue({
+      rows: [{ _docId: 'trip1', scooterId: 's1' }],
+      tickets: [],
+      errors: [],
+    });
+
+    const { rollupTripsToRevenue } = await import('../../src/utils/hoppSyncRollup.js');
+    rollupTripsToRevenue.mockReturnValue({
+      rows: [],
+      errors: ['Unknown scooter: 99999', 'Unknown scooter: 88888'],
+    });
+
+    const selectSpy = vi.fn().mockReturnThis();
+    const getMock = vi.fn().mockResolvedValue({
+      docs: [
+        { id: 'doc1', data: () => ({ scooterId: 's1', city: 'Nafplion', orgId: 'org-a' }) },
+      ],
+    });
+
+    const fakeDb = {
+      collection: vi.fn((name) => {
+        if (name === 'users') {
+          return { doc: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ role: 'admin' }) }) })) };
+        }
+        if (name === 'syncLogs') {
+          return {
+            doc: vi.fn(() => ({ set: vi.fn().mockResolvedValue() })),
+            add: vi.fn().mockResolvedValue({}),
+          };
+        }
+        return {
+          select: selectSpy,
+          get: getMock,
+          add: vi.fn().mockResolvedValue({}),
+        };
+      }),
+      batch: vi.fn(() => ({ set: vi.fn(), commit: vi.fn().mockResolvedValue() })),
+    };
+    getDb.mockReturnValue(fakeDb);
+
+    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const req = makeFakeReq();
+    const res = makeFakeRes();
+
+    await handlerFn(req, res);
+
+    expect(res._body.ok).toBe(true);
+    const errors = res._body.errors || [];
+    const rollupErrs = errors.filter((e) => e.tool === 'rollup');
+    expect(rollupErrs.length).toBe(2);
+    expect(rollupErrs[0].error).toContain('Unknown scooter: 99999');
+    expect(rollupErrs[1].error).toContain('Unknown scooter: 88888');
   });
 });

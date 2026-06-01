@@ -49,15 +49,17 @@ export default async function handler(req, res) {
     });
 
     // Re-fetch accounts and transactions (returns current data; refresh may still be in progress)
-    const acctRes  = await fetch(`${BASE}/accounts?connection_id=${connection_id}`, { headers });
+    const acctRes  = await fetch(`${BASE}/accounts?connection_id=${connection_id}`, { headers, signal: AbortSignal.timeout(10_000) });
     const acctData = await acctRes.json();
     const accounts = acctData.data || [];
 
+    const MAX_PAGES = 50;
     const allTransactions = [];
     for (const account of accounts) {
       let url = `${BASE}/transactions?connection_id=${connection_id}&account_id=${account.id}`;
-      while (url) {
-        const txRes  = await fetch(url, { headers });
+      let pages = 0;
+      while (url && pages++ < MAX_PAGES) {
+        const txRes  = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
         const txData = await txRes.json();
         const txs    = (txData.data || []).map((tx) => ({ ...tx, accountId: account.id }));
         allTransactions.push(...txs);
@@ -70,6 +72,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ transactions: allTransactions });
   } catch (err) {
     console.error('[bank-refresh]', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Bank data refresh failed' });
   }
 }

@@ -40,9 +40,9 @@ export async function completeRepairSession({
     });
   });
   const aggregatedPartsUsed = Object.values(partMap);
-  const totalPartsCost = aggregatedPartsUsed.reduce(
-    (sum, p) => sum + p.quantity * (p.unitCost ?? 0), 0
-  );
+  // #445 — totalPartsCost is re-computed inside the transaction after live
+  // unitCost fixup; this placeholder is replaced by the inner const.
+  let totalPartsCost = 0;
 
   // #402/#23/#24 — All writes happen in ONE transaction so the entire operation is
   // atomic. If the ticket update or session doc write fails, the stock decrements are
@@ -68,14 +68,25 @@ export async function completeRepairSession({
     );
     const partSnaps = await Promise.all(partRefs.map((ref) => transaction.get(ref)));
 
-    // Validate stock for every part before writing anything
+    // Validate stock for every part before writing anything, and capture
+    // the live unitCost so the audit doc stores price-at-write, not price-at-mount.
     partSnaps.forEach((snap, idx) => {
       const { partId, partName, quantity } = aggregatedPartsUsed[idx];
       const currentStock = snap.exists() ? (snap.data().stockOnHand ?? 0) : 0;
       if (currentStock < quantity) {
         throw new Error(`Insufficient stock for ${partName ?? partId}: have ${currentStock}, need ${quantity}`);
       }
+      // #445 — overwrite with live unitCost so both the ticket partsUsed field
+      // and the repairSessions audit doc record the price in effect at write time.
+      if (snap.exists() && snap.data().unitCost != null) {
+        aggregatedPartsUsed[idx] = { ...aggregatedPartsUsed[idx], unitCost: snap.data().unitCost };
+      }
     });
+
+    // Recompute after live unitCost fixup (#445)
+    const totalPartsCost = aggregatedPartsUsed.reduce(
+      (sum, p) => sum + p.quantity * (p.unitCost ?? 0), 0
+    );
 
     // All stock checks passed — decrement each part
     partSnaps.forEach((snap, idx) => {

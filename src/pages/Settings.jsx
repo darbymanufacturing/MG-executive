@@ -136,6 +136,13 @@ export default function Settings() {
     return unsub;
   }, [userProfile?.orgId]);
 
+  // #452 — if a non-owner somehow has inviteRole='admin' in state (e.g. role
+  // was downgraded after the dropdown was opened), reset to 'crew' so the form
+  // can't submit an admin invite that the backend will now reject anyway.
+  useEffect(() => {
+    if (!isOwner && inviteRole === 'admin') setInviteRole('crew');
+  }, [isOwner, inviteRole]);
+
   const handleSaveAccountant = () => {
     localStorage.setItem('omni_accountant_email', accountantEmail.trim());
     setAccountantSaved(true);
@@ -619,7 +626,8 @@ export default function Settings() {
                 >
                   <option value="crew">Crew — repairs, tickets, procedures only</option>
                   <option value="staff">Staff — full ops, no financial details</option>
-                  <option value="admin">Admin — full access</option>
+                  {/* #452 — only owners may mint admins; hide option from non-owners */}
+                  {isOwner && <option value="admin">Admin — full access</option>}
                 </select>
               </div>
             </div>

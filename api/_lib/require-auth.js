@@ -64,12 +64,21 @@ export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', '
     res.status(401).json({ error: 'Authentication required.' });
     return null;
   }
-  if (process.env.CRON_SECRET) {
+  // Vercel sets x-vercel-cron: 1 on every scheduled invocation. External callers
+  // cannot spoof this header — Vercel infrastructure strips it from inbound requests.
+  const isCronCall = req.headers['x-vercel-cron'] === '1';
+  if (isCronCall) {
+    if (!process.env.CRON_SECRET) {
+      console.error('[requireCronOrUser] CRON_SECRET env var is not configured — cron request rejected');
+      res.status(503).json({ error: 'Server misconfiguration: CRON_SECRET not set.' });
+      return null;
+    }
     const a = Buffer.from(token);
     const b = Buffer.from(process.env.CRON_SECRET);
     if (a.length === b.length && timingSafeEqual(a, b)) {
       return { trigger: 'cron', uid: null, role: null };
     }
+    // Secret present but token mismatch — fall through to user auth.
   }
   const user = await requireUser(req, res, { roles });
   if (!user) return null; // requireUser already responded

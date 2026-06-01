@@ -33,7 +33,11 @@ vi.mock('../../hooks/orgWrite.js', () => ({
 // We build this per-test so we can control ticket snap state.
 let _mockTransaction;
 
-function buildMockTransaction({ ticketStatus = 'In Progress', ticketCompletedBy = null } = {}) {
+function buildMockTransaction({
+  ticketStatus = 'In Progress',
+  ticketCompletedBy = null,
+  partUnitCost = 5,
+} = {}) {
   return {
     get: vi.fn(async (ref) => {
       if (ref.col === 'maintenanceTickets') {
@@ -42,11 +46,11 @@ function buildMockTransaction({ ticketStatus = 'In Progress', ticketCompletedBy 
           data: () => ({ status: ticketStatus, completedBy: ticketCompletedBy }),
         };
       }
-      // Part docs — always sufficient stock
+      // Part docs — always sufficient stock; expose unitCost for BUG-445 tests
       return {
         exists: () => true,
         ref,
-        data: () => ({ stockOnHand: 99 }),
+        data: () => ({ stockOnHand: 99, unitCost: partUnitCost }),
       };
     }),
     update: vi.fn(),
@@ -164,5 +168,36 @@ describe('BUG-422 — concurrent completion guard', () => {
     )?.[0];
     // Same object reference — not two separate doc() calls
     expect(ticketUpdateRef).toBe(readRef);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG-445: unitCost uses live price-at-write, not stale price-at-mount
+// ---------------------------------------------------------------------------
+describe('BUG-445 — unitCost uses live price-at-write, not stale price-at-mount', () => {
+  it('overwrites stale unitCost in aggregatedPartsUsed with live snap value', async () => {
+    // Admin updated the part price to 7 after the technician loaded the page
+    // (stale unitCost: 5 in VALID_ARGS, live snap returns 7)
+    _mockTransaction = buildMockTransaction({ partUnitCost: 7 });
+    const { runTransaction } = await import('firebase/firestore');
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb(_mockTransaction));
+
+    await completeRepairSession(VALID_ARGS);
+
+    // transaction.set is called with the repairSessions audit doc
+    const auditPayload = _mockTransaction.set.mock.calls[0][1];
+    expect(auditPayload.aggregatedPartsUsed[0].unitCost).toBe(7); // live price, not stale 5
+  });
+
+  it('totalPartsCost in audit doc reflects live unitCost', async () => {
+    // quantity: 2, live unitCost: 7 → expected total: 14 (not 10 from stale unitCost 5)
+    _mockTransaction = buildMockTransaction({ partUnitCost: 7 });
+    const { runTransaction } = await import('firebase/firestore');
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb(_mockTransaction));
+
+    await completeRepairSession(VALID_ARGS);
+
+    const auditPayload = _mockTransaction.set.mock.calls[0][1];
+    expect(auditPayload.totalPartsCost).toBe(14); // 2 * 7, not 2 * 5 = 10
   });
 });

@@ -3,6 +3,11 @@ import { totalMonthlyCost, allTimeMonthlyTrendData } from './calculations.js';
 
 const DAY_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+/** Accumulate EUR values in integer cents to avoid float drift. */
+function sumCents(items, getValue) {
+  return items.reduce((s, item) => s + Math.round((getValue(item) || 0) * 100), 0) / 100;
+}
+
 /**
  * Daily revenue breakdown for a selected month (YYYY-MM string).
  * Returns one entry per calendar day with actual revenue, daily cost rate,
@@ -13,12 +18,12 @@ export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
   const [y, m] = selectedMonth.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
 
-  // Revenue lookup by exact date string
-  const revByDate   = {};
-  const tripsByDate = {};
+  // Revenue lookup by exact date string (accumulated in integer cents to avoid float drift)
+  const revCentsDate = {};
+  const tripsByDate  = {};
   periodRevenue.forEach((r) => {
-    revByDate[r.date]   = (revByDate[r.date]   || 0) + (r.totalPaidRevenue || 0);
-    tripsByDate[r.date] = (tripsByDate[r.date] || 0) + (r.totalTrips       || 0);
+    revCentsDate[r.date] = (revCentsDate[r.date] || 0) + Math.round((r.totalPaidRevenue || 0) * 100);
+    tripsByDate[r.date]  = (tripsByDate[r.date]  || 0) + (r.totalTrips || 0);
   });
 
   // Spread recurring monthly costs evenly; land one-time costs on their exact startDate
@@ -37,9 +42,9 @@ export function dailyRevenueTrend(periodRevenue, costs, selectedMonth) {
   return Array.from({ length: daysInMonth }, (_, i) => {
     const dayNum  = i + 1;
     const dateStr = `${selectedMonth}-${String(dayNum).padStart(2, '0')}`;
-    const revenue = revByDate[dateStr]   || 0;
+    const revenue = (revCentsDate[dateStr] || 0) / 100;
     const trips   = tripsByDate[dateStr] || 0;
-    const hasData = !!revByDate[dateStr];
+    const hasData = !!revCentsDate[dateStr];
     const costRate = parseFloat((recurringDailyRate + (oneTimeCostByDate[dateStr] || 0)).toFixed(2));
     return {
       day:      `${DAY_ABBRS[m - 1]} ${dayNum}`,
@@ -64,7 +69,7 @@ export function filterByRange(revenueData, startDate, endDate) {
 
 /** Sum of totalPaidRevenue across all rows */
 export function totalRevenue(revenueData) {
-  return revenueData.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  return sumCents(revenueData, (r) => r.totalPaidRevenue);
 }
 
 /** Total revenue for the current calendar month */
@@ -185,7 +190,7 @@ export function revenuePerTrip(revenueData) {
   return totalRevenue(revenueData) / trips;
 }
 
-/** Vehicle utilization: avg unique vehicles / fleet size × 100 (uncapped — >100% is valid data) */
+/** Vehicle utilization: avg unique vehicles / fleet size × 100, capped at 100 (uniqueVehiclesCount can exceed a stale fleetSize; >100% is nonsensical as a KPI). */
 export function vehicleUtilization(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return 0;
   const avgVehicles = revenueData.reduce((s, r) => s + (r.uniqueVehiclesCount || 0), 0) / revenueData.length;
@@ -216,7 +221,7 @@ export function monthlyRevenueSummary(revenueData, year) {
     const rows = revenueData.filter((r) => r.date.startsWith(prefix));
     return {
       month: `${month} ${y}`,
-      revenue:        rows.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0),
+      revenue:        sumCents(rows, (r) => r.totalPaidRevenue),
       trips:          rows.reduce((s, r) => s + (r.totalTrips || 0), 0),
       distance:       rows.reduce((s, r) => s + (r.totalTripDistanceKm || 0), 0),
       // #69 — this is an AVERAGE of daily unique user counts, not a true monthly
@@ -271,18 +276,21 @@ export function allTimeCombinedTrend(costs, revenueData) {
 
   const costTrend = allTimeMonthlyTrendData(costs, earliestRevYM);
 
-  // Build revenue lookup by YYYY-MM
-  const revByKey = {};
+  // Build revenue lookup by YYYY-MM (accumulated in integer cents to avoid float drift)
+  const revCentsKey = {};
   revenueData.forEach((r) => {
     const key = r.date.slice(0, 7);
-    revByKey[key] = (revByKey[key] || 0) + (r.totalPaidRevenue || 0);
+    revCentsKey[key] = (revCentsKey[key] || 0) + Math.round((r.totalPaidRevenue || 0) * 100);
   });
 
-  return costTrend.map(({ _key, ...rest }) => ({
-    ...rest,
-    revenue: parseFloat((revByKey[_key] || 0).toFixed(2)),
-    profit:  parseFloat(((revByKey[_key] || 0) - (rest.total || 0)).toFixed(2)),
-  }));
+  return costTrend.map(({ _key, ...rest }) => {
+    const rev = (revCentsKey[_key] || 0) / 100;
+    return {
+      ...rest,
+      revenue: parseFloat(rev.toFixed(2)),
+      profit:  parseFloat((rev - (rest.total || 0)).toFixed(2)),
+    };
+  });
 }
 
 /**
@@ -292,12 +300,13 @@ export function allTimeCombinedTrend(costs, revenueData) {
 export function actualRevenuePerScooterMonthly(revenueData, fleetSize) {
   if (!fleetSize || !revenueData.length) return null;
   // Aggregate by YYYY-MM key to avoid silently dropping prior-year data
-  const byMonth = {};
+  // Accumulated in integer cents to avoid float drift; divided back to EUR at read
+  const byMonthCents = {};
   revenueData.forEach((r) => {
     const key = r.date.slice(0, 7);
-    byMonth[key] = (byMonth[key] || 0) + (r.totalPaidRevenue || 0);
+    byMonthCents[key] = (byMonthCents[key] || 0) + Math.round((r.totalPaidRevenue || 0) * 100);
   });
-  const activeMths = Object.values(byMonth).filter((v) => v > 0);
+  const activeMths = Object.values(byMonthCents).map((c) => c / 100).filter((v) => v > 0);
   if (!activeMths.length) return null;
   const avgMonthlyRev = activeMths.reduce((s, v) => s + v, 0) / activeMths.length;
   return avgMonthlyRev / fleetSize;
@@ -320,7 +329,7 @@ export function revenuePerCityBreakdown(periodRevenue, scooters, cities) {
     const cityRevenue = periodRevenue.filter(
       (r) => (r.location || '').toLowerCase() === cityLower,
     );
-    const revenue = cityRevenue.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+    const revenue = sumCents(cityRevenue, (r) => r.totalPaidRevenue);
     const trips   = cityRevenue.reduce((s, r) => s + (r.totalTrips || 0), 0);
 
     const cityScooters   = scooters.filter((s) => s.city === city);

@@ -32,14 +32,18 @@ export function OrgProvider({ children }) {
   // org change). Both are set together so they can never be out of sync (bug #425).
   useEffect(() => {
     setActiveOrg(orgId, uid);
-    return () => setActiveOrg(null);
+    // No cleanup: the effect body itself handles sign-out (orgId→null) and org changes.
+    // A cleanup here would null the singleton during HMR/nav unmounts, breaking
+    // in-flight orgWrite batches (bug #455). The next mount's effect re-sets the
+    // singleton idempotently.
   }, [orgId, uid]);
 
   const value = useMemo(() => ({
     orgId,
     role: userRole ?? null,
     loading: authLoading,
-  }), [orgId, userRole, authLoading]);
+    hasUser: userProfile !== null,
+  }), [orgId, userRole, authLoading, userProfile]);
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }

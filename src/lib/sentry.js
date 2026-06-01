@@ -1,5 +1,3 @@
-import * as Sentry from '@sentry/react';
-
 /**
  * Initialise Sentry error capture for the Omni client.
  *
@@ -17,12 +15,29 @@ import * as Sentry from '@sentry/react';
  * Once initialised, Sentry auto-installs window.onerror + unhandledrejection
  * handlers, so uncaught errors and rejected promises are captured globally;
  * ErrorBoundary.componentDidCatch reports React render errors on top.
+ *
+ * The Sentry SDK is dynamically imported so it is NOT bundled when DSN is
+ * unset — this eliminates the ~50KB gz static cost from no-DSN builds.
  */
-export function initSentry() {
+
+/** True only after initSentry() successfully loads + inits the SDK. */
+let _sentryEnabled = false;
+
+/** Returns true when Sentry has been initialised and is actively capturing. */
+export function isSentryEnabled() {
+  return _sentryEnabled;
+}
+
+export async function initSentry() {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   const force = import.meta.env.VITE_SENTRY_FORCE === 'true';
   const enabled = Boolean(dsn) && (import.meta.env.PROD || force);
   if (!enabled) return;
+
+  // Dynamic import — Rollup code-splits Sentry into a lazy chunk that is
+  // never fetched when DSN is absent (the import() call above is the only
+  // reference, so no static cost hits the main bundle).
+  const Sentry = await import('@sentry/react');
 
   /**
    * Scrub known PII patterns from a string before it reaches Sentry.
@@ -74,4 +89,6 @@ export function initSentry() {
       return event;
     },
   });
+
+  _sentryEnabled = true;
 }

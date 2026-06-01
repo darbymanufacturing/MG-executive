@@ -31,6 +31,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ connections: connData.data || [] });
   } catch (err) {
     console.error('[bank-connections]', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Failed to load bank connections' });
   }
 }

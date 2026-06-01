@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Sparkles, Paperclip, Camera, Send, Check, Eye, Receipt, RotateCcw,
 } from 'lucide-react';
@@ -419,9 +420,9 @@ export default function CaptureModal({ open, onClose }) {
               <div style={{ flex: 1 }} />
               {stage === 'confirmed' ? (
                 <>
-                  <a href={`/issues/${createdId}`} className="btn btn-outline btn-sm" onClick={onClose}>
+                  <Link to={`/issues/${createdId}`} className="btn btn-outline btn-sm" onClick={onClose}>
                     <Eye size={13} />View Issue
-                  </a>
+                  </Link>
                   <button className="btn btn-primary btn-sm" onClick={onClose}>Done</button>
                 </>
               ) : (

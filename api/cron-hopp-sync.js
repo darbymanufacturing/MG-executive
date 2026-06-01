@@ -129,7 +129,6 @@ export default async function handler(req, res) {
       trigger, triggeredByUid, startedAt, since, until,
       ok: true,
       written: { trips: 0, events: 0, tickets: 0, revenueDays: 0 },
-      duplicates: { trips: 0, events: 0, tickets: 0 },
       errors: [],
       scooterCount: 0,
       message: 'No scooters in Firestore to sync',
@@ -243,11 +242,8 @@ export default async function handler(req, res) {
 
   // ── Write to Firestore ───────────────────────────────────────────
   const written = { trips: 0, events: 0, tickets: 0, revenueDays: 0 };
-  const duplicates = { trips: 0, events: 0, tickets: 0 };
 
   try {
-    // Existing-ID lookups for dedup counting (best-effort; not strictly necessary
-    // since batch.set is idempotent — we just want accurate `duplicates` reporting)
     // BUG #382 — stamp orgId into every Firestore doc so docs are org-scoped (SCHEMA.md: orgId field).
     const stampOrg = (items) => items.map((item) => ({ ...item, orgId: ORG_ID }));
     written.trips    = await writeBatch(db, COLLECTIONS.trips,              stampOrg(aggregated.trips),   { merge: true, stampField: '_importedAt' });
@@ -259,6 +255,9 @@ export default async function handler(req, res) {
       aggregated.trips, scooterCityMap, since.toISOString(), until.toISOString(), now,
     );
     if (rollupErrors.length) {
+      aggregated.errors.push(
+        ...rollupErrors.map((e) => ({ tool: 'rollup', error: String(e) })),
+      );
       console.warn('[cron-hopp-sync] rollup skipped trips:', rollupErrors);
     }
     written.revenueDays = await writeBatch(
@@ -299,7 +298,7 @@ export default async function handler(req, res) {
   return finalize(res, db, {
     trigger, triggeredByUid, startedAt, since, until,
     ok: true,
-    written, duplicates,
+    written,
     errors: aggregated.errors,
     scooterCount: scooters.length,
   });
@@ -348,7 +347,7 @@ async function upsertSupabase(supa, table, rows) {
 }
 
 function escapeHtml(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 /**
@@ -414,7 +413,8 @@ async function finalize(res, db, summary) {
   };
 
   try {
-    await db.collection(COLLECTIONS.syncLogs).add(logDoc);
+    const logDocId = `${summary.trigger}_${summary.startedAt}`;
+    await db.collection(COLLECTIONS.syncLogs).doc(logDocId).set(logDoc);
   } catch (err) {
     console.error('[cron-hopp-sync] failed to write syncLogs entry', err);
   }

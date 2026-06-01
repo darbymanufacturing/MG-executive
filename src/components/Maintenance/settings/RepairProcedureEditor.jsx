@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown, Camera, X, BookOpen, Clock, Loader2,
 } from 'lucide-react';
@@ -100,7 +100,7 @@ function StepRow({ step, index, total, onChange, onRemove, onMove }) {
 function PartCombobox({ value, parts, onSelect }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const ref = useState(() => ({ current: null }))[0];
+  const ref = useRef(null);
 
   const selectedPart = parts.find((p) => p._docId === value || p.sku === value || p.id === value);
   const displayValue = open ? query : (selectedPart ? selectedPart.partName : '');
@@ -112,17 +112,20 @@ function PartCombobox({ value, parts, onSelect }) {
       ).slice(0, 10)
     : parts.slice(0, 10);
 
+  useEffect(() => {
+    function handleOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
   function handleFocus() {
     setQuery('');
     setOpen(true);
-  }
-
-  function handleBlur() {
-    // Delay so click on dropdown item registers first
-    setTimeout(() => {
-      setOpen(false);
-      setQuery('');
-    }, 150);
   }
 
   function handlePick(part) {
@@ -132,14 +135,13 @@ function PartCombobox({ value, parts, onSelect }) {
   }
 
   return (
-    <div className={styles.comboWrap} ref={(el) => { ref.current = el; }}>
+    <div className={styles.comboWrap} ref={ref}>
       <input
         className={styles.comboInput}
         placeholder={value ? selectedPart?.partName ?? 'Unknown part' : 'Search part name or SKU…'}
         value={displayValue}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={handleFocus}
-        onBlur={handleBlur}
       />
       {open && filtered.length > 0 && (
         <ul className={styles.comboDropdown}>
@@ -197,6 +199,14 @@ function ProcedureModal({ isOpen, onClose, initial }) {
   const [form, setForm] = useState(initial ?? blankForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm(initial ?? blankForm());
+      setError('');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initial?.id]);
 
   const isEdit = !!initial?.id;
 
@@ -261,7 +271,16 @@ function ProcedureModal({ isOpen, onClose, initial }) {
       }
       onClose();
     } catch (err) {
-      setError(err.message);
+      console.error('[RepairProcedureEditor] handleSave failed:', err);
+      const isOffline = err.message?.includes('client is offline') || err.code === 'unavailable';
+      const isPermission = err.code === 'permission-denied' || err.message?.includes('PERMISSION_DENIED');
+      if (isOffline) {
+        setError('Could not save — you appear to be offline. Check your connection and try again.');
+      } else if (isPermission) {
+        setError('Save failed — you do not have permission to edit procedures. Contact your administrator.');
+      } else {
+        setError('Could not save the procedure. Please try again.');
+      }
     } finally {
       setSaving(false);
     }

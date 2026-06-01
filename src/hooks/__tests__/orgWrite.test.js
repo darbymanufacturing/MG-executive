@@ -88,28 +88,28 @@ describe('orgWrite — leak-proof create', () => {
 
 describe('orgUpdate / orgDelete', () => {
   it('orgUpdate stamps a server updatedAt by default', async () => {
-    await orgUpdate('costs', 'doc-1', { amount: 99 });
+    await orgUpdate('costs', 'org-A_doc-1', { amount: 99 });
     const [, patch] = updateDoc.mock.calls[0];
     expect(patch).toEqual({ amount: 99, updatedAt: '__SERVER_TS__' });
   });
 
   it('orgUpdate preserves a caller-provided updatedAt', async () => {
-    await orgUpdate('costs', 'doc-1', { amount: 99, updatedAt: '2026-03-03T00:00:00.000Z' });
+    await orgUpdate('costs', 'org-A_doc-1', { amount: 99, updatedAt: '2026-03-03T00:00:00.000Z' });
     const [, patch] = updateDoc.mock.calls[0];
     expect(patch.updatedAt).toBe('2026-03-03T00:00:00.000Z');
   });
 
   it('orgUpdate throws and never writes when there is no active org', async () => {
     setActiveOrg(null);
-    await expect(orgUpdate('costs', 'doc-1', { amount: 1 })).rejects.toThrow(/no active orgId/);
+    await expect(orgUpdate('costs', 'org-A_doc-1', { amount: 1 })).rejects.toThrow(/no active orgId/);
     expect(updateDoc).not.toHaveBeenCalled();
   });
 
   it('orgDelete deletes when an org is active and throws when not', async () => {
-    await orgDelete('costs', 'doc-1');
+    await orgDelete('costs', 'org-A_doc-1');
     expect(deleteDoc).toHaveBeenCalledTimes(1);
     setActiveOrg(null);
-    await expect(orgDelete('costs', 'doc-2')).rejects.toThrow(/no active orgId/);
+    await expect(orgDelete('costs', 'org-A_doc-2')).rejects.toThrow(/no active orgId/);
   });
 });
 
@@ -125,7 +125,7 @@ describe('setActiveOrg / getActiveOrg', () => {
 describe('orgTransaction — atomic array mutation', () => {
   it('passes current server doc data to the mutator', async () => {
     let receivedData;
-    await orgTransaction('projects', 'proj-1', (data) => {
+    await orgTransaction('projects', 'org-A_proj-1', (data) => {
       receivedData = data;
       return { phases: [...data.phases, { id: 'ph-2', number: 2 }] };
     });
@@ -134,7 +134,7 @@ describe('orgTransaction — atomic array mutation', () => {
   });
 
   it('writes patched fields plus updatedAt via tx.update', async () => {
-    await orgTransaction('projects', 'proj-1', (data) => {
+    await orgTransaction('projects', 'org-A_proj-1', (data) => {
       return { phases: [...data.phases, { id: 'ph-2', number: 2 }] };
     });
     expect(txUpdateMock).toHaveBeenCalledTimes(1);
@@ -148,9 +148,41 @@ describe('orgTransaction — atomic array mutation', () => {
   it('throws ADR-0003 error and never calls runTransaction when no org is active', async () => {
     setActiveOrg(null);
     await expect(
-      orgTransaction('projects', 'proj-1', () => ({ phases: [] })),
+      orgTransaction('projects', 'org-A_proj-1', () => ({ phases: [] })),
     ).rejects.toThrow(/no active orgId/);
     expect(runTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('bug #424 — cross-org docId rejection', () => {
+  it('orgDelete rejects a docId that belongs to a different org and never calls deleteDoc', async () => {
+    // Active org is 'org-A' (set in beforeEach); 'other-org_doc-1' has wrong prefix.
+    await expect(orgDelete('costs', 'other-org_doc-1')).rejects.toThrow(/does not belong to active org/);
+    expect(deleteDoc).not.toHaveBeenCalled();
+  });
+
+  it('orgUpdate rejects a cross-org docId and never calls updateDoc', async () => {
+    await expect(orgUpdate('costs', 'other-org_doc-1', { amount: 42 })).rejects.toThrow(/does not belong to active org/);
+    expect(updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('orgTransaction rejects a cross-org docId and never calls runTransaction', async () => {
+    await expect(
+      orgTransaction('projects', 'other-org_doc-1', () => ({ phases: [] })),
+    ).rejects.toThrow(/does not belong to active org/);
+    expect(runTransaction).not.toHaveBeenCalled();
+  });
+
+  it('orgDelete with a correctly org-prefixed docId succeeds normally', async () => {
+    await orgDelete('costs', 'org-A_doc-1');
+    expect(deleteDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('orgUpdate with a correctly org-prefixed docId succeeds normally', async () => {
+    await orgUpdate('costs', 'org-A_doc-1', { amount: 77 });
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [, patch] = updateDoc.mock.calls[0];
+    expect(patch).toMatchObject({ amount: 77 });
   });
 });
 

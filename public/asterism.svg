@@ -1,14 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Omni">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Omni">
   <title>Omni</title>
+  <!-- Brand rust background with rounded corners -->
+  <rect width="512" height="512" rx="51.2" fill="#A0521D"/>
+  <!-- Asterism rays — content inside central 80% safe zone (tips at ~56–456 range) -->
+  <!-- Safe zone: inset 51px from each edge on 512 canvas = coords 51..461 for full icon -->
+  <!-- For maskable variant, tips inset to 56..456 -->
   <g stroke-linecap="round" fill="none">
-    <line x1="16.00" y1="13.00" x2="16.00" y2="0.00"  stroke="#A0521D" stroke-width="2.5"/>
-    <line x1="18.12" y1="13.88" x2="23.07" y2="8.93"  stroke="#0F172A" stroke-width="2.0"/>
-    <line x1="19.00" y1="16.00" x2="30.00" y2="16.00" stroke="#0F172A" stroke-width="2.5"/>
-    <line x1="18.12" y1="18.12" x2="22.72" y2="22.72" stroke="#0F172A" stroke-width="2.0"/>
-    <line x1="16.00" y1="19.00" x2="16.00" y2="31.00" stroke="#0F172A" stroke-width="2.5"/>
-    <line x1="13.88" y1="18.12" x2="8.93"  y2="23.07" stroke="#0F172A" stroke-width="2.0"/>
-    <line x1="13.00" y1="16.00" x2="1.50"  y2="16.00" stroke="#0F172A" stroke-width="2.5"/>
-    <line x1="13.88" y1="13.88" x2="9.28"  y2="9.28"  stroke="#0F172A" stroke-width="2.0"/>
+    <!-- North ray — rust/highlight, longest -->
+    <line x1="256" y1="216" x2="256" y2="60"  stroke="#FFFFFF" stroke-width="28"/>
+    <!-- NE ray — ink/secondary -->
+    <line x1="271" y1="225" x2="352" y2="144" stroke="#F5EDE6" stroke-width="22"/>
+    <!-- East ray -->
+    <line x1="280" y1="256" x2="440" y2="256" stroke="#F5EDE6" stroke-width="28"/>
+    <!-- SE ray -->
+    <line x1="271" y1="287" x2="340" y2="356" stroke="#F5EDE6" stroke-width="22"/>
+    <!-- South ray -->
+    <line x1="256" y1="296" x2="256" y2="452" stroke="#F5EDE6" stroke-width="28"/>
+    <!-- SW ray -->
+    <line x1="241" y1="287" x2="172" y2="356" stroke="#F5EDE6" stroke-width="22"/>
+    <!-- West ray -->
+    <line x1="232" y1="256" x2="80"  y2="256" stroke="#F5EDE6" stroke-width="28"/>
+    <!-- NW ray -->
+    <line x1="241" y1="225" x2="160" y2="144" stroke="#F5EDE6" stroke-width="22"/>
   </g>
-  <circle cx="16" cy="16" r="2.2" fill="#0F172A"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="28" fill="#FFFFFF"/>
 </svg>

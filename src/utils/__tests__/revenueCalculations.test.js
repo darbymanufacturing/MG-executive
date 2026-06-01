@@ -39,6 +39,14 @@ describe('totalRevenue', () => {
   test('returns 0 for empty array', () => {
     expect(totalRevenue([])).toBe(0);
   });
+
+  test('no cent drift when summing 10,000 rows of €1.10', () => {
+    const rows = Array.from({ length: 10_000 }, (_, i) => ({
+      date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+      totalPaidRevenue: 1.10,
+    }));
+    expect(totalRevenue(rows)).toBe(11000.00);
+  });
 });
 
 describe('revenueBreakdown — the Hopp fee + VAT + SIM identity', () => {

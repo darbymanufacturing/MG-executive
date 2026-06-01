@@ -61,15 +61,43 @@
 }
 
 /* ── Progress bar ── */
+/* #450 — bar is now a flex row of per-step buttons */
 .progressBar {
   height: 3px;
   background: var(--color-surface-2);
+  display: flex;
+  flex-direction: row;
+  gap: 1px;
 }
 
-.progressFill {
+/* #450 — individual step segment (replaces the single progressFill div) */
+.progressSegment {
+  flex: 1;
   height: 100%;
+  background: var(--color-surface-2);
+  border: none;
+  padding: 0;
+  cursor: default;
+  transition: background 0.3s ease;
+}
+.progressSegment:disabled { cursor: default; }
+
+.progressSegmentCompleted {
   background: var(--gradient-primary);
-  transition: width 0.4s ease;
+  cursor: pointer;
+}
+.progressSegmentCompleted:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.progressSegmentCurrent {
+  background: var(--color-primary-light, var(--color-primary));
+  cursor: pointer;
+}
+.progressSegmentCurrent:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ── Main ── */
@@ -456,6 +484,46 @@
 .completeBtn:hover:not(:disabled) { opacity: 0.9; }
 
 .notFound { padding: var(--space-8); text-align: center; color: var(--color-text-muted); }
+
+/* ── #bug-449: Procedure picker (disambiguation screen) ── */
+.procedurePicker {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.procedurePickerHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.procedurePickerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: 600;
+  padding: var(--space-4) var(--space-5);
+  width: 100%;
+  text-align: left;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.procedurePickerBtn:hover {
+  border-color: var(--accent, var(--color-primary));
+  background: rgba(160, 82, 29, 0.06);
+}
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
