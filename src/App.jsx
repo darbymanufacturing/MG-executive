@@ -232,10 +232,11 @@ function AppShell() {
     return <Navigate to="/crew" replace />;
   }
 
-  // #15 — fail closed: a signed-in user with no valid role (e.g. a Firebase Auth
-  // account with no users/{uid} doc) must NOT land in the admin shell. Only
-  // admin/staff reach here; anyone else gets a no-access screen + sign-out.
-  if (userRole !== 'admin' && userRole !== 'staff') {
+  // #15 / #499 — fail closed: only admin/owner/staff reach the admin shell. A signed-in
+  // user with no valid role (e.g. a Firebase Auth account with no users/{uid} doc), or a
+  // crew-tier role that slipped past the redirect above, gets a no-access screen + sign-out.
+  // 'owner' is the org-owner role (ADR-0014) — it MUST be admitted, not locked out.
+  if (userRole !== 'admin' && userRole !== 'owner' && userRole !== 'staff') {
     return <NoAccessScreen />;
   }
 

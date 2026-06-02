@@ -99,8 +99,8 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
     navigate('/login');
   }, [signOut, navigate]);
 
-  /* Crew members only see the /crew shell */
-  if (userRole === 'technician' || userRole === 'crew') return null;
+  /* Crew-tier members only see the /crew shell — never the admin sidebar (#499) */
+  if (userRole === 'technician' || userRole === 'crew' || userRole === 'contractor') return null;
 
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
 
