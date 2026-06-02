@@ -148,7 +148,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
           <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={openIssueCount > 0 ? openIssueCount : undefined} collapsed={collapsed} />
           <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={activeCount > 0 ? activeCount : undefined} collapsed={collapsed} />
           <NavItem to="/projects"    icon={ClipboardList} label="Projects"  collapsed={collapsed} />
-          <NavItem to="/crew"        icon={Users}         label="Crew"      collapsed={collapsed} />
+          <NavItem to="/contractors" icon={Users}         label="Contractors" collapsed={collapsed} />
           <NavItem to="/war-room"    icon={Crosshair}     label="War Room"  collapsed={collapsed} />
           <NavItem to="/scooters"    icon={Bike}          label="Scooters"  collapsed={collapsed} />
           <NavItem to="/pme"         icon={Activity}      label="PME"       collapsed={collapsed} />

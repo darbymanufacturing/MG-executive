@@ -48,6 +48,7 @@ import ScooterDetail from './pages/ScooterDetail.jsx';
 import TechnicianDashboard from './pages/TechnicianDashboard.jsx';
 import RepairSession from './components/Technician/RepairSession.jsx';
 import Notifications from './pages/Notifications.jsx';
+import Contractors from './pages/Contractors.jsx';
 
 import './styles/variables.css';
 import './styles/globals.css';
@@ -64,6 +65,7 @@ const ROUTE_TITLES = {
   '/maintenance': 'Tickets',
   '/projects':    'Projects',
   '/crew':        'Crew',
+  '/contractors': 'Contractors',
   '/war-room':    'War Room',
   '/scooters':    'Scooters',
   '/pme':         'PME',
@@ -284,6 +286,7 @@ function AppShell() {
             <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
             <Route path="/maintenance"    element={<RouteErrorBoundary><Maintenance /></RouteErrorBoundary>} />
             <Route path="/pow"            element={<RouteErrorBoundary><Pow /></RouteErrorBoundary>} />
+            <Route path="/contractors"    element={<RouteErrorBoundary><Contractors /></RouteErrorBoundary>} />
             <Route path="/settings"       element={<RouteErrorBoundary><Settings /></RouteErrorBoundary>} />
 
             {/* Scoped — heavy telemetry stack only mounts while user is on these routes */}
