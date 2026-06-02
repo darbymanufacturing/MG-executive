@@ -136,13 +136,6 @@ export default function Settings() {
     return unsub;
   }, [userProfile?.orgId]);
 
-  // #452 — if a non-owner somehow has inviteRole='admin' in state (e.g. role
-  // was downgraded after the dropdown was opened), reset to 'crew' so the form
-  // can't submit an admin invite that the backend will now reject anyway.
-  useEffect(() => {
-    if (!isOwner && inviteRole === 'admin') setInviteRole('crew');
-  }, [isOwner, inviteRole]);
-
   const handleSaveAccountant = () => {
     localStorage.setItem('omni_accountant_email', accountantEmail.trim());
     setAccountantSaved(true);
@@ -206,6 +199,16 @@ export default function Settings() {
   const [acctError, setAcctError] = useState(null);
 
   const isOwner = userProfile?.role === 'owner';
+
+  // #452 — if a non-owner somehow has inviteRole='admin' in state (e.g. role
+  // was downgraded after the dropdown was opened), reset to 'crew' so the form
+  // can't submit an admin invite that the backend will now reject anyway.
+  // #500 — this effect MUST stay below the `isOwner` declaration above: its
+  // dependency array reads `isOwner`, so placing it earlier hit the Temporal
+  // Dead Zone and crashed /settings with "Cannot access 'isOwner'/'we' before initialization".
+  useEffect(() => {
+    if (!isOwner && inviteRole === 'admin') setInviteRole('crew');
+  }, [isOwner, inviteRole]);
 
   const openAccountDialog = async () => {
     setAcctError(null);
