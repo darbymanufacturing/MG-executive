@@ -6,6 +6,8 @@ import ProjectsHUD  from '../components/WarRoom/ProjectsHUD.jsx';
 import { useCosts }       from '../context/CostContext.jsx';
 import { useRevenue }     from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
+import FleetScopeChip from '../components/Shared/FleetScopeChip.jsx';
 import { revenuePerCityBreakdown } from '../utils/revenueCalculations.js';
 import { formatEURCompact } from '../utils/formatters.js';
 import styles from './WarRoom.module.css';
@@ -24,12 +26,17 @@ export default function WarRoom() {
   const { config }      = useCosts();
   const { revenueData } = useRevenue();
   const { scooters }    = useMaintenance();
+  const { scopeByFleet, activeFleet, isAllFleets } = useFleet();
 
-  const locations = config.locations || [];
+  const allLocations = config.locations || [];
+  // FF-3 — scope the map to the active fleet's cities (All Fleets = every city).
+  const locations = isAllFleets ? allLocations : (activeFleet?.cities ?? allLocations);
+  const scopedScooters = useMemo(() => scopeByFleet(scooters), [scopeByFleet, scooters]);
+  const scopedRevenue  = useMemo(() => scopeByFleet(revenueData), [scopeByFleet, revenueData]);
 
   const cityData = useMemo(
-    () => revenuePerCityBreakdown(revenueData, scooters, locations),
-    [revenueData, scooters, locations],
+    () => revenuePerCityBreakdown(scopedRevenue, scopedScooters, locations),
+    [scopedRevenue, scopedScooters, locations],
   );
 
   const allCityData = useMemo(() => {
@@ -37,7 +44,7 @@ export default function WarRoom() {
     const scooterOnlyCities = locations
       .filter((loc) => !withData.has(loc))
       .map((loc) => {
-        const cityScooters = scooters.filter((s) => s.city === loc);
+        const cityScooters = scopedScooters.filter((s) => s.city === loc);
         return {
           city: loc,
           revenue: 0,
@@ -48,11 +55,11 @@ export default function WarRoom() {
         };
       });
     return [...cityData, ...scooterOnlyCities];
-  }, [cityData, locations, scooters]);
+  }, [cityData, locations, scopedScooters]);
 
   // Quick stats for top-right HUD
   const totalRevenue     = cityData.reduce((s, d) => s + d.revenue, 0);
-  const totalScooters    = scooters.filter((s) => s.status === 'Active').length;
+  const totalScooters    = scopedScooters.filter((s) => s.status === 'Active').length;
   const activeCityCount  = allCityData.filter((d) => d.activeScooters > 0).length;
 
   const handleBack = useCallback(() => {
@@ -84,6 +91,7 @@ export default function WarRoom() {
           <span className={styles.title}>War Room</span>
           <span className={styles.subtitle}>Omni Operations · Greece</span>
         </div>
+        <FleetScopeChip style={{ marginLeft: 12 }} />
 
         {/* Top-right quick stats (Victoria 3 resource bar style) */}
         <div className={styles.statsBar}>

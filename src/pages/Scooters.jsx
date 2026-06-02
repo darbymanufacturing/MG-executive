@@ -32,7 +32,7 @@ export default function Scooters() {
   const cities = config?.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
 
   // FF-3 — scope the roster to the active fleet (All Fleets = the full roll-up).
-  const { scopeByFleet } = useFleet();
+  const { scopeByFleet, fleetForCity } = useFleet();
   const scoped = useMemo(() => scopeByFleet(scooters), [scopeByFleet, scooters]);
 
   const [cityF,   setCityF]   = useState('All');
@@ -81,8 +81,11 @@ export default function Scooters() {
   }), [scoped]);
 
   async function handleSave(form) {
-    if (editing) await updateScooter(editing._docId, form);
-    else         await addScooter(form);
+    // FF-3 — stamp fleetId from the scooter's city so new data is fleet-native
+    // (scopeByFleet prefers fleetId when present, falling back to city otherwise).
+    const withFleet = { ...form, fleetId: form.fleetId ?? fleetForCity(form.city)?._docId ?? null };
+    if (editing) await updateScooter(editing._docId, withFleet);
+    else         await addScooter(withFleet);
     setEditing(null);
     setFormOpen(false);
   }
