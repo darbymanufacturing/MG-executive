@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive, Bike, Activity, ClipboardCheck,
+  LayoutDashboard, Wrench, Package, BarChart2, Settings, Database, Archive, Bike, Activity, ClipboardCheck, CalendarClock,
 } from 'lucide-react';
 // Package, BarChart2, Settings used in TABS icon array below
 import Header from '../components/Layout/Header.jsx';
@@ -14,6 +14,7 @@ import ArchivedTab from '../components/Maintenance/tabs/ArchivedTab.jsx';
 import FleetTab    from '../components/Maintenance/tabs/FleetTab.jsx';
 import SettingsTab from '../components/Maintenance/tabs/SettingsTab.jsx';
 import CostApprovalsTab from '../components/Maintenance/tabs/CostApprovalsTab.jsx';
+import ScheduleTab from '../components/Maintenance/tabs/ScheduleTab.jsx';
 import RepairSessionFeed from '../components/Maintenance/overview/RepairSessionFeed.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'fleet',       label: 'Fleet',           icon: Bike },
   { id: 'repairlog',   label: 'Repair Log',       icon: Wrench },
   { id: 'parts',       label: 'Parts Pipeline',   icon: Package },
+  { id: 'schedule',    label: 'Schedule',         icon: CalendarClock },
   { id: 'analytics',   label: 'Analytics',        icon: BarChart2 },
   { id: 'approvals',   label: 'Approvals',        icon: ClipboardCheck },
   { id: 'activity',    label: 'Activity',         icon: Activity },
@@ -123,6 +125,9 @@ export default function Maintenance() {
           )}
           {activeTab === 'parts' && (
             <PartsTab />
+          )}
+          {activeTab === 'schedule' && (
+            <ScheduleTab />
           )}
           {activeTab === 'analytics' && (
             <AnalyticsTab filteredTickets={filteredTickets} />

@@ -174,7 +174,7 @@ describe('toSupabaseRow', () => {
     expect(row.battery_level).toBe(87.5);
   });
 
-  it('SUPABASE_TABLE maps the 5 time-series + 14 operational collections (ADR-0013/0015)', () => {
+  it('SUPABASE_TABLE maps the time-series + operational collections + the maintenance scheduler (ADR-0013/0015)', () => {
     // time-series (ADR-0013)
     expect(SUPABASE_TABLE.telemetryEvents).toBe('telemetry_events');
     expect(SUPABASE_TABLE.scooterTrips).toBe('scooter_trips');
@@ -187,8 +187,10 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.repairSessions).toBe('repair_sessions');
     expect(SUPABASE_TABLE.config).toBe('app_config');
     expect(SUPABASE_TABLE.pow).toBe('app_config');
-    // 5 time-series + 13 operational + config + pow = 20 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(20);
+    // maintenance scheduler — date-based + recurring (added post-cutover)
+    expect(SUPABASE_TABLE.maintenanceSchedules).toBe('maintenance_schedules');
+    // 5 time-series + 13 operational + config + pow + maintenanceSchedules = 21 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(21);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

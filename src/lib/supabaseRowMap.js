@@ -53,6 +53,7 @@ export const SUPABASE_TABLE = Object.freeze({
   notifications: 'notifications',
   diary: 'diary',
   costs: 'costs',
+  maintenanceSchedules: 'maintenance_schedules',
   // The two singleton-config collections both fold into one app_config table
   // (source_doc_id keeps the existing composite ids, which are globally unique).
   config: 'app_config',
@@ -134,6 +135,7 @@ const TYPED_COLUMNS = Object.freeze({
   notifications: () => ({}),
   diary: () => ({}),
   costs: () => ({}),
+  maintenanceSchedules: () => ({}),
   config: () => ({}),
   pow: () => ({}),
 });

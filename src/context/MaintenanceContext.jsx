@@ -18,6 +18,8 @@ const BATCH_SIZE   = 450;
 const MAX_TICKETS  = 2000;
 const MAX_PARTS    = 2000;
 const MAX_SCOOTERS = 1000;
+const SCHEDULES_COL = 'maintenanceSchedules';
+const MAX_SCHEDULES = 500;
 
 // Deterministic doc IDs are org-PREFIXED to prevent cross-org collisions (two orgs
 // can both own scooter "70055"). The business fields (scooterId/sku/dateEntered)
@@ -139,6 +141,20 @@ export function computeDaysOpen(ticket) {
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
+/**
+ * Advance a YYYY-MM-DD date by N units, for recurring maintenance schedules.
+ * setMonth/setDate handle month + year rollover. Returns the original string if
+ * the date can't be parsed.
+ */
+export function advanceDueDate(dateStr, unit, n = 1) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  if (unit === 'weeks') d.setDate(d.getDate() + n * 7);
+  else if (unit === 'months') d.setMonth(d.getMonth() + n);
+  else d.setDate(d.getDate() + n); // 'days' (default)
+  return d.toISOString().slice(0, 10);
+}
+
 // ── Context ───────────────────────────────────────────────────────────────────
 const MaintenanceContext = createContext(null);
 
@@ -153,6 +169,7 @@ export function MaintenanceProvider({ children }) {
   const { items: tickets, loading: ticketsLoading, error } = useOrgCollection(TICKETS_COL, { limit: MAX_TICKETS });
   const { items: parts, loading: partsLoading } = useOrgCollection(PARTS_COL, { limit: MAX_PARTS });
   const { items: scooters, loading: scootersLoading } = useOrgCollection(SCOOTERS_COL, { limit: MAX_SCOOTERS });
+  const { items: schedules, loading: schedulesLoading } = useOrgCollection(SCHEDULES_COL, { limit: MAX_SCHEDULES });
   const { item: configItem, loading: configLoading } = useOrgDoc(CONFIG_COL, configDocId);
 
   const config = useMemo(() => {
@@ -301,6 +318,38 @@ export function MaintenanceProvider({ children }) {
     await orgDelete(SCOOTERS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete scooter' });
   }, []);
 
+  // ── Scheduled maintenance CRUD (date-based + recurring) ───────────────────────
+  const addSchedule = useCallback(async (data) => {
+    if (!orgId) throw new Error('addSchedule: no active org');
+    if (!data.scooterId) throw new Error('scooterId is required');
+    if (!data.nextDue) throw new Error('a due date is required');
+    const res = await orgWrite(SCHEDULES_COL, { status: 'active', ...data }, {
+      rethrow: true, errorMessage: 'Failed to create schedule',
+    });
+    return res?.data?.id ?? null;
+  }, [orgId]);
+
+  const updateSchedule = useCallback(async (docId, data) => {
+    await orgUpdate(SCHEDULES_COL, docId, data, { rethrow: true, errorMessage: 'Failed to update schedule' });
+  }, []);
+
+  const deleteSchedule = useCallback(async (docId) => {
+    await orgDelete(SCHEDULES_COL, docId, { rethrow: true, errorMessage: 'Failed to delete schedule' });
+  }, []);
+
+  // Mark this occurrence serviced: a recurring schedule rolls nextDue forward by its
+  // interval (status stays 'active'); a one-off becomes status 'done'. Stamps lastCompleted.
+  const markScheduleDone = useCallback(async (docId) => {
+    const s = schedules.find((x) => x._docId === docId);
+    if (!s) throw new Error('Schedule not found');
+    const today = new Date().toISOString().slice(0, 10);
+    const recurs = s.recurrence && s.recurrence !== 'none' && Number(s.interval) > 0;
+    const patch = recurs
+      ? { nextDue: advanceDueDate(s.nextDue, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
+      : { status: 'done', lastCompleted: today };
+    await orgUpdate(SCHEDULES_COL, docId, patch, { rethrow: true, errorMessage: 'Failed to update schedule' });
+  }, [schedules]);
+
   // ── Custom tags ───────────────────────────────────────────────────────────────
   const addCustomTag = useCallback(async (type, tag) => {
     const key = type === 'primary' ? 'customPrimaryTags' : 'customSecondaryTags';
@@ -374,6 +423,13 @@ export function MaintenanceProvider({ children }) {
     addScooter,
     updateScooter,
     deleteScooter,
+    // Schedule ops
+    schedules,
+    schedulesLoading,
+    addSchedule,
+    updateSchedule,
+    deleteSchedule,
+    markScheduleDone,
     // Part ops
     addPart,
     updatePart,
@@ -393,6 +449,7 @@ export function MaintenanceProvider({ children }) {
     activeTickets, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
     addScooter, updateScooter, deleteScooter,
+    schedules, schedulesLoading, addSchedule, updateSchedule, deleteSchedule, markScheduleDone,
     addPart, updatePart, deletePart,
     updateConfig, importTickets, importParts, addCustomTag,
     loadSeedData, patchPartModels,
