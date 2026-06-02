@@ -45,7 +45,7 @@ const MOCK_API_KEY     = '123456789012345';
 const MOCK_API_SECRET  = 'super-secret-value';
 
 // ── Import handler after mocks ──────────────────────────────────────────────────
-import handler from '../cloudinary-sign.js';
+import handler from '../_cloudinary-sign.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 

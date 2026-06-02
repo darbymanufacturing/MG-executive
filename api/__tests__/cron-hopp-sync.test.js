@@ -131,7 +131,7 @@ describe('cron-hopp-sync — BUG #382 org-id guards', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -169,7 +169,7 @@ describe('cron-hopp-sync — BUG #382 org-id guards', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -222,7 +222,7 @@ describe('cron-hopp-sync — BUG #382 org-id guards', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -332,7 +332,7 @@ describe('cron-hopp-sync — BUG #346 field-mask projection', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -380,7 +380,7 @@ describe('cron-hopp-sync — BUG #346 field-mask projection', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -452,7 +452,7 @@ describe('cron-hopp-sync — BUG #347 no all-zero duplicates key', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 
@@ -530,7 +530,7 @@ describe('cron-hopp-sync — BUG #350 rollup errors appear in response', () => {
     };
     getDb.mockReturnValue(fakeDb);
 
-    const { default: handlerFn } = await import('../cron-hopp-sync.js');
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
     const req = makeFakeReq();
     const res = makeFakeRes();
 

@@ -113,7 +113,7 @@ describe('transfer action — atomic transaction (BUG #410)', () => {
       requireUser: vi.fn().mockResolvedValue({ uid: CALLER, email: 'owner@test.com', role: 'owner' }),
     }));
 
-    const { default: handler } = await import('../delete-account.js');
+    const { default: handler } = await import('../_delete-account.js');
     const req = mockReq({ action: 'transfer', successorUid: SUCCESSOR });
     const res = mockRes();
     await handler(req, res);
@@ -192,7 +192,7 @@ describe('transfer action — atomic transaction (BUG #410)', () => {
       requireUser: vi.fn().mockResolvedValue({ uid: CALLER, email: 'owner@test.com', role: 'owner' }),
     }));
 
-    const { default: handler } = await import('../delete-account.js');
+    const { default: handler } = await import('../_delete-account.js');
     const req = mockReq({ action: 'transfer', successorUid: SUCCESSOR });
     const res = mockRes();
     await handler(req, res);
@@ -287,7 +287,7 @@ describe('transfer action — atomic transaction (BUG #410)', () => {
       requireUser: vi.fn().mockResolvedValue({ uid: CALLER, email: 'owner@test.com', role: 'owner' }),
     }));
 
-    const { default: handler } = await import('../delete-account.js');
+    const { default: handler } = await import('../_delete-account.js');
     const req = mockReq({ action: 'transfer', successorUid: SUCCESSOR });
     const res = mockRes();
     await handler(req, res);

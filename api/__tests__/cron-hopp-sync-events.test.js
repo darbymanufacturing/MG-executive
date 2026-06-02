@@ -144,7 +144,7 @@ describe('cron-hopp-sync — BUG #368 list_status_events per-scooter pull', () =
       return {};
     });
 
-    const { default: handler } = await import('../cron-hopp-sync.js');
+    const { default: handler } = await import('../_cron-hopp-sync.js');
     const res = makeFakeRes();
     await handler(makeFakeReq(), res);
 
@@ -182,7 +182,7 @@ describe('cron-hopp-sync — BUG #368 list_status_events per-scooter pull', () =
       return {};
     });
 
-    const { default: handler } = await import('../cron-hopp-sync.js');
+    const { default: handler } = await import('../_cron-hopp-sync.js');
     const res = makeFakeRes();
     await handler(makeFakeReq(), res);
 
@@ -221,7 +221,7 @@ describe('cron-hopp-sync — BUG #368 list_status_events per-scooter pull', () =
       return {};
     });
 
-    const { default: handler } = await import('../cron-hopp-sync.js');
+    const { default: handler } = await import('../_cron-hopp-sync.js');
     const res = makeFakeRes();
     await handler(makeFakeReq(), res);
 

@@ -60,7 +60,7 @@ describe('error-sanitization: bank-connections.js (BUG #436)', () => {
       requireUser: vi.fn().mockResolvedValue({ uid: 'u1', role: 'admin' }),
     }));
 
-    const mod = await import('../bank-connections.js');
+    const mod = await import('../_bank-connections.js');
     const req = { method: 'GET', headers: { authorization: 'Bearer t' }, query: { customer_id: 'cust123' } };
     const res = mockRes();
     await mod.default(req, res);
@@ -86,7 +86,7 @@ describe('error-sanitization: bank-session.js (BUG #436)', () => {
       requireUser: vi.fn().mockResolvedValue({ uid: 'u1', role: 'admin' }),
     }));
 
-    const mod = await import('../bank-session.js');
+    const mod = await import('../_bank-session.js');
     const req = { method: 'POST', headers: { authorization: 'Bearer t' }, body: {} };
     const res = mockRes();
     await mod.default(req, res);
@@ -122,7 +122,7 @@ describe('error-sanitization: bank-refresh.js (BUG #436)', () => {
       throw FIRESTORE_INDEX_ERROR;
     }));
 
-    const mod = await import('../bank-refresh.js');
+    const mod = await import('../_bank-refresh.js');
     const req = { method: 'POST', headers: { authorization: 'Bearer t' }, body: { connection_id: 'conn-abc' } };
     const res = mockRes();
     await mod.default(req, res);
@@ -153,7 +153,7 @@ describe('error-sanitization: bank-transactions.js (BUG #436)', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(FIRESTORE_INDEX_ERROR));
 
-    const mod = await import('../bank-transactions.js');
+    const mod = await import('../_bank-transactions.js');
     const req = { method: 'POST', headers: { authorization: 'Bearer t' }, body: { connection_id: 'conn-abc' } };
     const res = mockRes();
     await mod.default(req, res);
@@ -193,7 +193,7 @@ describe('error-sanitization: sync-claim.js (BUG #436)', () => {
       }),
     }));
 
-    const mod = await import('../sync-claim.js');
+    const mod = await import('../_sync-claim.js');
     const req = { method: 'POST', headers: { authorization: 'Bearer t' }, body: { uid: 'u1' } };
     const res = mockRes();
     await mod.default(req, res);
@@ -241,7 +241,7 @@ describe('error-sanitization: delete-account.js (BUG #436)', () => {
       },
     }));
 
-    const mod = await import('../delete-account.js');
+    const mod = await import('../_delete-account.js');
     // 'delete-org' triggers an update that we've mocked to throw
     const req = { method: 'POST', headers: { authorization: 'Bearer t' }, body: { action: 'delete-org', confirm: 'MyOrg' } };
     const res = mockRes();

@@ -91,7 +91,7 @@ async function loadHandler({ callerUid, callerRole, orgOwnerUid, orgId = 'org1',
     requireUser: vi.fn().mockResolvedValue({ uid: callerUid, email: 'test@test.com', role: callerRole }),
   }));
 
-  const mod = await import('../delete-account.js');
+  const mod = await import('../_delete-account.js');
   return { handler: mod.default, db };
 }
 

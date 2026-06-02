@@ -53,7 +53,7 @@ async function loadHandler({ connectUrl = 'https://saltedge.example.com/connect/
     requireUser: vi.fn().mockResolvedValue({ uid: 'user-1', email: 'test@test.com', role: 'admin' }),
   }));
 
-  const mod = await import('../bank-session.js');
+  const mod = await import('../_bank-session.js');
   return mod.default;
 }
 

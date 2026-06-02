@@ -27,7 +27,7 @@ vi.mock('../_lib/require-auth.js', () => ({
 }));
 
 // --- Import handler AFTER mocks -----------------------------------------
-import handler from '../accountant-forward.js';
+import handler from '../_accountant-forward.js';
 
 // Minimal req/res helpers ------------------------------------------------
 function makeReq(body = {}) {

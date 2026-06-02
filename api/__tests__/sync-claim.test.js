@@ -45,7 +45,7 @@ vi.mock('../_lib/require-auth.js', () => ({
 }));
 
 // --- Import handler AFTER mocks are in place ----------------------------
-import handler from '../sync-claim.js';
+import handler from '../_sync-claim.js';
 
 // Minimal req/res helpers
 function makeReq(body = {}) {

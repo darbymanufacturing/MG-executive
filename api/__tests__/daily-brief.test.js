@@ -32,7 +32,7 @@ vi.mock('@anthropic-ai/sdk', () => {
 });
 
 // --- Import handler AFTER mocks are in place --------------------------------
-import handler from '../daily-brief.js';
+import handler from '../_daily-brief.js';
 
 // Minimal req/res helpers
 function makeReq(body = {}) {

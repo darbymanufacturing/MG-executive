@@ -95,7 +95,7 @@ async function loadHandler({ orgDocs, freshDocData }) {
     requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
   }));
 
-  const mod = await import('../cron-purge-deleted-orgs.js');
+  const mod = await import('../_cron-purge-deleted-orgs.js');
   return { handler: mod.default, db, batchMock };
 }
 
@@ -291,7 +291,7 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
       requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
     }));
 
-    const mod = await import('../cron-purge-deleted-orgs.js');
+    const mod = await import('../_cron-purge-deleted-orgs.js');
     return { handler: mod.default, db, batchMock, deletedRefs, queriedFields, orgRef };
   }
 
