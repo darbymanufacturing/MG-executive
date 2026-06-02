@@ -17,12 +17,16 @@
  */
 
 const VALID_LAYERS = ['firestore', 'supabase'];
-const _rawGlobal = (import.meta.env.VITE_DATA_LAYER ?? 'firestore').toLowerCase().trim();
+// Post-cutover default is 'supabase' (ADR-0015 — the app is fully off Firestore for
+// operational data). An unset env var, or any new collection, defaults to Supabase so
+// features "just work" without per-collection config; set VITE_DATA_LAYER=firestore (or a
+// per-collection override) to opt a build/collection back to Firestore.
+const _rawGlobal = (import.meta.env.VITE_DATA_LAYER ?? 'supabase').toLowerCase().trim();
 if (!VALID_LAYERS.includes(_rawGlobal)) {
-  // #492 — a typo (e.g. "supabse") must not silently fall through to firestore unnoticed.
-  console.error(`[dataLayer] VITE_DATA_LAYER must be "firestore" or "supabase", got "${_rawGlobal}" — falling back to "firestore".`);
+  // #492 — a typo (e.g. "supabse") must not silently fall through unnoticed.
+  console.error(`[dataLayer] VITE_DATA_LAYER must be "firestore" or "supabase", got "${_rawGlobal}" — falling back to "supabase".`);
 }
-const GLOBAL = VALID_LAYERS.includes(_rawGlobal) ? _rawGlobal : 'firestore';
+const GLOBAL = VALID_LAYERS.includes(_rawGlobal) ? _rawGlobal : 'supabase';
 
 function parseOverrides(raw) {
   const map = {};

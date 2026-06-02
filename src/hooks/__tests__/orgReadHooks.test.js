@@ -22,6 +22,16 @@ vi.mock('firebase/firestore', () => ({
   onSnapshot: (...a) => onSnapshotMock(...a),
 }));
 
+// Force the FIRESTORE branch — these tests cover the Firestore read path (onSnapshot).
+// The global default is now 'supabase' (ADR-0015); the Supabase read path is covered by
+// the useSupabaseLive / useSupabaseTable suites.
+vi.mock('../../lib/dataLayerConfig.js', () => ({
+  layerFor: () => 'firestore',
+  isSupabaseLayer: () => false,
+  GLOBAL_DATA_LAYER: 'firestore',
+  DATA_LAYER_OVERRIDES: {},
+}));
+
 import { useOrg } from '../../context/OrgContext.jsx';
 import { useOrgCollection } from '../useOrgCollection.js';
 import { useOrgDoc } from '../useOrgDoc.js';

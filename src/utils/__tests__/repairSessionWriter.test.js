@@ -29,6 +29,16 @@ vi.mock('../../hooks/orgWrite.js', () => ({
   getActiveOrg: vi.fn(() => _activeOrg),
 }));
 
+// Force the FIRESTORE branch — this suite covers the Firestore runTransaction path.
+// The global default is now 'supabase' (ADR-0015); the Supabase RPC path is covered by
+// repairSessionWriter.supabase.test.js.
+vi.mock('../../lib/dataLayerConfig.js', () => ({
+  layerFor: () => 'firestore',
+  isSupabaseLayer: () => false,
+  GLOBAL_DATA_LAYER: 'firestore',
+  DATA_LAYER_OVERRIDES: {},
+}));
+
 // --- Shared transaction mock -----------------------------------------------
 // We build this per-test so we can control ticket snap state.
 let _mockTransaction;

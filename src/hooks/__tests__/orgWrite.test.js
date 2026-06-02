@@ -35,6 +35,16 @@ vi.mock('../../utils/firestoreWrite.js', () => ({
   safeWrite: vi.fn(async (writer) => ({ ok: true, data: await writer() })),
 }));
 
+// Force the FIRESTORE branch — these tests cover the Firestore write path. The global
+// default is now 'supabase' (ADR-0015), so without this the seam would route to Supabase.
+// (The Supabase write path has its own tests: supabaseWrite + repairSessionWriter.supabase.)
+vi.mock('../../lib/dataLayerConfig.js', () => ({
+  layerFor: () => 'firestore',
+  isSupabaseLayer: () => false,
+  GLOBAL_DATA_LAYER: 'firestore',
+  DATA_LAYER_OVERRIDES: {},
+}));
+
 import { addDoc, setDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { orgWrite, orgUpdate, orgDelete, orgTransaction, setActiveOrg, getActiveOrg } from '../orgWrite.js';
 

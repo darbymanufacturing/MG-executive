@@ -12,15 +12,15 @@ async function loadWith(env = {}) {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('layerFor (ADR-0015 per-collection routing)', () => {
-  it('defaults to firestore when nothing is set', async () => {
+  it('defaults to supabase when nothing is set (post-cutover default)', async () => {
     const { layerFor } = await loadWith({});
-    expect(layerFor('costs')).toBe('firestore');
-    expect(layerFor('anything')).toBe('firestore');
+    expect(layerFor('costs')).toBe('supabase');
+    expect(layerFor('anything')).toBe('supabase');
   });
 
-  it('honours the global VITE_DATA_LAYER', async () => {
-    const { layerFor } = await loadWith({ VITE_DATA_LAYER: 'supabase' });
-    expect(layerFor('costs')).toBe('supabase');
+  it('honours an explicit global VITE_DATA_LAYER (can force firestore back)', async () => {
+    const { layerFor } = await loadWith({ VITE_DATA_LAYER: 'firestore' });
+    expect(layerFor('costs')).toBe('firestore');
   });
 
   it('is case/space-insensitive on the global value', async () => {
@@ -47,10 +47,10 @@ describe('layerFor (ADR-0015 per-collection routing)', () => {
     expect(layerFor('costs')).toBe('supabase');
   });
 
-  it('falls back to firestore (with a console.error) on an invalid global — #492', async () => {
+  it('falls back to supabase (with a console.error) on an invalid global — #492', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { layerFor } = await loadWith({ VITE_DATA_LAYER: 'supabse' }); // typo
-    expect(layerFor('costs')).toBe('firestore');
+    const { layerFor } = await loadWith({ VITE_DATA_LAYER: 'firestre' }); // typo
+    expect(layerFor('costs')).toBe('supabase');
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('VITE_DATA_LAYER'));
     spy.mockRestore();
   });
@@ -59,13 +59,13 @@ describe('layerFor (ADR-0015 per-collection routing)', () => {
     const { layerFor } = await loadWith({
       VITE_DATA_LAYER_OVERRIDES: 'costs:bogus, :supabase , issues:supabase',
     });
-    expect(layerFor('costs')).toBe('firestore'); // 'bogus' layer rejected → falls through
+    expect(layerFor('costs')).toBe('supabase'); // 'bogus' layer rejected → falls through to the (supabase) default
     expect(layerFor('issues')).toBe('supabase'); // whitespace trimmed, valid
   });
 
   it('isSupabaseLayer mirrors layerFor', async () => {
-    const { isSupabaseLayer } = await loadWith({ VITE_DATA_LAYER_OVERRIDES: 'costs:supabase' });
-    expect(isSupabaseLayer('costs')).toBe(true);
-    expect(isSupabaseLayer('projects')).toBe(false);
+    const { isSupabaseLayer } = await loadWith({ VITE_DATA_LAYER: 'firestore', VITE_DATA_LAYER_OVERRIDES: 'costs:supabase' });
+    expect(isSupabaseLayer('costs')).toBe(true);    // overridden → supabase
+    expect(isSupabaseLayer('projects')).toBe(false); // global firestore
   });
 });
