@@ -5,7 +5,7 @@ import {
   Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal, RefreshCw,
 } from 'lucide-react';
 import useHoppSync from '../hooks/useHoppSync.js';
-import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
 import { authedFetch } from '../utils/apiClient.js';

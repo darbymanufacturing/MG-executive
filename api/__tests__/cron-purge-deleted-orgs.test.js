@@ -57,7 +57,7 @@ async function loadHandler({ orgDocs, freshDocData }) {
   };
 
   const db = {
-    collection: vi.fn((col) => ({
+    collection: vi.fn((_col) => ({
       where: vi.fn(() => ({
         get: vi.fn().mockResolvedValue({
           empty: orgDocs.length === 0,
@@ -67,7 +67,7 @@ async function loadHandler({ orgDocs, freshDocData }) {
           get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
         })),
       })),
-      doc: vi.fn((id) => makeDocRef({})),
+      doc: vi.fn((_id) => makeDocRef({})),
     })),
     batch: vi.fn(() => batchMock),
   };

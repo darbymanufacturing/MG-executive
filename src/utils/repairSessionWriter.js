@@ -51,9 +51,6 @@ export async function completeRepairSession({
     });
   });
   const aggregatedPartsUsed = Object.values(partMap);
-  // #445 — totalPartsCost is re-computed inside the transaction after live
-  // unitCost fixup; this placeholder is replaced by the inner const.
-  let totalPartsCost = 0;
 
   // ADR-0015 seam: when maintenance data is on Supabase, the whole atomic
   // completion (lock ticket + all parts, validate stock before any write, live

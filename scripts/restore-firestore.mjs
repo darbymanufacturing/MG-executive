@@ -84,7 +84,7 @@ async function main() {
 
   // Detect backup format from _manifest.json
   let manifestData = {};
-  try { manifestData = JSON.parse(readFileSync(resolve(dir, '_manifest.json'), 'utf8')); } catch {}
+  try { manifestData = JSON.parse(readFileSync(resolve(dir, '_manifest.json'), 'utf8')); } catch { /* no manifest — fall back to format detection */ }
   const isJsonl = manifestData.format === 'jsonl';
   const manifestCounts = manifestData.collections || {};
 

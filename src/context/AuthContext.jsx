@@ -105,7 +105,7 @@ export function AuthProvider({ children }) {
             setClaimsSyncing(true);
             try {
               if (syncClaimsRef.current) await syncClaimsRef.current();
-            } catch (syncErr) {
+            } catch (_syncErr) {
               // Sync failed (transient network / server error). Surface a toast so
               // the user knows, but still clear loading — the shell will render and
               // Firestore rules will reject individual queries gracefully.

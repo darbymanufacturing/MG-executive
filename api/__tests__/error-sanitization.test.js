@@ -6,7 +6,7 @@
  * Each test injects a realistic Firestore FAILED_PRECONDITION error and asserts
  * the response body contains only the safe static string, not the internal details.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Shared realistic Firestore error (leaks project ID + collection paths)
@@ -177,7 +177,7 @@ describe('error-sanitization: sync-claim.js (BUG #436)', () => {
     vi.doMock('../_lib/firebase-admin.js', () => ({
       getDb: () => ({
         collection: (col) => ({
-          doc: (id) => ({
+          doc: (_id) => ({
             get: vi.fn().mockResolvedValue({
               exists: true,
               data: () => col === 'users'
@@ -215,7 +215,7 @@ describe('error-sanitization: delete-account.js (BUG #436)', () => {
     vi.doMock('../_lib/firebase-admin.js', () => ({
       getDb: () => ({
         collection: (col) => ({
-          doc: (id) => ({
+          doc: (_id) => ({
             get: vi.fn().mockResolvedValue({
               exists: true,
               data: () => col === 'users'

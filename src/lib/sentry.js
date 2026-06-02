@@ -47,7 +47,7 @@ export async function initSentry() {
     if (!str) return str;
     return str
       // 1. Email addresses
-      .replace(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g, '[email]')
+      .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email]')
       // 2. EUR / financial amounts with decimals (number-then-currency or currency-then-number)
       .replace(/\b\d{1,6}[.,]\d{2}\s*(EUR|€)|(?<![A-Za-z0-9])(EUR|€)\s*\d{1,6}[.,]\d{2}/g, '[amount]')
       // 3. Firebase UID (28-char alphanumeric)

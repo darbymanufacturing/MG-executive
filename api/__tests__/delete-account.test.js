@@ -6,7 +6,7 @@
  * Key invariant: a user whose role is 'owner' but whose org.ownerUid points to a
  * different UID must be denied (403), not granted access to delete/transfer the org.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers to build mock req/res objects

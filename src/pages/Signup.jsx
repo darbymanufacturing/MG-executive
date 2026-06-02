@@ -90,10 +90,10 @@ export default function Signup() {
       // then delete the Auth user. Errors are swallowed so the original error
       // message is still surfaced to the user.
       if (orgDocId) {
-        try { await deleteDoc(doc(db, 'organizations', orgDocId)); } catch (_) {}
+        try { await deleteDoc(doc(db, 'organizations', orgDocId)); } catch (_) { /* rollback best-effort */ }
       }
       if (authCreated && auth.currentUser) {
-        try { await auth.currentUser.delete(); } catch (_) {}
+        try { await auth.currentUser.delete(); } catch (_) { /* rollback best-effort */ }
       }
       setError(err.message || 'Something went wrong creating your account.');
       setLoading(false);

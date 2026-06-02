@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { spawnSync } from 'child_process';
-import { mkdirSync, writeFileSync, rmSync, readdirSync } from 'fs';
+import { mkdirSync, writeFileSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -80,7 +80,7 @@ describe('rechunk-sql — header/footer mismatch detection (BUG #417)', () => {
       { org_id: 'org1', source_doc_id: 'trip003', cost: 7.0 },
     ];
 
-    const sqlContent = buildSqlFile(rows, { columnList: 'org_id text, source_doc_id text, cost numeric' });
+    const _sqlContent = buildSqlFile(rows, { columnList: 'org_id text, source_doc_id text, cost numeric' });
 
     // Both files have exactly the same header and footer; only row data differs.
     writeFileSync(join(tmpDir, `${TABLE}.000.sql`), buildSqlFile(rows.slice(0, 2)));

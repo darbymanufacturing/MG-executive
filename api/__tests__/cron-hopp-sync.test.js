@@ -19,7 +19,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 // handler module is ESM and the tests run in the same process, we use vi.mock
 // with a factory so mocks are hoisted correctly.
 
-const mockFinalize = vi.fn(async (_res, _db, summary) => {
+const _mockFinalize = vi.fn(async (_res, _db, summary) => {
   _res._summary = summary;
   _res.status(summary.ok ? 200 : 500).json({ ok: summary.ok, error: summary.errorMessage || null });
 });
@@ -87,7 +87,6 @@ function makeFakeReq() {
 
 describe('cron-hopp-sync — BUG #382 org-id guards', () => {
   let getDb;
-  let handler;
 
   beforeEach(async () => {
     vi.resetModules();

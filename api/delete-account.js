@@ -43,7 +43,6 @@ export default async function handler(req, res) {
   if (!meSnap.exists) return res.status(404).json({ error: 'Your user profile was not found.' });
   const me = meSnap.data();
   const orgId = me.orgId ?? null;
-  const myRole = me.role ?? null;
   if (!orgId) return res.status(400).json({ error: 'Your account is not linked to an organization.' });
 
   const orgRef = db.collection('organizations').doc(orgId);

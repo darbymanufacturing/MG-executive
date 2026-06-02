@@ -39,7 +39,7 @@ function makeRes() {
   return res;
 }
 
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB — must match handler constant
+const _MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB — must match handler constant
 
 const BASE_BODY = {
   costId: 'cost-2',
@@ -55,7 +55,7 @@ const BASE_BODY = {
 // Build a mock ReadableStream reader that emits chunkCount chunks each of
 // chunkSize bytes, tracking how many chunks the consumer actually received
 // before aborting.  Returns { reader, chunksRead }.
-function makeLargeStreamReader(chunkSize, chunkCount) {
+function _makeLargeStreamReader(chunkSize, chunkCount) {
   let index = 0;
   let chunksRead = 0;
   const reader = {
@@ -86,7 +86,7 @@ describe('Bug #434 — streaming size guard', () => {
     // 11 chunks of 1 MB each = 11 MB total — exceeds MAX_ATTACHMENT_BYTES after 11th chunk
     const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB
     const CHUNK_COUNT = 11;
-    const { reader, get chunksRead() { return chunksRead; } } = (() => {
+    const { reader } = (() => {
       let index = 0;
       let chunksRead = 0;
       const reader = {

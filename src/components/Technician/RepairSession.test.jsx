@@ -78,7 +78,7 @@ describe('#418 — startedAt sessionStorage persistence', () => {
 // Inline minimal version of PartPicker mirroring the fixed implementation
 // (avoids needing CSS modules in tests; focuses on interaction behaviour).
 function MinimalPartPicker({ parts, onAdd }) {
-  const [open, setOpen] = React.useState(true); // start open for tests
+  const [_open, _setOpen] = React.useState(true); // start open for tests
 
   return (
     <ul data-testid="dropdown">

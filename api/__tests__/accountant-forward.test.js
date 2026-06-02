@@ -23,7 +23,7 @@ vi.mock('resend', () => ({
 let authUserMock = { uid: 'user-1', email: 'staff@mgexecutive.app', role: 'staff' };
 
 vi.mock('../_lib/require-auth.js', () => ({
-  requireUser: vi.fn(async (_req, res, _opts) => authUserMock),
+  requireUser: vi.fn(async (_req, _res, _opts) => authUserMock),
 }));
 
 // --- Import handler AFTER mocks -----------------------------------------

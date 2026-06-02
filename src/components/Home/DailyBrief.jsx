@@ -180,7 +180,7 @@ export default function DailyBrief() {
 
     /* ── Build real payload from contexts (BUG #159, #bug-375) ── */
     const now = new Date();
-    const { revenueThisMonth, costsThisMonth, dataIsVoid, payload } = buildBriefPayload(
+    const { dataIsVoid, payload } = buildBriefPayload(
       { issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx },
       now,
     );

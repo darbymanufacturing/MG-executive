@@ -9,7 +9,7 @@
  */
 import { describe, test, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 // ── Minimal harness mirroring the exact fix ────────────────────────────────────
 // Replicates the useState + useEffect pattern from ProcedureModal so the

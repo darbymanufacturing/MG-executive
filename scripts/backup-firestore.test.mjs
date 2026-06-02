@@ -6,7 +6,7 @@
  *
  * Run: npx vitest run scripts/backup-firestore.test.mjs
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { tmpdir } from 'os';
 import { mkdirSync, readFileSync, readdirSync, existsSync, rmSync, writeFileSync, renameSync } from 'fs';
 import { resolve, join } from 'path';
@@ -376,7 +376,7 @@ describe('restore-firestore — JSONL streaming (BUG #324)', () => {
       batch() {
         const ops = [];
         return {
-          set(ref, data, opts) { ops.push(ref); },
+          set(ref, _data, _opts) { ops.push(ref); },
           async commit() { commitCount++; },
         };
       },

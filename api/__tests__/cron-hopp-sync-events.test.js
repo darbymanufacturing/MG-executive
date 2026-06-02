@@ -212,7 +212,7 @@ describe('cron-hopp-sync — BUG #368 list_status_events per-scooter pull', () =
     const fakeDb = makeFakeDb(scooterDocs);
     getDb.mockReturnValue(fakeDb);
 
-    callHoppTool.mockImplementation(async (tool, args) => {
+    callHoppTool.mockImplementation(async (tool, _args) => {
       if (tool === 'list_trips')         return { rows: [], errors: [] };
       if (tool === 'list_repair_events') return { tickets: [], errors: [] };
       if (tool === 'list_status_events') {

@@ -11,7 +11,7 @@
  * mounting the full AuthProvider (which needs a live Firebase project), mirroring
  * the pattern in RepairSession.test.jsx of testing the logic directly.
  */
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 // ── Helpers that mirror the claim-verification logic from AuthContext ──────────
 
