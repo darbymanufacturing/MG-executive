@@ -156,6 +156,20 @@ export default function DailyBrief() {
   const revenueCtx     = useRevenueSafe();
   const costsCtx       = useCostsSafe();
 
+  // #497 — the payload is built from these contexts, which load their data
+  // ASYNCHRONOUSLY (Supabase fetch + realtime subscribe). The one-shot effect below
+  // must wait until they've finished loading, or it reads empty arrays on its first
+  // run, trips the dataIsVoid guard, and shows "Brief unavailable" forever (it never
+  // re-runs when the data arrives). Each flag defaults to false so an absent/unmounted
+  // context can't block the brief indefinitely. NB: RevenueContext exposes
+  // `revenueLoading`; the others expose `loading`.
+  const contextsLoading =
+    (issueCtx?.loading ?? false) ||
+    (maintenanceCtx?.loading ?? false) ||
+    (projectCtx?.loading ?? false) ||
+    (revenueCtx?.revenueLoading ?? false) ||
+    (costsCtx?.loading ?? false);
+
   const [brief, setBrief] = useState(null);
   const [status, setStatus] = useState('loading'); /* loading | generating | ready | error */
   const [dismissed, setDismissed] = useState(false);
@@ -172,6 +186,9 @@ export default function DailyBrief() {
 
   useEffect(() => {
     if (!user || dismissed || hasFetched.current) return;
+    // #497 — wait for the data contexts to finish loading before deciding anything
+    // (especially the dataIsVoid short-circuit). status stays 'loading' until ready.
+    if (contextsLoading) return;
     hasFetched.current = true;
 
     const rawBriefKey = `${todayKey()}_${user.uid}`;
@@ -246,7 +263,7 @@ export default function DailyBrief() {
     return () => {
       hasFetched.current = false;
     };
-  }, [user, dismissed, retryCount]); // retryCount forces re-run on manual retry
+  }, [user, dismissed, retryCount, contextsLoading]); // retryCount = manual retry; contextsLoading = wait for data (#497)
 
   const handleDismiss = () => {
     localStorage.setItem(`omni_brief_dismissed_${todayKey()}`, '1');
