@@ -6,6 +6,7 @@ import { formatEUR, todayISO } from '../../utils/formatters.js';
 import { normalizeToMonthly } from '../../utils/calculations.js';
 import { validate } from '../../utils/validateForm.js';
 import { costSchema } from '../../utils/schemas/costSchema.js';
+import { useFleet } from '../../context/FleetContext.jsx';
 import styles from './CostFormModal.module.css';
 
 const EMPTY = {
@@ -17,6 +18,7 @@ const EMPTY = {
   endDate: '',
   notes: '',
   location: '',
+  fleetId: '', // FF-3 — which fleet's P&L this cost hits ('' = company-wide overhead)
   // Loan-specific
   lenderName: '',
   principalAmount: '',
@@ -33,10 +35,14 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const isEdit = !!initialData;
+  const { fleets, activeFleet } = useFleet(); // FF-3 — per-cost fleet scope
 
   useEffect(() => {
     if (isOpen) {
-      setForm(initialData ? { ...EMPTY, ...initialData, endDate: initialData.endDate || '' } : EMPTY);
+      // New costs default their fleet scope to the active fleet (else company-wide).
+      setForm(initialData
+        ? { ...EMPTY, ...initialData, endDate: initialData.endDate || '' }
+        : { ...EMPTY, fleetId: activeFleet?._docId ?? '' });
       setErrors({});
       setSaving(false);
     }
@@ -56,6 +62,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
         amount:         parseFloat(form.amount),
         endDate:        form.endDate        || null,
         location:       form.location       || null,
+        fleetId:        form.fleetId        || null,
         // Loan fields
         lenderName:     form.lenderName     || null,
         principalAmount:form.principalAmount ? parseFloat(form.principalAmount) : null,
@@ -129,6 +136,19 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               <option value="">All Locations (fleet-wide)</option>
               {locations.map((loc) => (
                 <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* FF-3 — which fleet's P&L this cost belongs to (or company-wide overhead) */}
+        {fleets.length > 0 && (
+          <div className={styles.field}>
+            <label className={styles.label}>Applies to</label>
+            <select className={styles.select} value={form.fleetId} onChange={set('fleetId')}>
+              <option value="">Whole company (shared overhead)</option>
+              {fleets.map((f) => (
+                <option key={f._docId} value={f._docId}>{f.name}</option>
               ))}
             </select>
           </div>
