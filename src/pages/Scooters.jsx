@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useTelemetry } from '../context/TelemetryContext.jsx';
 import { formatDate, formatEUR, formatRelativeTime } from '../utils/formatters.js';
@@ -28,6 +29,10 @@ export default function Scooters() {
   const { config } = useCosts();
   const { events } = useTelemetry();
   const cities = config?.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
+
+  // FF-3 — scope the roster to the active fleet (All Fleets = the full roll-up).
+  const { scopeByFleet, isAllFleets, activeFleet, hasFleets } = useFleet();
+  const scoped = useMemo(() => scopeByFleet(scooters), [scopeByFleet, scooters]);
 
   const [cityF,   setCityF]   = useState('All');
   const [statusF, setStatusF] = useState('All');
@@ -57,22 +62,22 @@ export default function Scooters() {
   }, [events]);
 
   const filtered = useMemo(() => {
-    return scooters.filter((s) => {
+    return scoped.filter((s) => {
       if (cityF   !== 'All' && s.city   !== cityF)   return false;
       if (statusF !== 'All' && s.status !== statusF) return false;
       if (search  && !String(s.scooterId).toLowerCase().includes(search.toLowerCase()) &&
           !s.model?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [scooters, cityF, statusF, search]);
+  }, [scoped, cityF, statusF, search]);
 
   // Summary counts
   const summary = useMemo(() => ({
-    total:    scooters.length,
-    active:   scooters.filter((s) => s.status === 'Active').length,
-    inRepair: scooters.filter((s) => s.status === 'In Repair').length,
-    retired:  scooters.filter((s) => s.status === 'Retired').length,
-  }), [scooters]);
+    total:    scoped.length,
+    active:   scoped.filter((s) => s.status === 'Active').length,
+    inRepair: scoped.filter((s) => s.status === 'In Repair').length,
+    retired:  scoped.filter((s) => s.status === 'Retired').length,
+  }), [scoped]);
 
   async function handleSave(form) {
     if (editing) await updateScooter(editing._docId, form);
@@ -84,6 +89,20 @@ export default function Scooters() {
   return (
     <div className={styles.page}>
       <Header title="Scooters" subtitle={`${summary.total} vehicles registered`} />
+
+      {/* FF-3 — active-fleet scope indicator */}
+      {hasFleets && (
+        <div style={{ marginBottom: 12 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 11px',
+            borderRadius: 'var(--radius-pill)', fontSize: 12, fontWeight: 600,
+            background: isAllFleets ? 'var(--bg-section)' : 'var(--accent-tint)',
+            color: isAllFleets ? 'var(--fg-secondary)' : 'var(--accent)',
+          }}>
+            {isAllFleets ? 'All Fleets' : `Fleet: ${activeFleet?.name}`}
+          </span>
+        </div>
+      )}
 
       {/* Summary bar */}
       <div className={styles.summaryBar}>
@@ -142,7 +161,7 @@ export default function Scooters() {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className={styles.empty}>
-          {scooters.length === 0
+          {scoped.length === 0
             ? 'No scooters registered yet. Click "Add Scooter" to get started.'
             : 'No scooters match the current filters.'}
         </div>

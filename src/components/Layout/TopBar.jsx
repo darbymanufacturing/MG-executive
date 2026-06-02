@@ -3,6 +3,7 @@ import { Sparkles, Sun, Moon, Bell, Menu, X, RefreshCw } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import useHoppSync from '../../hooks/useHoppSync.js';
+import FleetSwitcher from './FleetSwitcher.jsx';
 import styles from './TopBar.module.css';
 
 function formatRelative(ts) {
@@ -72,6 +73,9 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
       <div className={styles.titleArea}>
         <span className={styles.title}>{title}</span>
       </div>
+
+      {/* FF-3 — fleet switcher (active fleet / All Fleets) */}
+      <FleetSwitcher />
 
       {/* Capture bar — clickable, opens modal */}
       <div className={styles.captureBar} onClick={handleCaptureBarClick} role="button" tabIndex={0}

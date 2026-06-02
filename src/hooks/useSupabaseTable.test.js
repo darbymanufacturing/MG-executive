@@ -189,8 +189,10 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.pow).toBe('app_config');
     // maintenance scheduler — date-based + recurring (added post-cutover)
     expect(SUPABASE_TABLE.maintenanceSchedules).toBe('maintenance_schedules');
-    // 5 time-series + 13 operational + config + pow + maintenanceSchedules = 21 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(21);
+    // FF-3 multi-fleet
+    expect(SUPABASE_TABLE.fleets).toBe('fleets');
+    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets = 22 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(22);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

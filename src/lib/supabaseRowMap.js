@@ -54,6 +54,7 @@ export const SUPABASE_TABLE = Object.freeze({
   diary: 'diary',
   costs: 'costs',
   maintenanceSchedules: 'maintenance_schedules',
+  fleets: 'fleets', // FF-3 multi-fleet
   // The two singleton-config collections both fold into one app_config table
   // (source_doc_id keeps the existing composite ids, which are globally unique).
   config: 'app_config',
@@ -136,6 +137,7 @@ const TYPED_COLUMNS = Object.freeze({
   diary: () => ({}),
   costs: () => ({}),
   maintenanceSchedules: () => ({}),
+  fleets: () => ({}),
   config: () => ({}),
   pow: () => ({}),
 });

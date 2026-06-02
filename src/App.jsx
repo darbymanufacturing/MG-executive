@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { ErrorBoundary } from './components/Shared/ErrorBoundary.jsx';
 import { OrgProvider } from './context/OrgContext.jsx';
+import { FleetProvider } from './context/FleetContext.jsx';
 import { CostProvider } from './context/CostContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
@@ -390,6 +391,7 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <OrgProvider>
+                      <FleetProvider>
                       <CostProvider>
                         <RevenueProvider>
                           <MaintenanceProvider>
@@ -413,6 +415,7 @@ export default function App() {
                           </MaintenanceProvider>
                         </RevenueProvider>
                       </CostProvider>
+                      </FleetProvider>
                     </OrgProvider>
                   </ProtectedRoute>
                 }
