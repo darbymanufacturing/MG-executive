@@ -206,7 +206,8 @@ async function backfillUsers(db, auth) {
       if (budgetLeft()) { if (COMMIT) await d.ref.update({ orgId: ORG_ID }); writes++; r.stamped++; }
     } else r.skipped++;
     // custom claim (not a Firestore write; doesn't count against the doc-write budget)
-    if (COMMIT) { await auth.setCustomUserClaims(d.id, { orgId: ORG_ID, role }); r.claimsSet++; }
+    // role:'authenticated' = the Supabase Postgres role (reserved claim); app role → user_role.
+    if (COMMIT) { await auth.setCustomUserClaims(d.id, { orgId: ORG_ID, role: 'authenticated', user_role: role }); r.claimsSet++; }
   }
   if (!owner) owner = admins[0] || members[0] || null;
   r.owner = owner; r.memberCount = members.length;

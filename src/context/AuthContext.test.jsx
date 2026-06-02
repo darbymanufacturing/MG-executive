@@ -26,7 +26,7 @@ import { describe, test, expect, vi } from 'vitest';
 function claimsMatch(claims, profileData) {
   return (
     claims.orgId === profileData.orgId &&
-    claims.role  === profileData.role
+    claims.user_role === profileData.role
   );
 }
 
@@ -78,7 +78,7 @@ describe('#428 — AuthContext JWT claim verification on sign-in', () => {
     const result = await simulateOnSnapshot({
       profileExists: true,
       profileData,
-      jwtClaims: { orgId: 'org1', role: 'admin' }, // exact match
+      jwtClaims: { orgId: 'org1', user_role: 'admin' }, // exact match
       syncClaims,
     });
 
@@ -118,7 +118,7 @@ describe('#428 — AuthContext JWT claim verification on sign-in', () => {
     const result = await simulateOnSnapshot({
       profileExists: true,
       profileData,
-      jwtClaims: { orgId: 'org-wrong', role: 'admin' }, // orgId mismatch
+      jwtClaims: { orgId: 'org-wrong', user_role: 'admin' }, // orgId mismatch
       syncClaims,
     });
 

@@ -94,11 +94,13 @@ export function AuthProvider({ children }) {
           // waiting for getIdTokenResult(), making this callback stale.
           if (authEpoch.current !== epoch) return;
 
-          const { orgId: claimOrgId, role: claimRole } = tokenResult.claims;
+          // The reserved 'role' claim is 'authenticated' (Supabase Postgres role); the app
+          // RBAC role is mirrored into 'user_role'. Compare user_role against the profile.
+          const { orgId: claimOrgId, user_role: claimUserRole } = tokenResult.claims;
           const { orgId: profileOrgId, role: profileRole } = snap.data();
 
           const claimsMatch =
-            claimOrgId === profileOrgId && claimRole === profileRole;
+            claimOrgId === profileOrgId && claimUserRole === profileRole;
 
           if (!claimsMatch) {
             // Claims are absent or stale — sync them before letting the shell mount.
