@@ -18,6 +18,8 @@ import ScheduleTab from '../components/Maintenance/tabs/ScheduleTab.jsx';
 import RepairSessionFeed from '../components/Maintenance/overview/RepairSessionFeed.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
+import FleetScopeChip from '../components/Shared/FleetScopeChip.jsx';
 import styles from './Maintenance.module.css';
 
 const TABS = [
@@ -37,6 +39,7 @@ export default function Maintenance() {
   const { tickets, loadSeedData } = useMaintenance();
   const { config: costConfig } = useCosts();
   const locations = costConfig?.locations ?? [];
+  const { scopeByFleet } = useFleet(); // FF-3 — scope tickets to the active fleet
 
   const [activeTab,   setActiveTab]   = useState('overview');
   const [city,        setCity]        = useState('');
@@ -44,10 +47,10 @@ export default function Maintenance() {
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedDone,    setSeedDone]    = useState(false);
 
-  const filteredTickets = useMemo(
-    () => (city ? tickets.filter((t) => t.city === city) : tickets),
-    [tickets, city],
-  );
+  const filteredTickets = useMemo(() => {
+    const scoped = scopeByFleet(tickets); // FF-3 active-fleet scope first
+    return city ? scoped.filter((t) => t.city === city) : scoped;
+  }, [tickets, city, scopeByFleet]);
 
   async function handleSeedLoad() {
     if (!loadSeedData) return;
@@ -66,6 +69,7 @@ export default function Maintenance() {
         subtitle="Fleet repair tracking &amp; parts pipeline"
         actions={
           <div className={styles.headerControls}>
+            <FleetScopeChip style={{ marginRight: 4 }} />
             <span className={styles.cityLabel}>City:</span>
             <select
               className={styles.citySelect}

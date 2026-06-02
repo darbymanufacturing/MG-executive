@@ -62,7 +62,14 @@ export function FleetProvider({ children }) {
     if (isAllFleets || !activeFleet) return items;
     const cities = (activeFleet.cities ?? []).map((c) => String(c).toLowerCase());
     if (!cities.length) return items;
-    return items.filter((it) => it && it.city != null && cities.includes(String(it.city).toLowerCase()));
+    // Operational docs label their city as `city` (scooters, tickets, SPR) or
+    // `location` (revenue days). A future `fleetId` field wins if present.
+    return items.filter((it) => {
+      if (!it) return false;
+      if (it.fleetId) return it.fleetId === activeFleet._docId;
+      const c = it.city ?? it.location ?? null;
+      return c != null && cities.includes(String(c).toLowerCase());
+    });
   }, [isAllFleets, activeFleet]);
 
   // Which city a given fleet covers, label-friendly (first city or the fleet name).

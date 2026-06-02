@@ -10,6 +10,8 @@ import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import Skeleton from '../components/Shared/Skeleton.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
+import FleetScopeChip from '../components/Shared/FleetScopeChip.jsx';
 import { formatEUR, formatTrips, formatKm } from '../utils/formatters.js';
 import { totalRevenue, avgTripsPerDay, totalDistanceKm, totalTrips, filterRevenueByLocation } from '../utils/revenueCalculations.js';
 import styles from './Revenue.module.css';
@@ -18,13 +20,14 @@ export default function Revenue() {
   const { revenueData, revenueLoading, clearAllRevenue } = useRevenue();
   const { config } = useCosts();
   const locations = config.locations || [];
+  const { scopeByFleet } = useFleet(); // FF-3 — scope revenue to the active fleet
   const [clearConfirm, setClearConfirm] = useState(false);
   const [locationFilter, setLocationFilter] = useState('all');
   const [showIntro, setShowIntro] = useState(!localStorage.getItem('omni_revenue_intro_seen'));
 
   const filteredRevenue = useMemo(
-    () => filterRevenueByLocation(revenueData, locationFilter),
-    [revenueData, locationFilter]
+    () => filterRevenueByLocation(scopeByFleet(revenueData), locationFilter),
+    [revenueData, locationFilter, scopeByFleet]
   );
 
   const hasData = revenueData.length > 0;
@@ -41,6 +44,7 @@ export default function Revenue() {
         subtitle="Import and browse daily revenue data from your platform CSV exports"
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <FleetScopeChip />
             <LocationSelector locations={locations} value={locationFilter} onChange={setLocationFilter} />
             {hasData && (
               <Button variant="danger" size="sm" onClick={() => setClearConfirm(true)}>

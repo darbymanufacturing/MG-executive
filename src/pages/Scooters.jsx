@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useFleet } from '../context/FleetContext.jsx';
+import FleetScopeChip from '../components/Shared/FleetScopeChip.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useTelemetry } from '../context/TelemetryContext.jsx';
 import { formatDate, formatEUR, formatRelativeTime } from '../utils/formatters.js';
@@ -31,7 +32,7 @@ export default function Scooters() {
   const cities = config?.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
 
   // FF-3 — scope the roster to the active fleet (All Fleets = the full roll-up).
-  const { scopeByFleet, isAllFleets, activeFleet, hasFleets } = useFleet();
+  const { scopeByFleet } = useFleet();
   const scoped = useMemo(() => scopeByFleet(scooters), [scopeByFleet, scooters]);
 
   const [cityF,   setCityF]   = useState('All');
@@ -91,18 +92,7 @@ export default function Scooters() {
       <Header title="Scooters" subtitle={`${summary.total} vehicles registered`} />
 
       {/* FF-3 — active-fleet scope indicator */}
-      {hasFleets && (
-        <div style={{ marginBottom: 12 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 11px',
-            borderRadius: 'var(--radius-pill)', fontSize: 12, fontWeight: 600,
-            background: isAllFleets ? 'var(--bg-section)' : 'var(--accent-tint)',
-            color: isAllFleets ? 'var(--fg-secondary)' : 'var(--accent)',
-          }}>
-            {isAllFleets ? 'All Fleets' : `Fleet: ${activeFleet?.name}`}
-          </span>
-        </div>
-      )}
+      <FleetScopeChip style={{ margin: '0 0 12px' }} />
 
       {/* Summary bar */}
       <div className={styles.summaryBar}>
