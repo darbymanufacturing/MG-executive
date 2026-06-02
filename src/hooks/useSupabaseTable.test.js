@@ -191,8 +191,10 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.maintenanceSchedules).toBe('maintenance_schedules');
     // FF-3 multi-fleet
     expect(SUPABASE_TABLE.fleets).toBe('fleets');
-    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets = 22 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(22);
+    // FF-1 owner ledger
+    expect(SUPABASE_TABLE.ownerLedger).toBe('owner_ledger');
+    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger = 23 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(23);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests
