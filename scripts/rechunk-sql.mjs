@@ -35,6 +35,19 @@ const NUMERIC_COLS = {
   revenue_days: ['total_paid_revenue', 'total_trips', 'unique_users_count', 'unique_vehicles_count'],
 };
 
+// Per-column integer scale factor for checksums. lat/lon need 1e7 (7 dp = sub-cm)
+// to avoid the false-positive verification window of ~0.001° (~100 m) from ×1000.
+const SCALE = {
+  lat: 1e7, lon: 1e7,             // 7 decimal places — sub-cm precision
+  cost: 100,                       // cents
+  distance_km: 1e4,                // 4 dp
+  duration_minutes: 100,
+  battery_level: 100,
+  total_paid_revenue: 100,
+  total_trips: 1, unique_users_count: 1, unique_vehicles_count: 1,
+};
+const DEFAULT_SCALE = 1000; // fallback for any unlisted column
+
 const srcFiles = readdirSync(DIR)
   .filter((f) => f.startsWith(`${TABLE}.`) && f.endsWith('.sql') && /\.\d+\.sql$/.test(f))
   .sort();
@@ -66,8 +79,16 @@ for (const f of srcFiles) {
     }
   }
   for (let i = startIdx + 1; i < endIdx; i++) {
-    const line = lines[i].trim().replace(/,+$/, '');
-    if (line) rows.push(line);
+    const raw = lines[i].trim().replace(/,+$/, '');
+    if (!raw) continue;
+    try {
+      JSON.parse(raw);
+    } catch (e) {
+      console.error(`! ${f} line ${i + 1}: not valid JSON — ${e.message}`);
+      console.error(`  content: ${raw.slice(0, 120)}`);
+      process.exit(1);
+    }
+    rows.push(raw);
   }
 }
 
@@ -79,7 +100,7 @@ const ids = new Set();
 for (const line of rows) {
   const o = JSON.parse(line);
   ids.add(o.source_doc_id);
-  for (const c of NUMERIC_COLS[TABLE] || []) sums[c] += Math.round(num(o[c]) * 1000);
+  for (const c of NUMERIC_COLS[TABLE] || []) sums[c] += Math.round(num(o[c]) * (SCALE[c] ?? DEFAULT_SCALE));
 }
 
 const outDir = resolve(DIR, 'chunks');
@@ -98,9 +119,9 @@ console.log(`  distinct source_doc_id: ${ids.size}`);
 console.log('\n── VERIFY (run after loading, compare to these) ──');
 console.log(`  expected count: ${rows.length}`);
 for (const c of NUMERIC_COLS[TABLE] || []) {
-  console.log(`  expected sum(${c})*1000 (rounded): ${sums[c]}`);
+  console.log(`  expected sum(${c})×${SCALE[c] ?? DEFAULT_SCALE} (rounded): ${sums[c]}`);
 }
-const colSql = (NUMERIC_COLS[TABLE] || []).map((c) => `round(sum(${c})*1000) as ${c}_x1000`).join(', ');
+const colSql = (NUMERIC_COLS[TABLE] || []).map((c) => `round(sum(${c})*(${SCALE[c] ?? DEFAULT_SCALE})) as ${c}_x${SCALE[c] ?? DEFAULT_SCALE}`).join(', ');
 console.log('\n  Postgres check query:');
 console.log(`    select count(*) as n, count(distinct source_doc_id) as distinct_ids${colSql ? ', ' + colSql : ''} from ${TABLE};`);
 console.log('');

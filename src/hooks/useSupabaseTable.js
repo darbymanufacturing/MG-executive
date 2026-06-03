@@ -42,7 +42,8 @@ export const OP_MAP = Object.freeze({
  */
 export function mapRow(row) {
   if (!row) return null;
-  return { _docId: row.source_doc_id, ...(row.data ?? {}) };
+  if (row.data == null) return null;  // null-data row is not a valid doc — drop it
+  return { _docId: row.source_doc_id, ...row.data };
 }
 
 export function useSupabaseTable(table, opts = {}) {
@@ -126,7 +127,7 @@ export function useSupabaseTable(table, opts = {}) {
         }
         const rows = data ?? [];
         setHasMore(rows.length > baseLimit);
-        const pageRows = rows.slice(0, baseLimit).map(mapRow);
+        const pageRows = rows.slice(0, baseLimit).map(mapRow).filter(Boolean);
         if (offset === 0) {
           // Initial load or filter reset: replace items.
           setItems(pageRows);

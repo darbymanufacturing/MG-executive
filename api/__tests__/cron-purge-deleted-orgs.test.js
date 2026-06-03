@@ -359,3 +359,193 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
     expect(orgRef.delete).toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// BUG #457 — paged users fetch + parallel Auth deletes
+// ---------------------------------------------------------------------------
+describe('cron-purge-deleted-orgs.js paged users + parallel Auth (BUG #457)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Build a handler that simulates N member docs split across pages of BATCH_SIZE (450).
+   * Tracks how many times deleteUser was called and whether Promise.allSettled was used.
+   */
+  async function loadHandler457({ memberCount }) {
+    vi.resetModules();
+
+    const orgId = 'org-457';
+    const pastIso = new Date(Date.now() - 86400000).toISOString();
+    const BATCH_SIZE = 450;
+
+    const orgRef = {
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({ deleteAt: pastIso }),
+      }),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+    };
+
+    // Build member doc stubs.
+    const allMemberDocs = Array.from({ length: memberCount }, (_, i) => ({
+      id: `uid-${i}`,
+      ref: { delete: vi.fn().mockResolvedValue({}) },
+      data: () => ({ orgId }),
+    }));
+
+    const deleteUserMock = vi.fn().mockResolvedValue({});
+    const allSettledSpy = vi.spyOn(Promise, 'allSettled');
+
+    // Track limit() calls on the users collection to verify paging.
+    const limitCallArgs = [];
+
+    const batchMock = {
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue({}),
+    };
+
+    // Simulate paged returns: first page returns BATCH_SIZE docs, second page remainder.
+    let usersPageCallCount = 0;
+
+    const db = {
+      collection: vi.fn((col) => ({
+        where: vi.fn((field) => {
+          if (col === 'organizations') {
+            const orgDoc = { id: orgId, ref: orgRef, data: () => ({ deleteAt: pastIso }) };
+            return {
+              get: vi.fn().mockResolvedValue({ empty: false, docs: [orgDoc] }),
+              limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
+            };
+          }
+
+          if (col === 'users' && field === 'orgId') {
+            return {
+              limit: vi.fn((n) => {
+                limitCallArgs.push(n);
+                return {
+                  startAfter: vi.fn(() => ({
+                    get: vi.fn(() => {
+                      usersPageCallCount += 1;
+                      // Second page: only the remainder (memberCount - BATCH_SIZE), or empty if <=BATCH_SIZE.
+                      const remaining = allMemberDocs.slice(BATCH_SIZE);
+                      if (remaining.length === 0) {
+                        return Promise.resolve({ empty: true, docs: [], size: 0 });
+                      }
+                      return Promise.resolve({ empty: false, docs: remaining, size: remaining.length });
+                    }),
+                  })),
+                  get: vi.fn(() => {
+                    usersPageCallCount += 1;
+                    // First page.
+                    const page = allMemberDocs.slice(0, Math.min(BATCH_SIZE, memberCount));
+                    return Promise.resolve({ empty: page.length === 0, docs: page, size: page.length });
+                  }),
+                };
+              }),
+            };
+          }
+
+          // All other ORG_DATA_COLLECTIONS — empty.
+          return {
+            get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
+            limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
+          };
+        }),
+        doc: vi.fn(() => ({ delete: vi.fn().mockResolvedValue({}) })),
+      })),
+      batch: vi.fn(() => batchMock),
+    };
+
+    vi.doMock('../_lib/firebase-admin.js', () => ({
+      getDb: () => db,
+      getAuth: () => ({ deleteUser: deleteUserMock }),
+      FieldValue: {
+        delete: () => ({ _delete: true }),
+        serverTimestamp: () => 'SERVER_TS',
+        arrayRemove: (v) => ({ _arrayRemove: v }),
+      },
+    }));
+
+    vi.doMock('../_lib/require-auth.js', () => ({
+      requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
+    }));
+
+    const mod = await import('../_cron-purge-deleted-orgs.js');
+    return {
+      handler: mod.default,
+      orgRef,
+      deleteUserMock,
+      allSettledSpy,
+      limitCallArgs,
+    };
+  }
+
+  test('uses .limit(450) when querying users collection (paging, not unbounded)', async () => {
+    const { handler, limitCallArgs, orgRef } = await loadHandler457({ memberCount: 60 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._body.purged).toBe(1);
+    expect(orgRef.delete).toHaveBeenCalled();
+
+    // Every call to .limit() on the users collection must use BATCH_SIZE (450).
+    expect(limitCallArgs.length).toBeGreaterThan(0);
+    limitCallArgs.forEach((n) => expect(n).toBe(450));
+  });
+
+  test('calls deleteUser exactly 60 times for a 60-member org', async () => {
+    const { handler, deleteUserMock } = await loadHandler457({ memberCount: 60 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(deleteUserMock).toHaveBeenCalledTimes(60);
+  });
+
+  test('uses Promise.allSettled for Auth deletes (not serial await per user)', async () => {
+    const { handler, allSettledSpy } = await loadHandler457({ memberCount: 60 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    // Promise.allSettled must have been called at least once (batched concurrency).
+    expect(allSettledSpy).toHaveBeenCalled();
+    allSettledSpy.mockRestore();
+  });
+
+  test('response contains { ok: true, purged: 1 } for a single expired org', async () => {
+    const { handler } = await loadHandler457({ memberCount: 60 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
+    expect(res._body.purged).toBe(1);
+  });
+
+  test('regression: 500 members uses ceil(500/25)=20 allSettled rounds, not 500 serial awaits', async () => {
+    const { handler, allSettledSpy } = await loadHandler457({ memberCount: 500 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    // With AUTH_CONCURRENCY=25, 500 members → ceil(500/25)=20 allSettled calls.
+    // Verify bounded rounds: allSettled called ≤ 20 times (not 500 serial awaits).
+    const allSettledCallCount = allSettledSpy.mock.calls.length;
+    expect(allSettledCallCount).toBeLessThanOrEqual(20);
+    expect(allSettledCallCount).toBeGreaterThan(0);
+    allSettledSpy.mockRestore();
+  });
+});

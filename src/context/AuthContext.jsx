@@ -10,6 +10,7 @@ import { auth, db } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { authedFetch } from '../utils/apiClient.js';
 import { useToast } from './ToastContext.jsx';
+import { setSentryUser } from '../lib/sentry.js';
 
 const AuthContext = createContext(null);
 
@@ -55,6 +56,7 @@ export function AuthProvider({ children }) {
       const epoch = ++authEpoch.current;
 
       setUser(firebaseUser);
+      setSentryUser(firebaseUser ? firebaseUser.uid : null);
 
       if (profileUnsub) {
         profileUnsub();
@@ -242,13 +244,20 @@ export function AuthProvider({ children }) {
     return data.localId;
   };
 
+  // Thin wrapper so consumers never import `auth` directly — also satisfies the
+  // ROADMAP Phase-2 seam (getIdToken(true) after a claim change, ROADMAP.md:618).
+  const getIdToken = async (force = false) => {
+    if (!auth.currentUser) throw new Error('Not signed in');
+    return auth.currentUser.getIdToken(force);
+  };
+
   const userRole = userProfile?.role ?? null;
 
   return (
     <AuthContext.Provider value={{
       user, authLoading, claimsSyncing, userRole, userProfile,
       signIn, signUp, signOut, createTechnicianAccount,
-      refreshClaims, syncClaims,
+      refreshClaims, syncClaims, getIdToken,
     }}>
       {children}
     </AuthContext.Provider>

@@ -6,7 +6,9 @@
  *
  *   const { item, loading } = useOrgDoc('config', `${orgId}_fleet`);
  *
- * INVARIANT (ADR-0003): throws once the org has resolved but is absent.
+ * INVARIANT (ADR-0003): once the org has resolved but is absent (a user IS signed in),
+ * it fails loud via an ERROR STATE (`error` set, no data) — never a synchronous throw
+ * (#291). Mirrors the Supabase twin (useSupabaseDocLive).
  */
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -35,12 +37,15 @@ function useFirestoreDoc(collectionName, docId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fail loud (ADR-0003): org resolved but absent.
-  // Guard with hasUser: during the transient sign-in race where userProfile hasn't
-  // populated yet (orgId=null, hasUser=false), suppress the throw and stay loading
-  // (bug #454). Only throw when a real user is signed in but has no orgId.
+  // #291: org resolved-but-absent (user signed in) fails loud via an ERROR STATE, never
+  // a synchronous throw (a throw reached the outermost ErrorBoundary whose reset reloaded
+  // the page). The hasUser guard preserves the #454 sign-in-race case (orgId=null,
+  // hasUser=false -> stay loading). Mirrors useSupabaseDocLive.
   if (!orgLoading && !orgId && hasUser) {
-    throw new Error(`useOrgDoc('${collectionName}') requires an orgId — none in context.`);
+    return {
+      item: null, loading: false,
+      error: new Error(`useOrgDoc('${collectionName}') requires an orgId — none in context.`),
+    };
   }
 
   useEffect(() => {

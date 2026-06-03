@@ -20,6 +20,7 @@
  * service-role key NEVER appears here — it is server-only (backfill script + cron).
  */
 import { createClient } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/react';
 import { auth } from './firebase.js';
 import { toSupabaseRow, SUPABASE_TABLE } from './supabaseRowMap.js';
 import { GLOBAL_DATA_LAYER } from './dataLayerConfig.js';
@@ -48,10 +49,17 @@ export const supabase = isSupabaseConfigured
       // supabase-js calls this per-request; returning the live Firebase token makes
       // RLS see the user's orgId claim. Null before auth resolves → RLS denies.
       accessToken: async () => {
+        // Before auth resolves, currentUser is null — return null so RLS fails
+        // closed while the app is loading. This is intentional and silent.
+        if (!auth.currentUser) return null;
         try {
-          return (await auth.currentUser?.getIdToken()) ?? null;
-        } catch {
-          return null;
+          return await auth.currentUser.getIdToken();
+        } catch (err) {
+          // Auth is resolved but the token fetch failed (offline, expired session,
+          // rotated key). Re-throw so supabase-js surfaces a request error that
+          // useSupabaseTable can toast + capture, instead of silently going anon.
+          Sentry.captureException(err, { tags: { source: 'accessToken' } });
+          throw err;
         }
       },
     })

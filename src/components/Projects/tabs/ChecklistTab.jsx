@@ -23,7 +23,7 @@ function AssigneeSelect({ value, onChange }) {
 
 export default function ChecklistTab() {
   const navigate = useNavigate();
-  const { activeProjects, updatePhase, setTaskAssignee } = useProjects();
+  const { activeProjects, toggleTask, setTaskAssignee } = useProjects();
 
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [statusFilter,   setStatusFilter]   = useState('open');
@@ -75,14 +75,7 @@ export default function ChecklistTab() {
   }, [filtered, assigneeFilter]);
 
   async function handleToggle(t) {
-    const project = activeProjects.find((p) => p._docId === t.projectId);
-    if (!project) return;
-    const phase = (project.phases || []).find((ph) => ph.id === t.phaseId);
-    if (!phase) return;
-    const tasks = (phase.tasks || []).map((tk) =>
-      tk.id === t.id ? { ...tk, done: !tk.done } : tk,
-    );
-    await updatePhase(t.projectId, t.phaseId, { tasks });
+    await toggleTask(t.projectId, t.phaseId, t.id);
   }
 
   async function handleAssigneeChange(t, assignee) {

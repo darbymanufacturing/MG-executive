@@ -40,12 +40,27 @@ const NUMERIC = {
   revenue_days: ['total_paid_revenue', 'total_trips', 'unique_users_count', 'unique_vehicles_count'],
 };
 
+// Per-column integer scale factor for checksums (must match rechunk-sql.mjs).
+const SCALE = {
+  lat: 1e7, lon: 1e7,             // 7 decimal places — sub-cm precision
+  cost: 100,                       // cents
+  distance_km: 1e4,                // 4 dp
+  duration_minutes: 100,
+  battery_level: 100,
+  total_paid_revenue: 100,
+  total_trips: 1, unique_users_count: 1, unique_vehicles_count: 1,
+};
+const DEFAULT_SCALE = 1000; // fallback for any unlisted column
+
 // Pull the JSON row array out of one exported .sql file (between the $omni$ markers).
 function rowsFromSql(text) {
-  const start = text.indexOf('$omni$');
-  const end = text.lastIndexOf('$omni$');
-  if (start < 0 || end <= start) throw new Error('no $omni$ markers');
-  const json = text.slice(start + 6, end); // the "[ ... ]" array
+  const openMatch = /\$omni\$\[/.exec(text);
+  const closeMatch = /\]\$omni\$/.exec(text);
+  if (!openMatch || !closeMatch || closeMatch.index <= openMatch.index) {
+    throw new Error('no $omni$ markers');
+  }
+  // Slice from the '[' through the ']' to get the full JSON array.
+  const json = text.slice(openMatch.index + 6, closeMatch.index + 1);
   return JSON.parse(json);
 }
 
@@ -72,22 +87,21 @@ async function main() {
     for (let i = 0; i < rows.length; i += 500) {
       const batch = rows.slice(i, i + 500);
       const { error } = await sb.from(table).upsert(batch, { onConflict: 'source_doc_id', ignoreDuplicates: true });
-      if (error) { console.error(`  ✗ ${table}: ${error.message}`); process.exit(1); }
+      if (error) { console.error(`  ✗ ${table}: ${error.message} | code=${error.code ?? ''} | details=${error.details ?? ''} | hint=${error.hint ?? ''}`); process.exit(1); }
       upserted += batch.length;
       process.stdout.write(`\r  ${table}: ${upserted}/${rows.length}`);
     }
 
-    // Checksums (match rechunk-sql.mjs: round(sum(col)*1000)).
+    // Checksums (match rechunk-sql.mjs: round(sum(col)×SCALE[col])).
     const sums = {};
     for (const c of NUMERIC[table] || []) {
-      sums[c] = rows.reduce((s, r) => s + Math.round((r[c] == null || r[c] === '' ? 0 : Number(r[c])) * 1000), 0);
+      sums[c] = rows.reduce((s, r) => s + Math.round((r[c] == null || r[c] === '' ? 0 : Number(r[c])) * (SCALE[c] ?? DEFAULT_SCALE)), 0);
     }
     const ids = new Set(rows.map((r) => r.source_doc_id));
     console.log(`\r  ✓ ${table}: ${rows.length} rows upserted (${ids.size} distinct ids)` +
-      (Object.keys(sums).length ? `  checksums×1000 ${JSON.stringify(sums)}` : ''));
+      (Object.keys(sums).length ? `  checksums×scale ${JSON.stringify(sums)}` : ''));
   }
-  console.log('\nDone. Verify in Postgres with the matching `select count(*) … round(sum()*1000)` query.\n');
-  process.exit(0);
+  console.log('\nDone. Verify in Postgres with the matching `select count(*) … round(sum()×scale)` query.\n');
 }
 
-main().catch((e) => { console.error('\n❌ load failed:', e.message); process.exit(1); });
+main().catch((e) => { console.error('\n❌ load failed:', e.code ?? '', e.message, e.details ?? '', e.hint ?? ''); process.exit(1); });

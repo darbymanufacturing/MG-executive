@@ -28,4 +28,25 @@ describe('orgDocId', () => {
     expect(() => orgDocId(null, '70055')).toThrow(/orgId is required/);
     expect(() => orgDocId('', '70055')).toThrow(/orgId is required/);
   });
+
+  // BUG #462 — tail guard: empty/undefined parts must not produce a bare `${orgId}_`
+  it('throws when called with no parts (tail would be bare empty string)', () => {
+    expect(() => orgDocId('acme')).toThrow(/tail must be non-empty/);
+  });
+
+  it('throws when called with a single undefined part', () => {
+    expect(() => orgDocId('acme', undefined)).toThrow(/tail must be non-empty/);
+  });
+
+  it('throws when called with multiple undefined parts', () => {
+    expect(() => orgDocId('acme', undefined, undefined)).toThrow(/tail must be non-empty/);
+  });
+
+  it('throws when called with a single empty-string part', () => {
+    expect(() => orgDocId('acme', '')).toThrow(/tail must be non-empty/);
+  });
+
+  it('returns the expected key for a valid single-part call (regression guard)', () => {
+    expect(orgDocId('acme', '70055')).toBe('acme_70055');
+  });
 });

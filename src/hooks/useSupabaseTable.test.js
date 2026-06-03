@@ -73,14 +73,25 @@ describe('mapRow', () => {
 
   it('handles null and empty data', () => {
     expect(mapRow(null)).toBeNull();
-    expect(mapRow({ source_doc_id: 'x' })).toEqual({ _docId: 'x' });
+    expect(mapRow({ source_doc_id: 'x' })).toBeNull(); // undefined data → null (BUG #392 fix)
   });
 
-  // BUG #392 — explicit data:null must be treated like missing data (not crash).
-  it('handles explicit data:null gracefully (BUG #392)', () => {
-    // data ?? {} → spread of {} → only _docId surfaces, no crash.
-    const result = mapRow({ source_doc_id: 'x', data: null });
-    expect(result).toEqual({ _docId: 'x' });
+  // BUG #392 — explicit data:null must return null, not a schema-incomplete object.
+  it('handles explicit data:null — returns null (BUG #392 fix)', () => {
+    expect(mapRow({ source_doc_id: 'x', data: null })).toBeNull();
+  });
+
+  // BUG #392 — a page fetch result containing a null-data row must be filtered out.
+  it('null-data rows are filtered from page results (regression for .filter(Boolean) on line 129)', () => {
+    const rows = [
+      { source_doc_id: 'a', data: { scooterId: 'S1' } },
+      { source_doc_id: 'b', data: null },                   // null-data: must be dropped
+      { source_doc_id: 'c', data: { scooterId: 'S3' } },
+    ];
+    const result = rows.map(mapRow).filter(Boolean);
+    expect(result).toHaveLength(2);
+    expect(result[0]._docId).toBe('a');
+    expect(result[1]._docId).toBe('c');
   });
 
   it('drops the snake_case typed columns — only data + _docId surface', () => {
@@ -96,9 +107,12 @@ describe('OP_MAP', () => {
   it('maps Firestore where-ops to supabase-js filter methods', () => {
     expect(OP_MAP['==']).toBe('eq');
     expect(OP_MAP['!=']).toBe('neq');
+    expect(OP_MAP['>']).toBe('gt');       // ADD — was missing (BUG #463)
     expect(OP_MAP['>=']).toBe('gte');
     expect(OP_MAP['<']).toBe('lt');
+    expect(OP_MAP['<=']).toBe('lte');     // ADD — was missing (BUG #463)
     expect(OP_MAP.in).toBe('in');
+    expect(Object.keys(OP_MAP)).toHaveLength(7); // ADD — locks enumeration (BUG #463)
   });
 });
 
@@ -255,13 +269,20 @@ describe('toSupabaseRow', () => {
     expect(row.action).toBe('Deploy');
   });
 
-  // BUG #465 — sprWeather mapping test
-  it('maps a sprWeather doc to typed columns', () => {
-    const doc = { date: '2026-05-01', city: 'Nafplio', tempMax: 28.5 };
+  // BUG #465 / BUG #388 — sprWeather mapping test (expanded to cover climate fields)
+  it('maps a sprWeather doc to typed columns including climate fields (#388)', () => {
+    const doc = {
+      date: '2026-05-01', city: 'Nafplio',
+      isRainy: true, totalRainMm: 3.2, weatherCode: 61, temperature: 18.5,
+    };
     const row = toSupabaseRow('sprWeather', 'org1', 'org1_weather_001', doc);
     expect(row.weather_date).toBe('2026-05-01');
     expect(row.city).toBe('Nafplio');
-    expect(row.data.tempMax).toBe(28.5); // extra fields preserved in data blob
+    expect(row.is_rainy).toBe(true);
+    expect(row.total_rain_mm).toBe(3.2);
+    expect(row.weather_code).toBe(61);
+    expect(row.temperature_c).toBe(18.5);
+    expect(row.data.isRainy).toBe(true); // full doc still preserved in data blob
   });
 });
 

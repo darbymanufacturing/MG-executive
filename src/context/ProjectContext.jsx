@@ -300,6 +300,20 @@ export function ProjectProvider({ children }) {
     });
   }, []);
 
+  // ── Task toggle (bug #243 — atomic transaction, avoids stale read-modify-write) ──
+  const toggleTask = useCallback(async (projectId, phaseId, taskId) => {
+    await orgTransaction(PROJECTS_COL, projectId, (data) => {
+      const phases = (data.phases || []).map((ph) => {
+        if (ph.id !== phaseId) return ph;
+        const tasks = (ph.tasks || []).map((tk) =>
+          tk.id === taskId ? { ...tk, done: !tk.done } : tk,
+        );
+        return { ...ph, tasks };
+      });
+      return { phases };
+    });
+  }, []);
+
   // ── Task assignee ─────────────────────────────────────────────────────────
   const setTaskAssignee = useCallback(async (docId, phaseId, taskId, assignee) => {
     await orgTransaction(PROJECTS_COL, docId, (data) => {
@@ -407,7 +421,7 @@ export function ProjectProvider({ children }) {
     addDecision,
     addPowEntry,
     addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
-    setTaskAssignee,
+    toggleTask, setTaskAssignee,
     promotePhaseToProject, linkProjects, unlinkProjects,
     toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
     addGate, updateGate, deleteGate,
@@ -421,7 +435,7 @@ export function ProjectProvider({ children }) {
     addBlocker, resolveBlocker, deleteBlocker, toggleBlocker,
     addUpdate, addDecision, addPowEntry,
     addBrainstormIdea, deleteBrainstormIdea, updateBrainstormIdea,
-    setTaskAssignee,
+    toggleTask, setTaskAssignee,
     promotePhaseToProject, linkProjects, unlinkProjects,
     toggleMilestone, addMilestone, deleteMilestone, updateMilestone,
     addGate, updateGate, deleteGate,

@@ -18,7 +18,7 @@
  * agent's context; load it via the keyed backfill script instead).
  */
 import admin from 'firebase-admin';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { toSupabaseRow, SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
@@ -108,8 +108,6 @@ function normalizeDates(row, cols) {
   return row;
 }
 
-const pad = (n) => String(n).padStart(2, '0');
-
 function buildSql(table, rows) {
   const cols = COLS[table];
   const list = cols.map(([n]) => n).join(', ');
@@ -127,9 +125,9 @@ on conflict (source_doc_id) do nothing;
 async function main() {
   initAdmin();
   const db = admin.firestore();
-  const now = new Date();
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const dir = resolve(process.cwd(), 'backups', `supabase-sql-${stamp}`);
+  if (existsSync(dir)) throw new Error(`Output dir already exists: ${dir}`);
   mkdirSync(dir, { recursive: true });
 
   console.log(`\nExporting → ${dir}\n  org_id=${ORG_ID}  batch=${BATCH}  collections=${ONLY.join(', ')}\n`);
@@ -167,12 +165,11 @@ async function main() {
   console.log(`  (consumed ~${total} Firestore reads against the Spark 50K/day quota)`);
   console.log(`  Next: run each .sql via the Supabase MCP execute_sql (idempotent, ON CONFLICT DO NOTHING).\n`);
   console.log(`OUTDIR=${dir}`);
-  process.exit(0);
 }
 
 // Export pure utilities for unit testing (importers get no Firebase side-effects).
 export { normalizeDates };
 
 if (process.argv[1] === __filename) {
-  main().catch((e) => { console.error('\n❌ export failed:', e.message); process.exit(1); });
+  main().catch((e) => { console.error('\n❌ export failed:', e.code ?? '', e.message, e.details ?? '', e.hint ?? ''); process.exit(1); });
 }

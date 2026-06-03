@@ -23,5 +23,8 @@ export function orgDocId(orgId, ...parts) {
     .map((p) => String(p ?? ''))
     .join('_')
     .replace(FORBIDDEN, '_');
+  if (!tail.replace(/_/g, '').trim()) {
+    throw new Error('orgDocId: tail must be non-empty (received only empty/undefined parts).');
+  }
   return `${orgId}_${tail}`;
 }

@@ -17,7 +17,6 @@ import Modal from '../components/Shared/Modal.jsx';
 import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
-import { ScooterConfigProvider } from '../context/ScooterConfigContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
@@ -662,10 +661,9 @@ export default function Settings() {
           <p className={styles.sectionDesc}>
             Configure the tabs shown on each scooter's detail page. Drag to reorder, toggle to show/hide.
           </p>
-          {/* #290 — ScooterTabsConfig needs ScooterConfigProvider; /settings is outside ScooterScopedRoutes */}
-          <ScooterConfigProvider>
-            <ScooterTabsConfig />
-          </ScooterConfigProvider>
+          {/* ScooterConfigProvider is now at the admin root (App.jsx — Bug #356).
+              ScooterTabsConfig consumes it from there; no local wrapper needed. */}
+          <ScooterTabsConfig />
         </section>
 
         {/* Accountant / Integrations */}
@@ -977,9 +975,13 @@ function HoppSyncSection() {
   // eslint-disable-next-line react-hooks/purity
   const ageMin = lastTs ? Math.floor((Date.now() - lastTs.getTime()) / 60000) : null;
   const allOk = recentSyncs.length > 0 && recentSyncs.slice(0, 3).every((s) => s.ok);
+  // Bug #372: Red only when ALL 3 most-recent syncs failed (not on a single failure).
+  // A single transient failure resolves to amber (allOk=false but not allFailed),
+  // matching the spec: red = "consistently broken", amber = "degraded".
+  const allFailed = recentSyncs.length > 0 && recentSyncs.slice(0, 3).every((s) => !s.ok);
   const statusColor = !lastTs
     ? 'var(--fg-muted)'
-    : !lastSync.ok ? 'var(--status-red)'
+    : allFailed ? 'var(--status-red)'
     : ageMin > 120 ? 'var(--status-amber)'
     : allOk ? 'var(--status-green)' : 'var(--status-amber)';
 

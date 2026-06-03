@@ -111,8 +111,19 @@ export default async function handler(req, res) {
       // 1b. UID-scoped collections (briefs, bankTransactions) — never received an orgId stamp
       //     (BUG #397/#400). Purge by createdByUid for every member of this org.
       //     Firestore `in` supports up to 30 items — chunk memberUids if needed.
-      const membersForUidSnap = await db.collection('users').where('orgId', '==', orgId).get();
-      const memberUids = membersForUidSnap.docs.map((d) => d.id);
+      //     Page the users collection to avoid a single unbounded .get() (BUG #457).
+      const memberDocs = [];
+      let memberCursor = null;
+      while (true) {
+        let q = db.collection('users').where('orgId', '==', orgId).limit(BATCH_SIZE);
+        if (memberCursor) q = q.startAfter(memberCursor);
+        const snap = await q.get();
+        if (snap.empty) break;
+        snap.docs.forEach((d) => memberDocs.push(d));
+        memberCursor = snap.docs[snap.docs.length - 1];
+        if (snap.size < BATCH_SIZE) break;
+      }
+      const memberUids = memberDocs.map((d) => d.id);
 
       if (memberUids.length > 0) {
         // Split into groups of 30 (Firestore `in` limit).
@@ -159,17 +170,26 @@ export default async function handler(req, res) {
       await cfgBatch.commit();
       deletesThisRun += CONFIG_SINGLETONS.length;
 
-      // 3. Members: users/{uid} docs + Auth accounts (reuse membersForUidSnap from step 1b).
-      for (const m of membersForUidSnap.docs) {
-        await m.ref.delete();
-        await getAuth().deleteUser(m.id).catch(() => {}); // best-effort
-        deletesThisRun += 1;
+      // 3. Members: users/{uid} docs + Auth accounts (reuse memberDocs from step 1b).
+      //    One batch write for all user docs, then parallel Auth deletes in chunks of 25
+      //    to avoid serial HTTP round-trips (BUG #457: 500 members × 200 ms ≈ 100 s > 60 s limit).
+      const AUTH_CONCURRENCY = 25;
+      const memberBatch = db.batch();
+      memberDocs.forEach((m) => memberBatch.delete(m.ref));
+      await memberBatch.commit();
+      deletesThisRun += memberDocs.length;
+
+      for (let i = 0; i < memberDocs.length; i += AUTH_CONCURRENCY) {
+        const chunk = memberDocs.slice(i, i + AUTH_CONCURRENCY);
+        await Promise.allSettled(
+          chunk.map((m) => getAuth().deleteUser(m.id).catch(() => {}))
+        );
       }
 
       // 4. Finally the org doc itself.
       await orgDoc.ref.delete();
       deletesThisRun += 1;
-      report.push({ orgId, status: 'purged', deleted: orgDeletes + membersForUidSnap.size + 1 });
+      report.push({ orgId, status: 'purged', deleted: orgDeletes + memberDocs.length + 1 });
     }
 
     return res.status(200).json({

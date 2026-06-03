@@ -133,12 +133,13 @@ function RouteErrorBoundary({ children, ...props }) {
  * (e.g. /pme → /scooters) does NOT remount them; only leaving the group does.
  */
 function ScooterScopedRoutes() {
+  // ScooterConfigProvider has been hoisted to the admin root provider chain
+  // (Bug #356 / Bug #291) — TelemetryProvider + TripProvider remain here
+  // because they carry heavy listeners scoped to the /scooters* routes.
   return (
     <TelemetryProvider>
       <TripProvider>
-        <ScooterConfigProvider>
-          <ErrorBoundary><Outlet /></ErrorBoundary>
-        </ScooterConfigProvider>
+        <ErrorBoundary><Outlet /></ErrorBoundary>
       </TripProvider>
     </TelemetryProvider>
   );
@@ -317,9 +318,11 @@ function AppShell() {
         </main>
       </div>
 
-      {/* Global overlays */}
-      <DiaryBubble />
-      <CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} />
+      {/* Global overlays — each wrapped in their own ErrorBoundary so a crash in
+          an always-on overlay cannot reach the AppShell-level boundary and unmount
+          the whole shell (Bug #291). */}
+      <ErrorBoundary><DiaryBubble /></ErrorBoundary>
+      <ErrorBoundary><CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} /></ErrorBoundary>
     </div>
   );
 }
@@ -408,9 +411,15 @@ export default function App() {
                                     <InboxProvider>
                                       <NotificationProvider>
                                         <DiaryProvider>
-                                          <ErrorBoundary>
-                                            <AppShell />
-                                          </ErrorBoundary>
+                                          {/* ScooterConfigProvider hoisted here (Bug #356/#291):
+                                              single config-doc listener shared by /scooters* AND
+                                              /settings, eliminates the duplicate local wrapper in
+                                              Settings.jsx. */}
+                                          <ScooterConfigProvider>
+                                            <ErrorBoundary>
+                                              <AppShell />
+                                            </ErrorBoundary>
+                                          </ScooterConfigProvider>
                                         </DiaryProvider>
                                       </NotificationProvider>
                                     </InboxProvider>

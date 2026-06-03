@@ -74,8 +74,17 @@ export function useSupabaseCollectionLive(table, opts = {}) {
   const [hasMore, setHasMore] = useState(false);
 
   // Fail loud (ADR-0003 parity): org resolved but absent → never query unscoped.
+  // Bug #291: Return error state instead of throwing synchronously during render.
+  // A sync throw during an ErrorBoundary reset cycle cascades to the outermost
+  // boundary whose onReset calls window.location.reload() — killing all listeners.
   if (!orgLoading && !orgId && hasUser) {
-    throw new Error(`useSupabaseCollectionLive('${table}') requires an orgId — none in context.`);
+    return {
+      items: [],
+      loading: false,
+      error: new Error(`useSupabaseCollectionLive('${table}') requires an orgId — none in context.`),
+      loadMore: () => {},
+      hasMore: false,
+    };
   }
 
   const [orderField, orderDir] = Array.isArray(orderByOpt)
@@ -147,7 +156,7 @@ export function useSupabaseCollectionLive(table, opts = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, orgId, orgLoading, orderKey, whereKey, pageLimit]);
 
-  const items = useMemo(() => rawItems.map(mapRow), [rawItems]);
+  const items = useMemo(() => rawItems.map(mapRow).filter(Boolean), [rawItems]);
   const loadMore = useCallback(() => setPageLimit((p) => p + baseLimit), [baseLimit]);
 
   return { items, loading, error, loadMore, hasMore };
@@ -159,8 +168,13 @@ export function useSupabaseDocLive(table, sourceDocId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Bug #291: Return error state instead of throwing synchronously during render.
   if (!orgLoading && !orgId && hasUser) {
-    throw new Error(`useSupabaseDocLive('${table}') requires an orgId — none in context.`);
+    return {
+      item: null,
+      loading: false,
+      error: new Error(`useSupabaseDocLive('${table}') requires an orgId — none in context.`),
+    };
   }
 
   useEffect(() => {

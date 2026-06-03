@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase.js';
 import { useToast } from '../context/ToastContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { friendlyFirestoreError } from '../utils/firestoreWrite.js';
 
 /**
@@ -22,6 +23,7 @@ import { friendlyFirestoreError } from '../utils/firestoreWrite.js';
  */
 export default function useHoppSync() {
   const { success, error: errorToast } = useToast();
+  const { getIdToken } = useAuth();
   const [syncing, setSyncing] = useState(false);
   const [recentSyncs, setRecentSyncs] = useState([]);
   const [lastSync, setLastSync] = useState(null);
@@ -56,7 +58,7 @@ export default function useHoppSync() {
     }
     setSyncing(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await getIdToken();
       const res = await fetch('/api/cron-hopp-sync', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${idToken}` },

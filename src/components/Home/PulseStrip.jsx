@@ -99,8 +99,12 @@ export default function PulseStrip() {
     .filter(c => c.startDate?.startsWith(monthKey))
     .reduce((s, c) => s + (c.amount || 0), 0);
 
-  /* Active fleet: from CostContext config, never hardcoded */
-  const activeFleet = config?.fleetSize ?? '—';
+  /* Active fleet: live count of scooters with status === 'Active' from MaintenanceContext */
+  const activeScooterCount = maintenanceCtx?.scooters?.filter(s => s.status === 'Active').length;
+  const totalFleet = config?.fleetSize;
+  const activeFleet = activeScooterCount != null
+    ? (totalFleet != null ? `${activeScooterCount} / ${totalFleet}` : String(activeScooterCount))
+    : '—';
 
   /* Open tickets */
   const openTickets = maintenanceCtx?.tickets?.filter(

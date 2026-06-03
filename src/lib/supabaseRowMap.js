@@ -110,8 +110,16 @@ const TYPED_COLUMNS = Object.freeze({
     action: d.action ?? null,
   }),
   sprWeather: (d) => ({
-    weather_date: d.date ?? null,
-    city: d.city ?? null,
+    weather_date:  d.date ?? null,
+    city:          d.city ?? null,
+    // Bug #388: add the four climate typed columns so analytics queries can
+    // use indexed SQL columns instead of slow (data->>'field')::type JSONB casts.
+    // Field names match the actual Open-Meteo pipeline (openMeteo.js:59-73):
+    // temperature = mean °C, totalRainMm = precipitation sum, weatherCode = WMO code.
+    is_rainy:      bool(d.isRainy),
+    total_rain_mm: num(d.totalRainMm),
+    weather_code:  num(d.weatherCode),
+    temperature_c: num(d.temperature),
   }),
   revenue: (d) => ({
     revenue_date: d.date ?? null,

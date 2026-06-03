@@ -167,12 +167,24 @@ export default async function handler(req, res) {
   // a33f45a because #315 returned NOT_AUTHORIZED. #315 is now RESOLVED (2026-05-29):
   // the root cause was our own bug (missing getVehicleByCode() lookup) not a Hopp
   // privilege gap. Re-enabled below (per-scooter, sequential). See #368.
+
+  // BUG #358 — each callHoppTool's per-call timeoutMs must be subordinate to the
+  // Vercel maxDuration=60 s ceiling. Two sequential 45 s calls would budget 90 s
+  // worst-case, causing the runtime to kill the function before the second call
+  // even fires its AbortController. remainingMs() shrinks each call's timeout to
+  // whatever wall-clock time is left, with a 5 000 ms floor so the call can at
+  // least attempt and report a timeout error gracefully.
+  const CRON_BUDGET_MS = (maxDuration - 2) * 1000; // 58 000 ms — 2 s headroom for finalize/write
+  function remainingMs() {
+    return Math.max(5000, CRON_BUDGET_MS - (Date.now() - startedAt));
+  }
+
   const range = { since: since.toISOString(), until: until.toISOString() };
   const aggregated = { trips: [], events: [], tickets: [], errors: [] };
   let pullsOk = 0;
 
   try {
-    const r = await callHoppTool('list_trips', range);
+    const r = await callHoppTool('list_trips', range, { timeoutMs: remainingMs() });
     aggregated.trips = Array.isArray(r?.rows) ? r.rows : [];
     pullsOk++;
     if (Array.isArray(r?.errors) && r.errors.length) {
@@ -183,7 +195,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const r = await callHoppTool('list_repair_events', range);
+    const r = await callHoppTool('list_repair_events', range, { timeoutMs: remainingMs() });
     aggregated.tickets = Array.isArray(r?.tickets) ? r.tickets : [];
     pullsOk++;
     if (Array.isArray(r?.errors) && r.errors.length) {
@@ -204,7 +216,7 @@ export default async function handler(req, res) {
     let eventsOk = 0;
     for (const [scooterId] of scooterCityMap) {
       try {
-        const r = await callHoppTool('list_status_events', { scooterId, ...range });
+        const r = await callHoppTool('list_status_events', { scooterId, ...range }, { timeoutMs: remainingMs() });
         const evts = Array.isArray(r?.events) ? r.events : [];
         const city = scooterCityMap.get(scooterId) || null;
         aggregated.events.push(...evts.map((evt) => ({ ...evt, city, scooterId })));

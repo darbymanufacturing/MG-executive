@@ -544,3 +544,135 @@ describe('cron-hopp-sync — BUG #350 rollup errors appear in response', () => {
     expect(rollupErrs[1].error).toContain('Unknown scooter: 88888');
   });
 });
+
+// ── BUG #358 — remainingMs() budget-pool caps per-call timeoutMs ──────────────
+//
+// Vercel maxDuration=60 s. Two sequential 45 s callHoppTool defaults → worst-case
+// 90 s budget, causing the runtime to kill the function before the second call
+// even fires its AbortController. remainingMs() subordinates each call's timeout
+// to remaining wall-clock budget (CRON_BUDGET_MS = 58 000 ms), with a 5 000 ms floor.
+//
+// Strategy: spy on Date.now() so we can simulate elapsed wall-clock time, capture
+// the `timeoutMs` option passed to each callHoppTool invocation, then assert the
+// math is correct.
+
+describe('cron-hopp-sync — BUG #358 remainingMs() caps per-call timeoutMs', () => {
+  let getDb;
+  let callHoppTool;
+
+  const CRON_BUDGET_MS = (60 - 2) * 1000; // 58 000 ms — matches production constant
+
+  function makeStandardFakeDb(getDbMock) {
+    const selectSpy = vi.fn().mockReturnThis();
+    const getMock = vi.fn().mockResolvedValue({
+      docs: [
+        { id: 'doc1', data: () => ({ scooterId: 's1', city: 'Nafplion', orgId: 'org-a' }) },
+      ],
+    });
+    const fakeDb = {
+      collection: vi.fn((name) => {
+        if (name === 'users') {
+          return { doc: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ role: 'admin' }) }) })) };
+        }
+        if (name === 'syncLogs') {
+          return { doc: vi.fn(() => ({ set: vi.fn().mockResolvedValue() })), add: vi.fn().mockResolvedValue({}) };
+        }
+        return { select: selectSpy, get: getMock, add: vi.fn().mockResolvedValue({}) };
+      }),
+      batch: vi.fn(() => ({ set: vi.fn(), commit: vi.fn().mockResolvedValue() })),
+    };
+    getDbMock.mockReturnValue(fakeDb);
+    return fakeDb;
+  }
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ getDb } = await import('../_lib/firebase-admin.js'));
+    ({ callHoppTool } = await import('../_lib/hopp-mcp-client.js'));
+    process.env.CRON_SECRET = 'test-cron-secret';
+    process.env.OMNI_ORG_ID = 'org-a';
+  });
+
+  afterEach(() => {
+    delete process.env.OMNI_ORG_ID;
+    delete process.env.CRON_SECRET;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  test('second callHoppTool gets timeoutMs <= 10 000 when first call consumed 50 000 ms', async () => {
+    const startTs = 1_000_000;
+    // Simulate: handler start = startTs, first call = startTs + 50 000 ms elapsed
+    // so remaining = 58 000 - 50 000 = 8 000 ms (above 5 000 ms floor).
+    let callCount = 0;
+    const dateSpy = vi.spyOn(Date, 'now');
+    dateSpy.mockImplementation(() => {
+      // 0 = initial startedAt capture; 1+ = subsequent calls in remainingMs()
+      // We let the first remainingMs() call see ~0 ms elapsed (full budget),
+      // the second see ~50 000 ms elapsed.
+      if (callCount === 0) {
+        callCount++;
+        return startTs; // this is the startedAt assignment
+      }
+      if (callCount === 1) {
+        callCount++;
+        return startTs; // first remainingMs() call → list_trips → ~full budget
+      }
+      // All subsequent calls (list_repair_events, list_status_events) see 50 000 ms elapsed
+      return startTs + 50_000;
+    });
+
+    const capturedTimeouts = [];
+    callHoppTool.mockImplementation(async (_tool, _args, opts) => {
+      capturedTimeouts.push(opts?.timeoutMs ?? null);
+      return { rows: [], tickets: [], events: [], errors: [] };
+    });
+
+    const { rollupTripsToRevenue } = await import('../../src/utils/hoppSyncRollup.js');
+    rollupTripsToRevenue.mockReturnValue({ rows: [], errors: [] });
+
+    makeStandardFakeDb(getDb);
+
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
+    await handlerFn(makeFakeReq(), makeFakeRes());
+
+    // capturedTimeouts[0] = list_trips, capturedTimeouts[1] = list_repair_events
+    // capturedTimeouts[2] = list_status_events for scooter 's1'
+    expect(capturedTimeouts.length).toBeGreaterThanOrEqual(2);
+    // Second call (list_repair_events): 58 000 - 50 000 = 8 000 ms ≤ 10 000 ms
+    expect(capturedTimeouts[1]).toBeLessThanOrEqual(10_000);
+    // And it must be above the 5 000 ms floor
+    expect(capturedTimeouts[1]).toBeGreaterThanOrEqual(5_000);
+  });
+
+  test('floor: when elapsed time exceeds CRON_BUDGET_MS, remainingMs() returns 5 000 ms', async () => {
+    const startTs = 1_000_000;
+    let callCount = 0;
+    const dateSpy = vi.spyOn(Date, 'now');
+    dateSpy.mockImplementation(() => {
+      if (callCount === 0) { callCount++; return startTs; } // startedAt
+      // Every subsequent remainingMs() call sees 70 000 ms elapsed (> 58 000 ms budget)
+      return startTs + 70_000;
+    });
+
+    const capturedTimeouts = [];
+    callHoppTool.mockImplementation(async (_tool, _args, opts) => {
+      capturedTimeouts.push(opts?.timeoutMs ?? null);
+      return { rows: [], tickets: [], events: [], errors: [] };
+    });
+
+    const { rollupTripsToRevenue } = await import('../../src/utils/hoppSyncRollup.js');
+    rollupTripsToRevenue.mockReturnValue({ rows: [], errors: [] });
+
+    makeStandardFakeDb(getDb);
+
+    const { default: handlerFn } = await import('../_cron-hopp-sync.js');
+    await handlerFn(makeFakeReq(), makeFakeRes());
+
+    // All calls should receive exactly the floor value (5 000 ms), never negative
+    expect(capturedTimeouts.length).toBeGreaterThanOrEqual(1);
+    for (const t of capturedTimeouts) {
+      expect(t).toBe(5_000);
+    }
+  });
+});

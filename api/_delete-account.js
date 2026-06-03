@@ -89,13 +89,29 @@ export default async function handler(req, res) {
         if (isOwner) {
           return res.status(400).json({ error: 'The owner cannot leave the org. Transfer ownership or delete the organization instead.' });
         }
-        // Remove the member: delete their profile doc + their Auth account.
-        await db.collection('users').doc(authUser.uid).delete();
-        await getAuth().deleteUser(authUser.uid).catch(() => {}); // best-effort; profile gone is the access cut
-        // Drop from the org members array if present.
-        if (org && Array.isArray(org.members)) {
-          await orgRef.update({ members: FieldValue.arrayRemove(authUser.uid) });
-        }
+        // Wrap both Firestore writes in a single transaction so they are atomic.
+        // If either write fails the transaction rolls back — we never end up with the
+        // user profile deleted but still listed in org.members (dangling member entry).
+        // Mirroring the same pattern used by the 'transfer' action (lines 117-134).
+        const meRef = db.collection('users').doc(authUser.uid);
+        await db.runTransaction(async (tx) => {
+          const [txOrgSnap, txMeSnap] = await Promise.all([
+            tx.get(orgRef),
+            tx.get(meRef),
+          ]);
+          if (!txMeSnap.exists) {
+            throw Object.assign(new Error('Your user profile was not found.'), { status: 404 });
+          }
+          // Drop from the org members array if present (re-read inside transaction for safety).
+          if (txOrgSnap.exists && Array.isArray(txOrgSnap.data().members)) {
+            tx.update(orgRef, { members: FieldValue.arrayRemove(authUser.uid) });
+          }
+          tx.delete(meRef);
+        });
+        // Auth deletion is a non-Firestore side effect — keep outside the transaction.
+        // The profile doc deletion (inside the transaction) is the actual access-control cut;
+        // Auth deletion is best-effort (orphaned Auth accounts without a profile are harmless).
+        await getAuth().deleteUser(authUser.uid).catch(() => {});
         return res.status(200).json({ ok: true, action: 'leave', message: 'You have been removed from the organization.' });
       }
 

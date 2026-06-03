@@ -1,5 +1,6 @@
 /**
- * Tests for the PII scrubber baked into initSentry's beforeSend callback.
+ * Tests for the PII scrubber baked into initSentry's beforeSend callback,
+ * and for setSentryUser (BUG #332).
  *
  * Strategy: mock @sentry/react so Sentry.init() captures its options object,
  * then force initSentry to run in "enabled" mode by setting the Vite env vars
@@ -9,9 +10,11 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 // --- capture the options passed to Sentry.init ---
 let capturedInit = null;
+const mockSetUser = vi.fn();
 
 vi.mock('@sentry/react', () => ({
   init: (options) => { capturedInit = options; },
+  setUser: (...args) => mockSetUser(...args),
 }));
 
 // Stub Vite env vars so sentry.js sees them when it evaluates import.meta.env.
@@ -22,7 +25,7 @@ vi.stubEnv('VITE_SENTRY_FORCE', 'true');
 // Reset the module registry so sentry.js is re-evaluated fresh with the stubbed env.
 vi.resetModules();
 
-const { initSentry } = await import('./sentry.js');
+const { initSentry, setSentryUser } = await import('./sentry.js');
 
 beforeAll(async () => {
   await initSentry();
@@ -112,5 +115,36 @@ describe('sentry beforeSend PII scrubber', () => {
     const result = runBeforeSend({ message: 'some error' });
     expect(result).not.toBeNull();
     expect(typeof result).toBe('object');
+  });
+});
+
+// ------------------------------------------------------------------
+// BUG #332 — setSentryUser regression tests
+// ------------------------------------------------------------------
+describe('setSentryUser', () => {
+  // After beforeAll (initSentry ran with VITE_SENTRY_FORCE=true), _sentryEnabled is true.
+  // We can test the "enabled" path directly in this describe block.
+
+  it('(a) calls Sentry.setUser({ id: uid }) when _sentryEnabled is true and uid is provided', async () => {
+    mockSetUser.mockClear();
+    await setSentryUser('uid123');
+    expect(mockSetUser).toHaveBeenCalledOnce();
+    expect(mockSetUser).toHaveBeenCalledWith({ id: 'uid123' });
+  });
+
+  it('(b) calls Sentry.setUser(null) on sign-out (uid is null)', async () => {
+    mockSetUser.mockClear();
+    await setSentryUser(null);
+    expect(mockSetUser).toHaveBeenCalledOnce();
+    expect(mockSetUser).toHaveBeenCalledWith(null);
+  });
+
+  it('(c) is a no-op and does NOT call Sentry.setUser when _sentryEnabled is false', async () => {
+    // Import a fresh module instance where initSentry has not been called.
+    vi.resetModules();
+    mockSetUser.mockClear();
+    const { setSentryUser: setSentryUserFresh } = await import('./sentry.js');
+    await setSentryUserFresh('uid456');
+    expect(mockSetUser).not.toHaveBeenCalled();
   });
 });

@@ -68,16 +68,22 @@ async function backfillCollection(db, sb, name) {
   let buffer = [];
   let last = null;
 
+  // Connectivity probe: verifies reachability, service-role RLS bypass, and that
+  // source_doc_id column exists. Runs in both dry-run and commit modes.
+  const { error: probeErr } = await sb.from(table).select('source_doc_id').limit(0);
+  if (probeErr) throw new Error(`[${name}→${table}] connectivity/schema probe failed: ${probeErr.message}`);
+
   const flush = async () => {
     if (!buffer.length) return;
     if (COMMIT) {
-      const { error } = await sb.from(table).upsert(buffer, {
+      const { error, count } = await sb.from(table).upsert(buffer, {
         onConflict: 'source_doc_id',
         ignoreDuplicates: true,
+        count: 'exact',
       });
-      if (error) throw new Error(`[${name}→${table}] upsert failed: ${error.message}`);
+      if (error) throw new Error(`[${name}→${table}] upsert failed: ${error.message} | code=${error.code ?? ''} | details=${error.details ?? ''} | hint=${error.hint ?? ''}`);
+      written += (count ?? 0);
     }
-    written += buffer.length;
     buffer = [];
   };
 
@@ -119,13 +125,12 @@ async function main() {
   console.log(`   collections:     ${names.join(', ')}\n`);
 
   const db = initFirestore();
-  const sb = COMMIT ? initSupabase() : null;
-  if (COMMIT && !sb) return;
+  const sb = initSupabase();
 
   const report = [];
   for (const name of names) {
     process.stdout.write(`   ${name} … `);
-    const r = await backfillCollection(db, COMMIT ? sb : { from: () => ({ upsert: async () => ({ error: null }) }) }, name);
+    const r = await backfillCollection(db, sb, name);
     report.push(r);
     console.log(`${r.total} docs → ${COMMIT ? `${r.written} upserted` : `${r.total} WOULD upsert`} into ${r.table}`);
   }
@@ -136,4 +141,4 @@ async function main() {
   console.log(`   (Read ~${grand} Firestore docs against the Spark 50K/day quota.)\n`);
 }
 
-main().catch((e) => { console.error('\n❌', e.message); process.exit(1); });
+main().catch((e) => { console.error('\n❌', e.code ?? '', e.message, e.details ?? '', e.hint ?? ''); process.exit(1); });

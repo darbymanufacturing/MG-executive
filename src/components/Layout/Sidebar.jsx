@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Inbox, Sparkles, Activity, Bell, Flag, Wrench,
@@ -92,6 +92,16 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
   const maintenanceCtx = useSafeMaintenance();
   const openIssueCount = (issueCtx?.issues ?? []).filter(i => i.status !== 'done').length;
   const activeCount = maintenanceCtx?.activeCount ?? 0;
+
+  // #299 — last-known-good cache so a transient provider null / post-crash
+  // re-subscription gap doesn't erase the badge entirely.
+  const lastIssueCount = useRef(0);
+  const lastActiveCount = useRef(0);
+  if (openIssueCount > 0) lastIssueCount.current = openIssueCount;
+  if (activeCount > 0) lastActiveCount.current = activeCount;
+  const displayIssueCount = openIssueCount > 0 ? openIssueCount : lastIssueCount.current;
+  const displayActiveCount = activeCount > 0 ? activeCount : lastActiveCount.current;
+
   const navigate = useNavigate();
 
   const handleSignOut = useCallback(async () => {
@@ -145,8 +155,8 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
 
         {/* Operations section */}
         <SidebarSection label="Operations" collapsed={collapsed}>
-          <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={openIssueCount > 0 ? openIssueCount : undefined} collapsed={collapsed} />
-          <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={activeCount > 0 ? activeCount : undefined} collapsed={collapsed} />
+          <NavItem to="/issues"      icon={Flag}          label="Issues"    badge={displayIssueCount > 0 ? displayIssueCount : undefined} collapsed={collapsed} />
+          <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={displayActiveCount > 0 ? displayActiveCount : undefined} collapsed={collapsed} />
           <NavItem to="/projects"    icon={ClipboardList} label="Projects"  collapsed={collapsed} />
           <NavItem to="/contractors" icon={Users}         label="Contractors" collapsed={collapsed} />
           <NavItem to="/war-room"    icon={Crosshair}     label="War Room"  collapsed={collapsed} />

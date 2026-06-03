@@ -121,3 +121,54 @@ describe('rechunk-sql — header/footer mismatch detection (BUG #417)', () => {
     expect((result.stderr + result.stdout).toLowerCase()).toMatch(/mismatch/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// BUG #438 — per-line JSON parse guard
+// ---------------------------------------------------------------------------
+describe('rechunk-sql — per-line JSON parse guard (BUG #438)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `rechunk-test-438-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  // -------------------------------------------------------------------------
+  // HAPPY PATH — each body line is valid JSON. Should exit 0 and produce chunks.
+  // -------------------------------------------------------------------------
+  it('exits 0 when all body lines are valid one-JSON-per-line rows', () => {
+    const rows = [
+      { org_id: 'org1', source_doc_id: 'trip001', cost: 5.5 },
+      { org_id: 'org1', source_doc_id: 'trip002', cost: 6.0 },
+      { org_id: 'org1', source_doc_id: 'trip003', cost: 7.0 },
+    ];
+    writeFileSync(join(tmpDir, `${TABLE}.000.sql`), buildSqlFile(rows));
+
+    const result = spawnRechunk(tmpDir);
+
+    expect(result.status).toBe(0);
+    const chunksDir = join(tmpDir, 'chunks');
+    const chunkFiles = readdirSync(chunksDir).filter((f) => f.startsWith(`${TABLE}.chunk-`));
+    expect(chunkFiles.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // BAD FORMAT PATH — a body line contains a multi-line pretty-printed fragment
+  // (not valid JSON on its own after comma-strip). Must exit 1 and print
+  // "not valid JSON" to stderr.
+  // -------------------------------------------------------------------------
+  it('exits 1 and prints "not valid JSON" when a body line is not complete JSON', () => {
+    // Inject a line that is only the opening brace of a pretty-printed object —
+    // it will not parse on its own.
+    const header = `insert into ${TABLE} (org_id, source_doc_id, cost)\nselect org_id, source_doc_id, cost\nfrom jsonb_to_recordset($omni$[`;
+    const footer = `]$omni$::jsonb) as x(org_id text, source_doc_id text, cost numeric)\non conflict (source_doc_id) do nothing;`;
+    // Deliberately broken: first line of a pretty-printed JSON object
+    const badBody = `{\n  "org_id": "org1",`;
+    writeFileSync(join(tmpDir, `${TABLE}.000.sql`), `${header}\n${badBody}\n${footer}\n`);
+
+    const result = spawnRechunk(tmpDir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/not valid JSON/);
+  });
+});

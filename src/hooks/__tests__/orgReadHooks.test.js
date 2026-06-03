@@ -53,11 +53,14 @@ describe('useOrgCollection', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('fails loud (throws) when the org resolved but is absent and user is signed in', () => {
+  it('fails loud via error state (does NOT throw) when the org resolved but is absent and user is signed in (#291)', () => {
     useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: true });
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => renderHook(() => useOrgCollection('costs'))).toThrow(/requires an orgId/);
-    spy.mockRestore();
+    const { result } = renderHook(() => useOrgCollection('costs'));
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.message).toMatch(/requires an orgId/);
+    expect(result.current.items).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(where).not.toHaveBeenCalled();
   });
 
   it('stays loading (no query) while the org is still resolving', () => {
@@ -97,11 +100,13 @@ describe('useOrgDoc', () => {
     expect(result.current.item).toBe(null);
   });
 
-  it('fails loud (throws) when the org resolved but is absent and user is signed in', () => {
+  it('fails loud via error state (does NOT throw) when the org resolved but is absent and user is signed in (#291)', () => {
     useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: true });
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => renderHook(() => useOrgDoc('config', 'whatever'))).toThrow(/requires an orgId/);
-    spy.mockRestore();
+    const { result } = renderHook(() => useOrgDoc('config', 'whatever'));
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.message).toMatch(/requires an orgId/);
+    expect(result.current.item).toBe(null);
+    expect(result.current.loading).toBe(false);
   });
 
   it('does NOT throw (stays loading) when orgId is null but no user is signed in yet (bug #454)', () => {

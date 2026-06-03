@@ -28,6 +28,21 @@ export function isSentryEnabled() {
   return _sentryEnabled;
 }
 
+/**
+ * Set (or clear) the Sentry user context so every subsequent event is
+ * attributed to the signed-in Firebase uid. Call on every auth-state change:
+ *   - sign-in  → setSentryUser(firebaseUser.uid)
+ *   - sign-out → setSentryUser(null)
+ *
+ * No-ops when Sentry is not initialised (avoids a dynamic import on dev builds
+ * that have no DSN).
+ */
+export async function setSentryUser(uid) {
+  if (!_sentryEnabled) return;
+  const Sentry = await import('@sentry/react');
+  Sentry.setUser(uid ? { id: uid } : null);
+}
+
 export async function initSentry() {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   const force = import.meta.env.VITE_SENTRY_FORCE === 'true';
@@ -58,6 +73,7 @@ export async function initSentry() {
 
   Sentry.init({
     dsn,
+    release: import.meta.env.VITE_RELEASE_TAG || undefined,
     environment: import.meta.env.MODE,
     sendDefaultPii: false,
     ignoreErrors: [

@@ -9,9 +9,11 @@
  *     where: [['active', '==', true]], // extra clauses, ANDed with the orgId filter
  *   });
  *
- * INVARIANT (ADR-0003): throws synchronously once the org has resolved but is
- * absent — a forgotten org context fails loud, never silently returns unscoped or
- * empty data. While the org is still resolving it returns `loading: true`.
+ * INVARIANT (ADR-0003): once the org has resolved but is absent (a user IS signed in),
+ * it fails loud via an ERROR STATE — `error` is set and no data is returned — but does
+ * NOT throw (#291: a synchronous throw reached the outermost ErrorBoundary, whose reset
+ * reloaded the page and tore down every listener). Matches the Supabase twin. While the
+ * org is still resolving it returns `loading: true`.
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -69,15 +71,20 @@ function useFirestoreCollection(collectionName, opts = {}) {
   const [pageLimit, setPageLimit] = useState(baseLimit);
   const [hasMore, setHasMore] = useState(false);
 
-  // Fail loud (ADR-0003): org resolved but absent → never query unscoped.
-  // Guard with hasUser: during the transient sign-in race where userProfile hasn't
-  // populated yet (orgId=null, hasUser=false), suppress the throw and stay loading
-  // (bug #454). Only throw when a real user is signed in but has no orgId.
+  // #291: org resolved-but-absent (user signed in) fails loud via an ERROR STATE — never
+  // a synchronous throw (a throw reached the outermost ErrorBoundary whose reset reloaded
+  // the page, tearing down every listener). Mirrors useSupabaseCollectionLive.
   if (!orgLoading && !orgId && hasUser) {
-    throw new Error(`useOrgCollection('${collectionName}') requires an orgId — none in context.`);
+    return {
+      items: [], loading: false,
+      error: new Error(`useOrgCollection('${collectionName}') requires an orgId — none in context.`),
+      loadMore: () => {}, hasMore: false,
+    };
   }
 
   useEffect(() => {
+    // The missing-org case returned an error state above, so here we only handle:
+    // still loading, or orgId present.
     if (orgLoading || !orgId) { setLoading(true); return undefined; }
     setLoading(true);
     setError(null);
