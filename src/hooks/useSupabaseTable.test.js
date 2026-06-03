@@ -55,7 +55,7 @@ vi.mock('@sentry/react', () => ({
 let _mockIsConfigured = true;
 let _mockDataLayer = 'supabase';
 
-import { mapRow, OP_MAP, useSupabaseTable, useOrgTable } from './useSupabaseTable.js';
+import { mapRow, OP_MAP, useSupabaseTable, useOrgTable, _useOrgTableAdapterCache } from './useSupabaseTable.js';
 import { toSupabaseRow, SUPABASE_TABLE, jsonbSafe } from '../lib/supabaseRowMap.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { useOrgCollection } from './useOrgCollection.js';
@@ -505,6 +505,8 @@ describe('useOrgTable', () => {
     vi.clearAllMocks();
     _mockIsConfigured = true;
     _mockDataLayer = 'supabase';
+    // Reset adapter cache so each test picks the correct hook for its DATA_LAYER.
+    _useOrgTableAdapterCache.fn = null;
     _chain = makeChain();
     useOrg.mockReturnValue({ orgId: 'org-1', loading: false });
     mockRange.mockResolvedValue({ data: [], error: null });
@@ -546,6 +548,111 @@ describe('useOrgTable', () => {
     // Must NOT silently fall back to Firestore
     expect(useOrgCollection).not.toHaveBeenCalled();
     errSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG #476 — useOrgTable rules-of-hooks: same hook reference on every render
+// ---------------------------------------------------------------------------
+
+describe('useOrgTable — BUG #476 hook-count stability', () => {
+  // React throws "Rendered more hooks than during the previous render" when the
+  // number of hook calls changes between renders. The fix stores the adapter
+  // choice in _useOrgTableAdapterCache.fn on the first render call, so every
+  // subsequent render of that component instance always calls exactly ONE hook.
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _mockIsConfigured = true;
+    // Reset adapter cache so each test starts fresh with the correct DATA_LAYER.
+    _useOrgTableAdapterCache.fn = null;
+    _chain = makeChain();
+    useOrg.mockReturnValue({ orgId: 'org-1', loading: false });
+    mockRange.mockResolvedValue({ data: [], error: null });
+  });
+
+  it('DATA_LAYER=supabase: re-renders with different args do not change hook count', async () => {
+    _mockDataLayer = 'supabase';
+    // renderHook with rerender — if React sees a different hook count it throws
+    // "Rendered more hooks than during the previous render".
+    let caughtError = null;
+    const { rerender } = renderHook(
+      ({ table, layer }) => {
+        try {
+          return useOrgTable('firestoreCol', table, layer);
+        } catch (e) {
+          caughtError = e;
+          throw e;
+        }
+      },
+      {
+        initialProps: {
+          table: 'revenue_days',
+          layer: { supabase: { limit: 50 }, firestore: { limit: 50 } },
+        },
+      }
+    );
+    await act(async () => {});
+    // Re-render with different table/opts — hook count must be identical.
+    rerender({
+      table: 'telemetry_events',
+      layer: { supabase: { limit: 100 }, firestore: { limit: 100 } },
+    });
+    await act(async () => {});
+    expect(caughtError).toBeNull();
+  });
+
+  it('DATA_LAYER=firestore: re-renders with different args do not change hook count', () => {
+    _mockDataLayer = 'firestore';
+    let caughtError = null;
+    const { rerender } = renderHook(
+      ({ col, layer }) => {
+        try {
+          return useOrgTable(col, 'revenue_days', layer);
+        } catch (e) {
+          caughtError = e;
+          throw e;
+        }
+      },
+      {
+        initialProps: {
+          col: 'revenue',
+          layer: { firestore: { orderBy: ['date', 'desc'] } },
+        },
+      }
+    );
+    // Re-render with a different collection name.
+    rerender({
+      col: 'costs',
+      layer: { firestore: { orderBy: ['amount', 'desc'] } },
+    });
+    expect(caughtError).toBeNull();
+    // useOrgCollection must have been called twice (initial + rerender), never useSupabaseTable.
+    expect(useOrgCollection).toHaveBeenCalledTimes(2);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('DATA_LAYER=supabase: delegates to useSupabaseTable (calls supabase.from)', async () => {
+    _mockDataLayer = 'supabase';
+    renderHook(() =>
+      useOrgTable('revenue', 'revenue_days', {
+        supabase: { orderBy: ['revenue_date', 'desc'] },
+      })
+    );
+    await act(async () => {});
+    expect(mockFrom).toHaveBeenCalledWith('revenue_days');
+    expect(useOrgCollection).not.toHaveBeenCalled();
+  });
+
+  it('DATA_LAYER=firestore: delegates to useOrgCollection (never touches supabase.from)', () => {
+    _mockDataLayer = 'firestore';
+    renderHook(() =>
+      useOrgTable('revenue', 'revenue_days', {
+        firestore: { orderBy: ['date', 'desc'] },
+      })
+    );
+    expect(useOrgCollection).toHaveBeenCalledWith('revenue', { orderBy: ['date', 'desc'] });
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 

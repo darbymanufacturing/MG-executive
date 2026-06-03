@@ -28,19 +28,38 @@ export default async function handler(req, res) {
   const date = new Date().toISOString().slice(0, 10);
   console.log(`[cron-daily-brief] Triggered for date: ${date}`);
 
-  /*
-   * TODO: When firebase-admin is available, fan out to all admin/staff users:
+  const isManual = auth.trigger === 'manual';
+  const force    = req.query.force === '1';
+
+  if (isManual && !force) {
+    // TODO (when firebase-admin is live): query for any brief with today's date
+    // const snapshot = await db.collection('briefs')
+    //   .where('date', '==', date).limit(1).get();
+    // if (!snapshot.empty) {
+    //   return res.status(200).json({ ok: true, skipped: true,
+    //     reason: 'Briefs already generated today. Add ?force=1 to override.' });
+    // }
+  }
+
+  /* TODO: Fan-out when firebase-admin is available.
+   * For each user, check existence of briefs/{date}_{uid} and skip if present
+   * (idempotency). Track anthropicCalls in dailyCosts/{date} and cap at
+   * users.docs.length + 5 to prevent runaway cost.
    *
    * const admin = initFirebaseAdmin();
    * const db = admin.firestore();
    * const users = await db.collection('users')
-   *   .where('role', 'in', ['admin', 'staff'])
-   *   .get();
-   *
+   *   .where('role', 'in', ['admin', 'staff']).get();
+   * let anthropicCalls = 0;
+   * const MAX_CALLS = users.docs.length + 5;
    * for (const userDoc of users.docs) {
+   *   const existing = await db.collection('briefs').doc(`${date}_${userDoc.id}`).get();
+   *   if (existing.exists && !force) continue;          // idempotency skip
+   *   if (anthropicCalls >= MAX_CALLS) break;           // cost cap
    *   const data = await aggregateOperationalData(db, userDoc.id);
    *   const brief = await generateBrief(date, userDoc.id, data);
    *   await db.collection('briefs').doc(`${date}_${userDoc.id}`).set(brief);
+   *   anthropicCalls++;
    * }
    */
 

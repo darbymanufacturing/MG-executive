@@ -15,7 +15,7 @@
  * + ON CONFLICT), so chunks are byte-identical in structure to the validated export
  * — zero new template risk. Output: <dir>/chunks/<table>.chunk-NNN.sql
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
 
 const args = process.argv.slice(2);
@@ -48,9 +48,26 @@ const SCALE = {
 };
 const DEFAULT_SCALE = 1000; // fallback for any unlisted column
 
-const srcFiles = readdirSync(DIR)
-  .filter((f) => f.startsWith(`${TABLE}.`) && f.endsWith('.sql') && /\.\d+\.sql$/.test(f))
-  .sort();
+const manifestPath = join(DIR, 'MANIFEST.json');
+let srcFiles;
+if (existsSync(manifestPath)) {
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  srcFiles = manifest.files
+    .filter((e) => e.table === TABLE)
+    .map((e) => e.filename)
+    .sort();
+  // Detect files in dir that aren't in manifest (format-drift or hand-edits).
+  const allSql = readdirSync(DIR).filter((f) => f.startsWith(`${TABLE}.`) && f.endsWith('.sql'));
+  const extra = allSql.filter((f) => !srcFiles.includes(f));
+  if (extra.length) {
+    console.warn(`! WARNING: ${extra.length} ${TABLE}.*.sql file(s) found in dir NOT in MANIFEST — skipped: ${extra.join(', ')}`);
+  }
+} else {
+  console.warn(`! No MANIFEST.json in ${DIR} — relying on filename pattern /\\.\\d+\\.sql$/. Re-export to get a manifest.`);
+  srcFiles = readdirSync(DIR)
+    .filter((f) => f.startsWith(`${TABLE}.`) && f.endsWith('.sql') && /\.\d+\.sql$/.test(f))
+    .sort();
+}
 if (!srcFiles.length) { console.error(`No ${TABLE}.NNN.sql files in ${DIR}`); process.exit(1); }
 
 let header = null;

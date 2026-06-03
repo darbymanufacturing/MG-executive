@@ -157,7 +157,17 @@ export function jsonbSafe(value) {
   if (value === null || value === undefined) return null;
   if (typeof value?.toDate === 'function') return value.toDate().toISOString();
   // Firestore FieldValue sentinels (serverTimestamp etc.) — not serializable; drop.
-  if (value && typeof value === 'object' && value._methodName) return null;
+  // Primary check: _methodName (Firebase v9-v12 public shape).
+  // Secondary check: _delegate._methodName (modular SDK internal wrapping).
+  // If Firebase renames both, the contract tests in
+  // src/lib/__tests__/supabaseRowMap.test.js will fail immediately at CI time,
+  // catching the regression before silent {} corruption reaches the Postgres jsonb column.
+  if (
+    value &&
+    typeof value === 'object' &&
+    (value._methodName ||
+      (value._delegate && typeof value._delegate._methodName === 'string'))
+  ) return null;
   if (Array.isArray(value)) return value.map(jsonbSafe);
   if (typeof value === 'object') {
     const out = {};

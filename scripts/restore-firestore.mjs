@@ -12,6 +12,7 @@
  *   node scripts/restore-firestore.mjs ./backups/firestore-YYYYMMDD-HHMMSS --commit     # WRITE (full overwrite)
  *   node scripts/restore-firestore.mjs <dir> --commit --merge                           # WRITE (merge, preserve extra fields)
  *   node scripts/restore-firestore.mjs <dir> --commit --only costs,revenue              # subset
+ *   node scripts/restore-firestore.mjs <dir> --commit --resume                         # resume after partial failure
  *
  * Behaviour:
  *  - Restores via batched set() (BATCH_SIZE=450), preserving doc IDs → idempotent upsert.
@@ -25,9 +26,12 @@
  *  - Reverses the Timestamp/GeoPoint/DocumentReference encoding from the backup.
  *  - Supports both legacy .json format and the newer .jsonl (streaming) format.
  *    Format is detected from _manifest.json `format` field (absent = legacy json).
+ *  - Progress/resume: on --commit runs, completed collections are written to
+ *    {dir}/.restore_progress.json after each collection. Pass --resume on a re-run
+ *    to skip already-completed collections. The progress file is deleted on success.
  */
 import admin from 'firebase-admin';
-import { readFileSync, readdirSync, createReadStream } from 'fs';
+import { readFileSync, readdirSync, createReadStream, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { createInterface } from 'readline';
 import { resolve, basename } from 'path';
 
@@ -75,12 +79,28 @@ async function main() {
     only = raw.split(',').filter(Boolean);
   }
 
+  const resume = args.includes('--resume');
+
   if (!dir) {
-    console.error('Usage: node scripts/restore-firestore.mjs <backup-dir> [--commit] [--merge] [--only col1,col2]');
+    console.error('Usage: node scripts/restore-firestore.mjs <backup-dir> [--commit] [--merge] [--only col1,col2] [--resume]');
     process.exit(1);
   }
   initAdmin();
   const db = admin.firestore();
+
+  // Progress / resume state — file-based (safer than Firestore during disaster recovery)
+  const progressFile = resolve(dir, '.restore_progress.json');
+  let completedCollections = [];
+  if (resume && existsSync(progressFile)) {
+    try {
+      const saved = JSON.parse(readFileSync(progressFile, 'utf8'));
+      completedCollections = Array.isArray(saved.completedCollections) ? saved.completedCollections : [];
+      console.log(`Resuming restore — ${completedCollections.length} collection(s) already completed: ${completedCollections.join(', ')}\n`);
+    } catch {
+      console.warn('WARNING: could not parse progress file — starting from scratch.\n');
+      completedCollections = [];
+    }
+  }
 
   // Detect backup format from _manifest.json
   let manifestData = {};
@@ -105,6 +125,12 @@ async function main() {
     const ext = isJsonl ? '.jsonl' : '.json';
     const collName = basename(file, ext);
 
+    // Skip collections already completed in a previous run (only meaningful with --resume)
+    if (completedCollections.includes(collName)) {
+      console.log(`  ${collName.padEnd(24)} (skipped — already restored)`);
+      continue;
+    }
+
     if (isJsonl) {
       // Streaming JSONL path — memory-flat, one batch at a time.
       // Count lines for the dry-run summary by streaming without writing.
@@ -127,6 +153,9 @@ async function main() {
           }
         }
         if (batchCount > 0) await batch.commit();
+        // Checkpoint: mark this collection complete
+        completedCollections.push(collName);
+        writeFileSync(progressFile, JSON.stringify({ completedCollections }, null, 2));
       } else {
         // Dry run: stream and count only, no writes.
         const rl = createInterface({ input: createReadStream(resolve(dir, file)), crlfDelay: Infinity });
@@ -164,11 +193,18 @@ async function main() {
         }
         await batch.commit();
       }
+      // Checkpoint: mark this collection complete
+      completedCollections.push(collName);
+      writeFileSync(progressFile, JSON.stringify({ completedCollections }, null, 2));
     }
   }
 
   console.log(`\n${commit ? '✓ Restored' : 'Would restore'} ${grandTotal} docs across ${targets.length} collections.`);
   if (!commit) console.log('Re-run with --commit to actually write.');
+  // Clean up stale progress file on a fully successful commit run
+  if (commit && existsSync(progressFile)) {
+    unlinkSync(progressFile);
+  }
   process.exit(0);
 }
 

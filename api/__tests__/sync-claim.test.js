@@ -32,9 +32,15 @@ const dbMock = {
   })),
 };
 
+// Default getUser returns no pre-existing custom claims; override per test.
+let getUserMock = vi.fn().mockResolvedValue({ customClaims: {} });
+
 vi.mock('../_lib/firebase-admin.js', () => ({
   getDb: () => dbMock,
-  getAuth: () => ({ setCustomUserClaims: setCustomUserClaimsMock }),
+  getAuth: () => ({
+    setCustomUserClaims: setCustomUserClaimsMock,
+    getUser: (...args) => getUserMock(...args),
+  }),
 }));
 
 // --- Mock require-auth.js — caller is always the targetUid by default ---
@@ -66,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   firestoreDocMocks = {};
   callerUidMock = 'attacker-uid';
+  getUserMock = vi.fn().mockResolvedValue({ customClaims: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -118,7 +125,7 @@ describe('bug-411 — legitimate owner claim allowed', () => {
 
     expect(res._status).toBe(200);
     expect(res._body.ok).toBe(true);
-    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(ownerUid, { orgId: 'org-123', role: 'owner' });
+    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(ownerUid, { orgId: 'org-123', role: 'authenticated', user_role: 'owner' });
   });
 });
 
@@ -170,9 +177,52 @@ describe('bug-411 — non-privileged role bypasses org check', () => {
 
     expect(res._status).toBe(200);
     expect(res._body.ok).toBe(true);
-    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(staffUid, { orgId: 'org-123', role: 'staff' });
+    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(staffUid, { orgId: 'org-123', role: 'authenticated', user_role: 'staff' });
     // Verify the organizations collection was never queried
     const colCalls = dbMock.collection.mock.calls.map((c) => c[0]);
     expect(colCalls).not.toContain('organizations');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Case 5 (bug-458): pre-existing claims are preserved across a sync call
+// ---------------------------------------------------------------------------
+describe('bug-458 — pre-existing custom claims survive sync', () => {
+  it('merges tenancy claims on top of pre-existing claims without discarding them', async () => {
+    const ownerUid = 'real-owner-uid';
+    callerUidMock = ownerUid;
+
+    firestoreDocMocks[`users/${ownerUid}`] = {
+      orgId: 'org-123',
+      role: 'owner',
+    };
+    firestoreDocMocks['organizations/org-123'] = {
+      ownerUid: ownerUid,
+      members: [ownerUid],
+    };
+
+    // Simulate a pre-existing claim written by another endpoint (e.g. Stripe)
+    getUserMock = vi.fn().mockResolvedValue({
+      customClaims: { stripeCustomerId: 'cus_abc' },
+    });
+
+    const req = makeReq({});
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
+
+    // getUser must have been called to read the existing claims
+    expect(getUserMock).toHaveBeenCalledWith(ownerUid);
+
+    // The merged claims object must contain BOTH the pre-existing key AND all
+    // three tenancy keys overwritten with authoritative values.
+    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(ownerUid, {
+      stripeCustomerId: 'cus_abc',
+      orgId: 'org-123',
+      role: 'authenticated',
+      user_role: 'owner',
+    });
   });
 });

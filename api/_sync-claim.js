@@ -82,7 +82,8 @@ export default async function handler(req, res) {
     // be 'authenticated' (a real DB role). The app's RBAC role lives in 'user_role'.
     // (Minting role:'admin' made Supabase do SET ROLE admin → "role admin does not exist"
     // → every Supabase request failed. The Firestore rules + AuthContext read 'user_role'.)
-    await getAuth().setCustomUserClaims(targetUid, { orgId, role: 'authenticated', user_role: role });
+    const existing = (await getAuth().getUser(targetUid)).customClaims ?? {};
+    await getAuth().setCustomUserClaims(targetUid, { ...existing, orgId, role: 'authenticated', user_role: role });
     return res.status(200).json({ ok: true, uid: targetUid, orgId, role });
   } catch (err) {
     console.error('sync-claim error:', err);

@@ -168,21 +168,35 @@ export function useSupabaseTable(table, opts = {}) {
  *     supabase:  { orderBy: ['revenue_date', 'desc'], limit: 2000 },
  *   });
  *
- * DATA_LAYER never changes at runtime (it's a build-time env value), so the branch
- * selects the SAME hook on every render — rules-of-hooks holds in practice even
- * though the linter can't prove the constant.
+ * Rules-of-hooks compliance: `useDataLayerHook` is the single adapter reference
+ * resolved at module load time. Because DATA_LAYER is a build-time Vite constant
+ * in production, the branch never changes after module evaluation, so every
+ * render of useOrgTable always calls exactly one hook (useDataLayerHook) — the
+ * hook-call count is stable across renders and the rules-of-hooks invariant holds.
+ *
+ * In Vitest the module mock returns DATA_LAYER via a getter, so the lazy
+ * initialisation below defers the getter read until after mock setup completes.
  */
+
+// Resolved lazily on first useOrgTable call (not at module parse time) so that
+// Vitest mock getters are fully wired before DATA_LAYER is first read.
+// Exported for testing only — do NOT reassign in application code.
+export const _useOrgTableAdapterCache = { fn: null };
+
 export function useOrgTable(firestoreCollection, supabaseTable, perLayer = {}) {
-  if (DATA_LAYER === 'supabase') {
-    if (!isSupabaseConfigured) {
-      throw new Error(
-        'useOrgTable: VITE_DATA_LAYER=supabase but Supabase is not configured. ' +
-        'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or set VITE_DATA_LAYER=firestore.'
-      );
-    }
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useSupabaseTable(supabaseTable, perLayer.supabase ?? {});
+  if (DATA_LAYER === 'supabase' && !isSupabaseConfigured) {
+    throw new Error(
+      'useOrgTable: VITE_DATA_LAYER=supabase but Supabase is not configured. ' +
+      'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or set VITE_DATA_LAYER=firestore.'
+    );
   }
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useOrgCollection(firestoreCollection, perLayer.firestore ?? {});
+  // Populate the adapter once per module lifetime (or per test file when reset
+  // via _useOrgTableAdapterCache.fn = null in beforeEach). After the first call
+  // the same hook reference is used on every render — rules-of-hooks hold.
+  if (!_useOrgTableAdapterCache.fn) {
+    _useOrgTableAdapterCache.fn = DATA_LAYER === 'supabase' ? useSupabaseTable : useOrgCollection;
+  }
+  const collection = DATA_LAYER === 'supabase' ? supabaseTable : firestoreCollection;
+  const opts = DATA_LAYER === 'supabase' ? (perLayer.supabase ?? {}) : (perLayer.firestore ?? {});
+  return _useOrgTableAdapterCache.fn(collection, opts);
 }

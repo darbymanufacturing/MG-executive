@@ -160,6 +160,16 @@ async function main() {
     summary.push({ table, docs: rows.length, files });
   }
 
+  // Write MANIFEST.json so rechunk-sql.mjs can use it as the authoritative file list.
+  const manifest = { exportedAt: stamp, orgId: ORG_ID, files: [] };
+  for (const { table, docs, files } of summary) {
+    for (let i = 0; i < files; i++) {
+      const part = String(i).padStart(3, '0');
+      manifest.files.push({ filename: `${table}.${part}.sql`, table, rows: Math.min(BATCH, docs - i * BATCH) });
+    }
+  }
+  writeFileSync(resolve(dir, 'MANIFEST.json'), JSON.stringify(manifest, null, 2));
+
   const total = summary.reduce((s, r) => s + r.docs, 0);
   console.log(`\n✓ ${total} docs across ${summary.length} tables → ${dir}`);
   console.log(`  (consumed ~${total} Firestore reads against the Spark 50K/day quota)`);
