@@ -60,9 +60,18 @@ const ROUTES = {
 export const config = { maxDuration: 60 };
 
 export default function handler(req, res) {
-  // Vercel populates the catch-all segments at req.query.path (array) for [...path].js.
+  // Resolve the route name. Vercel SHOULD populate req.query.path for a [...path].js
+  // catch-all, but in this project — which ships a vercel.json with a SPA rewrite — it
+  // arrives EMPTY in production, so every /api/* 404'd with "Unknown API route: (root)"
+  // (this is why #501 recurred: removing the /api rewrite was necessary but NOT
+  // sufficient — the dynamic param still isn't populated). Fall back to parsing req.url,
+  // which always reflects the real request path, so routing never depends on the quirk.
   const seg = req.query?.path;
-  const name = Array.isArray(seg) ? seg.join('/') : (seg || '');
+  let name = Array.isArray(seg) ? seg.join('/') : (seg || '');
+  if (!name) {
+    const pathname = (req.url || '').split('?')[0];
+    name = pathname.replace(/^\/+/, '').replace(/^api\/+/, '').replace(/\/+$/, '');
+  }
   const route = ROUTES[name];
   if (!route) {
     res.status(404).json({ error: `Unknown API route: ${name || '(root)'}` });
