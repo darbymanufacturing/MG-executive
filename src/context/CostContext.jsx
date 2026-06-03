@@ -106,6 +106,25 @@ export function CostProvider({ children }) {
     });
   }, [config, configDocId]);
 
+  // ── Location management (#557) ────────────────────────────────────────────
+  // Deduplicate case-insensitively + trim so "Athens" and "athens" don't coexist.
+
+  const addLocation = useCallback(async (name) => {
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+    const existing = config.locations ?? [];
+    const duplicate = existing.some(
+      (loc) => loc.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (duplicate) return;
+    await updateConfig({ locations: [...existing, trimmed] });
+  }, [config.locations, updateConfig]);
+
+  const removeLocation = useCallback(async (name) => {
+    const existing = config.locations ?? [];
+    await updateConfig({ locations: existing.filter((loc) => loc !== name) });
+  }, [config.locations, updateConfig]);
+
   // ── Sample data ──────────────────────────────────────────────────────────────
 
   const loadSampleData = useCallback(async () => {
@@ -223,6 +242,8 @@ export function CostProvider({ children }) {
         deleteCost,
         getCostById,
         updateConfig,
+        addLocation,
+        removeLocation,
         loadSampleData,
         clearAllData,
         importData,

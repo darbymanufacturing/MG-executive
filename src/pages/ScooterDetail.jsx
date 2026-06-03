@@ -27,7 +27,7 @@ export default function ScooterDetail() {
   const { scooters, updateScooter } = useMaintenance();
   const { config } = useCosts();
   const { enabledTabs } = useScooterConfig();
-  const cities = config?.locations?.length ? config.locations : ['Nafplio', 'Corinth'];
+  const cities = config?.locations ?? [];
 
   const scooter = useMemo(
     () => scooters.find((s) => String(s.scooterId) === String(id)),

@@ -18,6 +18,8 @@ import BankConnect from '../components/Bank/BankConnect.jsx';
 import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { exportToJSON, importFromJSON, exportDashboardToPDF } from '../utils/exportData.js';
 import { projectedCostPerScooterSimple } from '../utils/calculations.js';
@@ -93,22 +95,33 @@ function MoneyField({ label, value, onCommit, styles: s, placeholder, step = '0.
 }
 
 export default function Settings() {
-  const { costs, config, updateConfig, loadSampleData, clearAllData, importData } = useCosts();
+  const { costs, config, updateConfig, addLocation, removeLocation, loadSampleData, clearAllData, importData } = useCosts();
+  const { scooters } = useMaintenance();
+  const { scopeByFleet, isAllFleets } = useFleet();
   const { createTechnicianAccount, signOut, userProfile } = useAuth();
   const { success: toastSuccess, error: toastError } = useToast();
   const [clearConfirm, setClearConfirm] = useState(false);
+
+  // ── Live fleet size: prefer scooter count scoped to the active fleet ────────
+  // Falls back to config.fleetSize when no scooters are loaded yet.
+  const liveFleetSize = (scooters && scooters.length > 0)
+    ? (isAllFleets ? scooters.length : (scopeByFleet(scooters).length || null))
+    : null;
+  const effectiveFleetSize = liveFleetSize ?? config.fleetSize;
+
   const [projFleet, setProjFleet] = useState(config.fleetSize);
 
-  // #553 — sync projFleet when the real config.fleetSize loads (it starts as the
-  // constants.js default of 10 before Firestore/Supabase data arrives).  If the
-  // user has already dragged the slider above the current fleet we leave it alone;
-  // if it is *below* the live fleet size we snap it up so the default scenario is
+  // #553 / #558 — sync projFleet when the effective fleet size loads (starts as
+  // the constants.js default of 10 until Firestore/Supabase + scooter data arrive).
+  // Uses the live scooter count (fleet-scoped) when available, otherwise config.fleetSize.
+  // If the user already dragged the slider above the current fleet we leave it alone;
+  // if it is *below* the effective fleet size we snap it up so the default scenario is
   // always growth (or neutral), never a shrink.
   useEffect(() => {
-    if (config.fleetSize && projFleet < config.fleetSize) {
-      setProjFleet(config.fleetSize);
+    if (effectiveFleetSize && projFleet < effectiveFleetSize) {
+      setProjFleet(effectiveFleetSize);
     }
-  }, [config.fleetSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveFleetSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
@@ -278,17 +291,17 @@ export default function Settings() {
     }
   };
 
-  const locations = config.locations || [];
+  const locations = config.locations ?? [];
 
-  const handleAddLocation = () => {
+  const handleAddLocation = async () => {
     const trimmed = newLocation.trim();
-    if (!trimmed || locations.includes(trimmed)) return;
-    updateConfig({ locations: [...locations, trimmed] });
+    if (!trimmed) return;
+    await addLocation(trimmed);
     setNewLocation('');
   };
 
-  const handleRemoveLocation = (loc) => {
-    updateConfig({ locations: locations.filter((l) => l !== loc) });
+  const handleRemoveLocation = async (loc) => {
+    await removeLocation(loc);
   };
 
   // field() returns a FieldInput element — a proper component so useState is valid (#221, #223)
@@ -320,7 +333,7 @@ export default function Settings() {
     e.target.value = '';
   };
 
-  const projectedCPS = projectedCostPerScooterSimple(costs, config.fleetSize, projFleet);
+  const projectedCPS = projectedCostPerScooterSimple(costs, effectiveFleetSize, projFleet);
 
   return (
     <div className={styles.page}>
@@ -466,34 +479,34 @@ export default function Settings() {
           </p>
           <div className={styles.projCard}>
             <div className={styles.projLabels}>
-              <span>Current: <strong>{config.fleetSize} scooters</strong></span>
+              <span>Current: <strong>{effectiveFleetSize} scooters</strong>{liveFleetSize != null ? ' (live)' : ''}</span>
               <span className={styles.projNew}>Projected: <strong>{projFleet} scooters</strong></span>
             </div>
             <input
               type="range"
               className={styles.slider}
               min={1}
-              max={Math.max(config.fleetSize * 3, 100)}
+              max={Math.max(effectiveFleetSize * 3, 100)}
               value={projFleet}
               onChange={(e) => setProjFleet(Number(e.target.value))}
             />
             <div className={styles.projResults}>
               <div className={styles.projItem}>
                 <span className={styles.projLabel}>Current cost/scooter/month</span>
-                <span className={styles.projValue}>{formatEUR(projectedCostPerScooterSimple(costs, config.fleetSize, config.fleetSize))}</span>
+                <span className={styles.projValue}>{formatEUR(projectedCostPerScooterSimple(costs, effectiveFleetSize, effectiveFleetSize))}</span>
               </div>
               <div className={styles.projArrow}>→</div>
               <div className={styles.projItem}>
                 <span className={styles.projLabel}>Projected cost/scooter/month</span>
-                <span className={`${styles.projValue} ${projectedCPS < projectedCostPerScooterSimple(costs, config.fleetSize, config.fleetSize) ? styles.projBetter : styles.projWorse}`}>
+                <span className={`${styles.projValue} ${projectedCPS < projectedCostPerScooterSimple(costs, effectiveFleetSize, effectiveFleetSize) ? styles.projBetter : styles.projWorse}`}>
                   {formatEUR(projectedCPS)}
                 </span>
               </div>
-              {projFleet !== config.fleetSize && (
+              {projFleet !== effectiveFleetSize && (
                 <div className={styles.projSaving}>
-                  {projectedCPS < projectedCostPerScooterSimple(costs, config.fleetSize, config.fleetSize)
-                    ? `Save ${formatEUR(projectedCostPerScooterSimple(costs, config.fleetSize, config.fleetSize) - projectedCPS)}/scooter by growing to ${projFleet} units`
-                    : `Cost increases by ${formatEUR(projectedCPS - projectedCostPerScooterSimple(costs, config.fleetSize, config.fleetSize))}/scooter at ${projFleet} units`}
+                  {projectedCPS < projectedCostPerScooterSimple(costs, effectiveFleetSize, effectiveFleetSize)
+                    ? `Save ${formatEUR(projectedCostPerScooterSimple(costs, effectiveFleetSize, effectiveFleetSize) - projectedCPS)}/scooter by growing to ${projFleet} units`
+                    : `Cost increases by ${formatEUR(projectedCPS - projectedCostPerScooterSimple(costs, effectiveFleetSize, effectiveFleetSize))}/scooter at ${projFleet} units`}
                 </div>
               )}
             </div>

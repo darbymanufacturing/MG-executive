@@ -8,11 +8,16 @@ vi.mock('../../context/CostContext.jsx', () => ({ useCosts: vi.fn() }));
 vi.mock('../../context/RevenueContext.jsx', () => ({ useRevenue: vi.fn() }));
 vi.mock('../../context/MaintenanceContext.jsx', () => ({ useMaintenance: vi.fn() }));
 vi.mock('./PulseStrip.module.css', () => ({ default: {} }));
-// lucide-react stubs
+// lucide-react stubs — must include every icon imported by transitive deps (Toast.jsx etc.)
 vi.mock('lucide-react', () => ({
-  ArrowUp: () => null,
-  ArrowDown: () => null,
-  Minus: () => null,
+  ArrowUp:       () => null,
+  ArrowDown:     () => null,
+  Minus:         () => null,
+  CheckCircle:   () => null,
+  AlertCircle:   () => null,
+  Info:          () => null,
+  AlertTriangle: () => null,
+  X:             () => null,
 }));
 
 import { useCosts } from '../../context/CostContext.jsx';

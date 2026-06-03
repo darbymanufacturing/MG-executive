@@ -23,7 +23,7 @@ export default function FleetTab() {
   // is not mounted here. The safe shim returns empty events → "No CSV" for all scooters.
   const { events: telemetryEvents } = useTelemetrySafe();
   const { config } = useCosts();
-  const cities = config.locations?.length ? config.locations : ['Nafplio', 'Corinth'];
+  const cities = config.locations ?? [];
 
   const [formOpen, setFormOpen]   = useState(false);
   const [editing, setEditing]     = useState(null);
@@ -137,6 +137,11 @@ export default function FleetTab() {
               onClick={() => setCityF(c)}
             >{c}</button>
           ))}
+          {cities.length === 0 && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', alignSelf: 'center' }}>
+              No cities — add them in <a href="/settings" style={{ color: 'var(--accent)' }}>Settings</a>
+            </span>
+          )}
         </div>
 
         <div className={styles.chips}>

@@ -18,6 +18,7 @@ import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import { useFleet } from '../context/FleetContext.jsx';
 import {
   totalMonthlyCost, totalAnnualCost,
   costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
@@ -96,7 +97,19 @@ export default function Dashboard() {
     config: maintConfig,
   } = useMaintenance();
   const { activeProjects, archivedProjects } = useProjects();
+  const { scopeByFleet, isAllFleets } = useFleet();
   const navigate = useNavigate();
+
+  // ── Fleet-aware fleet size ────────────────────────────────────────────────
+  // When a specific fleet is active, count only scooters belonging to that fleet;
+  // when All-Fleets, count every scooter we know about.
+  // Falls back to config.fleetSize (manual scalar) when no live scooters are loaded.
+  const liveFleetSize = useMemo(() => {
+    if (!scooters || scooters.length === 0) return null;
+    if (isAllFleets) return scooters.length;
+    return scopeByFleet(scooters).length || null;
+  }, [scooters, isAllFleets, scopeByFleet]);
+  const effectiveFleetSize = liveFleetSize ?? config.fleetSize;
 
   // ── Financial config (Hopp fee, VAT, SIM) ────────────────────────────────
   const financial = config.financial || {
@@ -200,9 +213,9 @@ export default function Dashboard() {
   }, [viewMode, periodCosts, filteredCosts, rangeFrom, rangeTo]);
   const displayTotal      = monthlyCostRate * periodMonths + oneTimeInPeriod;
   const annualTotal       = totalAnnualCost(filteredCosts);
-  const perScooterMonthly = costPerScooterMonthly(filteredCosts, config.fleetSize);
-  const perScooterDaily   = costPerScooterDaily(filteredCosts, config.fleetSize);
-  const perScooterAnnual  = costPerScooterAnnual(filteredCosts, config.fleetSize);
+  const perScooterMonthly = costPerScooterMonthly(filteredCosts, effectiveFleetSize);
+  const perScooterDaily   = costPerScooterDaily(filteredCosts, effectiveFleetSize);
+  const perScooterAnnual  = costPerScooterAnnual(filteredCosts, effectiveFleetSize);
   const breakdown         = breakdownByCategory(viewMode === 'month' ? periodCosts : filteredCosts);
   const trendData         = viewMode === 'all'
     ? allTimeMonthlyTrendData(filteredCosts)
@@ -218,8 +231,8 @@ export default function Dashboard() {
   const displayPnL         = displayRevenue - displayTotal;
   const tripsPerDay        = avgTripsPerDay(periodRevenue);
   const revPerTrip         = revenuePerTrip(periodRevenue);
-  const utilization        = vehicleUtilization(periodRevenue, config.fleetSize);
-  const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, config.fleetSize);
+  const utilization        = vehicleUtilization(periodRevenue, effectiveFleetSize);
+  const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, effectiveFleetSize);
   const rawCombinedTrend   = hasRevenue
     ? (viewMode === 'all'
         ? allTimeCombinedTrend(filteredCosts, filteredRevenue)
@@ -296,7 +309,7 @@ export default function Dashboard() {
     <div className={styles.page} id="dashboard-export">
       <Header
         title="Pulse"
-        subtitle={`Fleet overview · ${config.fleetSize} scooters`}
+        subtitle={`Fleet overview · ${effectiveFleetSize} scooters`}
         actions={
           <div className={styles.headerActions}>
             {/* View mode toggle */}
@@ -447,8 +460,8 @@ export default function Dashboard() {
           <KpiCard
             icon={Target}
             label="Fleet Size"
-            value={config.fleetSize}
-            sub="scooters in operation"
+            value={effectiveFleetSize}
+            sub={liveFleetSize != null ? 'live scooter count' : 'configured fleet size'}
           />
           {config.targetCostPerScooter && (
             <KpiCard
@@ -523,7 +536,7 @@ export default function Dashboard() {
               icon={Users}
               label="Vehicle Utilization"
               value={formatPercent(utilization)}
-              sub={`of ${config.fleetSize} scooters active`}
+              sub={`of ${effectiveFleetSize} scooters active`}
             />
           </div>
         )}

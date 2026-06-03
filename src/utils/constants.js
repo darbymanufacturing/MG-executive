@@ -82,6 +82,11 @@ export const FREQUENCIES = {
 export const FREQUENCY_KEYS = Object.keys(FREQUENCIES);
 
 export const DEFAULT_CONFIG = {
+  // fleetSize is the manually-configured fallback scalar used when no live scooter
+  // count is available (e.g. before Supabase data loads, or for display-only consumers
+  // that don't have access to the scooters collection). Primary consumers
+  // (Dashboard, Settings, PulseStrip) now prefer the live fleet-scoped scooter count
+  // and fall back to this value only when that count is zero or unavailable.
   fleetSize: 10,
   companyName: 'Omni',
   currency: 'EUR',

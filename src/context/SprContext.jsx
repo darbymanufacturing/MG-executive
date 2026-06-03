@@ -9,6 +9,7 @@ import {
   NAFPLIO_CITY_CENTER,
 } from '../utils/nafplioSprData.js';
 import { useOrg } from './OrgContext.jsx';
+import { useFleet } from './FleetContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
 import { dualWriteSupabase } from '../lib/supabase.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
@@ -34,6 +35,7 @@ const SprContext = createContext(null);
 
 export function SprProvider({ children }) {
   const { orgId } = useOrg();
+  const { fleetForCity } = useFleet();
   // Per-org bootstrap guard: scoped to this provider instance (not module-level) so
   // it resets on unmount/remount (org switch, sign-out). Prevents StrictMode double-write.
   const bootstrappedRef = useRef(new Set());
@@ -109,13 +111,22 @@ export function SprProvider({ children }) {
   const importEvents = useCallback(async (rows, city) => {
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    // #559 — resolve fleetId once for the whole import (all rows share the same city).
+    const fleet = city ? fleetForCity(city) : null;
+    const fleetId = fleet?._docId ?? null;
     const sbEntries = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const chunk = rows.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((row) => {
         const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
-        const rowData = { ...row, city: city || row.city || null, orgId, createdByUid: uid };
+        const rowData = {
+          ...row,
+          city: city || row.city || null,
+          orgId,
+          createdByUid: uid,
+          ...(fleetId ? { fleetId } : {}),
+        };
         batch.set(doc(db, EVENTS_COL, docId), rowData);
         sbEntries.push({ id: docId, data: rowData });
       });
@@ -123,7 +134,7 @@ export function SprProvider({ children }) {
     }
     // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
     await dualWriteSupabase(EVENTS_COL, orgId, sbEntries);
-  }, [orgId]);
+  }, [orgId, fleetForCity]);
 
   const clearEvents = useCallback(async (city = null) => {
     if (!orgId) throw new Error('clearEvents: no active org');
@@ -147,13 +158,16 @@ export function SprProvider({ children }) {
   const importWeather = useCallback(async (days, city) => {
     if (!orgId) throw new Error('importWeather: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    // #559 — resolve fleetId once for the whole import.
+    const fleet = city ? fleetForCity(city) : null;
+    const fleetId = fleet?._docId ?? null;
     const sbEntries = [];
     for (let i = 0; i < days.length; i += BATCH_SIZE) {
       const chunk = days.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
         const docId = orgDocId(orgId, day.date, city);
-        const rowData = { ...day, city, orgId, createdByUid: uid };
+        const rowData = { ...day, city, orgId, createdByUid: uid, ...(fleetId ? { fleetId } : {}) };
         batch.set(doc(db, WEATHER_COL, docId), rowData);
         sbEntries.push({ id: docId, data: rowData });
       });
@@ -161,7 +175,7 @@ export function SprProvider({ children }) {
     }
     // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
     await dualWriteSupabase(WEATHER_COL, orgId, sbEntries);
-  }, [orgId]);
+  }, [orgId, fleetForCity]);
 
   const clearWeather = useCallback(async (city = null) => {
     if (!orgId) throw new Error('clearWeather: no active org');
@@ -185,6 +199,10 @@ export function SprProvider({ children }) {
   const loadNafplioData = useCallback(async () => {
     if (!orgId) throw new Error('loadNafplioData: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    // #559 — stamp fleetId for the hardcoded Nafplio seed data.
+    const nafplioFleet = fleetForCity('Nafplio');
+    const nafplioFleetId = nafplioFleet?._docId ?? null;
+    const fleetPatch = nafplioFleetId ? { fleetId: nafplioFleetId } : {};
 
     // 1. Config (zones + city center)
     await writeFullConfig({
@@ -199,7 +217,7 @@ export function SprProvider({ children }) {
       const chunk = NAFPLIO_WEATHER.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        batch.set(doc(db, WEATHER_COL, orgDocId(orgId, day.date, 'Nafplio')), { ...day, city: 'Nafplio', orgId, createdByUid: uid });
+        batch.set(doc(db, WEATHER_COL, orgDocId(orgId, day.date, 'Nafplio')), { ...day, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Nafplio seed: weather batch failed' });
     }
@@ -210,11 +228,11 @@ export function SprProvider({ children }) {
       const batch = writeBatch(db);
       chunk.forEach((row) => {
         const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
-        batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio', orgId, createdByUid: uid });
+        batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
-  }, [orgId, writeFullConfig]);
+  }, [orgId, fleetForCity, writeFullConfig]);
 
   const value = useMemo(() => ({
     events, weather, sprConfig, loading, snapshotError: error ? error.message : null,

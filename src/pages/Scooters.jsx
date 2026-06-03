@@ -29,7 +29,7 @@ export default function Scooters() {
   const { scooters, tickets, addScooter, updateScooter } = useMaintenance();
   const { config } = useCosts();
   const { events } = useTelemetry();
-  const cities = config?.locations?.length ? config.locations : ['Nafplio', 'Corinth'];
+  const cities = config?.locations ?? [];
 
   // FF-3 — scope the roster to the active fleet (All Fleets = the full roll-up).
   const { scopeByFleet, fleetForCity } = useFleet();
@@ -134,6 +134,11 @@ export default function Scooters() {
               onClick={() => setCityF(c)}
             >{c}</button>
           ))}
+          {cities.length === 0 && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', alignSelf: 'center' }}>
+              No cities — add them in <a href="/settings" style={{ color: 'var(--accent)' }}>Settings</a>
+            </span>
+          )}
         </div>
 
         <div className={styles.chips}>

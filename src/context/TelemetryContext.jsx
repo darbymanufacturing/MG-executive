@@ -13,6 +13,7 @@ import { db, auth } from '../lib/firebase.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
+import { useFleet } from './FleetContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
 import { dualWriteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
@@ -26,6 +27,7 @@ const TelemetryContext = createContext(null);
 
 export function TelemetryProvider({ children }) {
   const { orgId } = useOrg();
+  const { fleetForCity } = useFleet();
   // Phase 2 (ADR-0003): org-scoped read. Kept route-scoped to /scooters + /pme.
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
   const { items, loading, loadMore, hasMore } = useOrgTable(EVENTS_COL, SB_TABLE, {
@@ -80,8 +82,14 @@ export function TelemetryProvider({ children }) {
         // Org-prefix the parser's fingerprint id (ADR-0002): future non-Hopp imports
         // can't assume globally-unique scooter ids, so prefix unconditionally.
         const fullId = orgDocId(orgId, _docId);
-        batch.set(doc(db, EVENTS_COL, fullId), { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp() });
-        sbEntries.push({ id: fullId, data: { ...data, orgId, createdByUid: uid } });
+        // #559 — stamp fleetId per-event (each event carries `city` from the CSV or
+        // the hopp sync injection). fleetForCity returns null when no fleet covers
+        // the city; omit the field so scopeByFleet treats the doc as unassigned.
+        const fleet = data.city ? fleetForCity(data.city) : null;
+        const fleetId = fleet?._docId ?? null;
+        const stored = { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp(), ...(fleetId ? { fleetId } : {}) };
+        batch.set(doc(db, EVENTS_COL, fullId), stored);
+        sbEntries.push({ id: fullId, data: { ...data, orgId, createdByUid: uid, ...(fleetId ? { fleetId } : {}) } });
       });
       await safeWrite(
         () => batch.commit(),
@@ -95,7 +103,7 @@ export function TelemetryProvider({ children }) {
     void dualWriteSupabase(EVENTS_COL, orgId, sbEntries)
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written, duplicates };
-  }, [events, orgId]);
+  }, [events, orgId, fleetForCity]);
 
   const clearAllEvents = useCallback(async () => {
     if (!orgId) throw new Error('clearAllEvents: no active org');

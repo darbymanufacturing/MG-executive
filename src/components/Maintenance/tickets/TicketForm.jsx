@@ -37,7 +37,7 @@ function blank() {
 export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtMaxActive }) {
   const { config } = useCosts();
   const { config: mConfig, addCustomTag } = useMaintenance();
-  const cities = config.locations?.length ? config.locations : ['Corinth', 'Nafplio'];
+  const cities = config.locations ?? [];
 
   const [form,   setForm]   = useState(blank());
   const [errors, setErrors] = useState({});
@@ -120,7 +120,9 @@ export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtM
               value={form.city}
               onChange={(e) => set('city', e.target.value)}
             >
-              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+              {cities.length === 0
+                ? <option value="">— Add cities in Settings first —</option>
+                : cities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             {errors.city && <span className={styles.errorMsg}>{errors.city}</span>}
           </div>

@@ -62,6 +62,25 @@ vi.mock('../OrgContext.jsx', () => ({
   useOrg: () => ({ orgId: 'acme' }),
 }));
 
+// FleetContext — TelemetryProvider calls useFleet() for fleetForCity stamping.
+vi.mock('../FleetContext.jsx', () => ({
+  useFleet: () => ({
+    fleets: [],
+    fleetsLoading: false,
+    activeFleetId: 'all',
+    activeFleet: null,
+    isAllFleets: true,
+    hasFleets: false,
+    setActiveFleet: vi.fn(),
+    scopeByFleet: (items) => items,
+    fleetForCity: () => null,
+    addFleet: vi.fn(),
+    updateFleet: vi.fn(),
+    deleteFleet: vi.fn(),
+    ALL_FLEETS: 'all',
+  }),
+}));
+
 // useOrgTable — returns a configurable set of stored events.
 let storedEvents = [];
 vi.mock('../../hooks/useSupabaseTable.js', () => ({

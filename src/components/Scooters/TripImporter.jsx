@@ -12,6 +12,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { useTrips } from '../../context/TripContext.jsx';
+import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { parseTripLogCsv } from '../../utils/parseTripLogCsv.js';
 import { formatKm, formatMinutes, formatEUR } from '../../utils/formatters.js';
 import Button from '../Shared/Button.jsx';
@@ -27,6 +28,7 @@ function StatusIcon({ type }) {
 
 export default function TripImporter({ scooterId, onImportDone }) {
   const { importTrips, clearTripsForScooter } = useTrips();
+  const { scooters } = useMaintenance();
   const fileRef = useRef(null);
 
   const [stage,    setStage]    = useState('idle');   // idle | preview | importing | done | error
@@ -70,7 +72,9 @@ export default function TripImporter({ scooterId, onImportDone }) {
       if (replaceMode) {
         await clearTripsForScooter(scooterId);
       }
-      const { written } = await importTrips(preview.rows);
+      // #559: pass the scooter's city so TripContext can stamp the canonical fleetId on imported trips.
+      const scooterCity = scooters.find((s) => String(s.scooterId) === String(scooterId))?.city ?? null;
+      const { written } = await importTrips(preview.rows, scooterCity);
       setStatus({ type: 'success', text: `${written} trips imported successfully.` });
       setStage('done');
       onImportDone?.();

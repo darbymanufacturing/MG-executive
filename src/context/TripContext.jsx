@@ -9,6 +9,7 @@ import { collection, doc, writeBatch, getDocs, query, where, serverTimestamp } f
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
+import { useFleet } from './FleetContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
 import { dualWriteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDocId } from '../utils/orgDocId.js';
@@ -22,6 +23,7 @@ const TripContext = createContext(null);
 
 export function TripProvider({ children }) {
   const { orgId } = useOrg();
+  const { fleetForCity } = useFleet();
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
   const { items: trips, loading } = useOrgTable(TRIPS_COL, SB_TABLE, {
     firestore: { limit: MAX_TRIPS },
@@ -30,10 +32,23 @@ export function TripProvider({ children }) {
     supabase: { limit: MAX_TRIPS, orderBy: ['started_at', 'desc'] },
   });
 
-  /** Batch-upsert trip rows from parseTripLogCsv output. Returns { written }. */
-  const importTrips = useCallback(async (rows) => {
+  /**
+   * Batch-upsert trip rows from parseTripLogCsv output. Returns { written }.
+   *
+   * @param {object[]} rows  - output of parseTripLogCsv()
+   * @param {string}  [city] - optional city for the scooter these trips belong to.
+   *   The trip CSV has no city column; the caller (TripImporter) knows the scooter
+   *   and should pass the scooter's city so fleetId can be stamped. When omitted
+   *   the trips are stored without fleetId (scopeByFleet treats them as unassigned).
+   *   #559 — canonical fleet key; existing city/location fields are not removed.
+   */
+  const importTrips = useCallback(async (rows, city) => {
     if (!orgId) throw new Error('importTrips: no active org');
     const uid = auth.currentUser?.uid ?? null;
+    // #559 — resolve fleetId once (all rows share the same scooter/city).
+    const fleet = city ? fleetForCity(city) : null;
+    const fleetId = fleet?._docId ?? null;
+    const fleetPatch = fleetId ? { fleetId } : {};
     let written = 0;
     const sbEntries = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
@@ -51,10 +66,10 @@ export function TripProvider({ children }) {
         const docId = orgDocId(orgId, baseId);
         batch.set(
           doc(db, TRIPS_COL, docId),
-          { ...row, orgId, createdByUid: uid, _importedAt: serverTimestamp() },
+          { ...row, orgId, createdByUid: uid, _importedAt: serverTimestamp(), ...fleetPatch },
           { merge: true },
         );
-        sbEntries.push({ id: docId, data: { ...row, orgId, createdByUid: uid } });
+        sbEntries.push({ id: docId, data: { ...row, orgId, createdByUid: uid, ...fleetPatch } });
         written++;
       });
       await safeWrite(
@@ -66,7 +81,7 @@ export function TripProvider({ children }) {
     void dualWriteSupabase(TRIPS_COL, orgId, sbEntries)
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written };
-  }, [orgId]);
+  }, [orgId, fleetForCity]);
 
   /* NOTE: trips are queried/deleted by the scooterId FIELD (+ orgId), never by doc id,
      so the doc-id prefixing above is transparent to clearTripsForScooter below. */

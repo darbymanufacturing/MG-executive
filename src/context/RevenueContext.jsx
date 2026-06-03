@@ -5,6 +5,7 @@ import {
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
+import { useFleet } from './FleetContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
 import { dualWriteSupabase, dualDeleteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { orgDelete } from '../hooks/orgWrite.js';
@@ -20,6 +21,7 @@ const RevenueContext = createContext(null);
 
 export function RevenueProvider({ children }) {
   const { orgId } = useOrg();
+  const { fleetForCity } = useFleet();
 
   // ── Org-scoped listener (ADR-0003); ADR-0013: Firestore OR Supabase per flag ──
   const { items, loading: revenueLoading, error } = useOrgTable(REVENUE_COL, SB_TABLE, {
@@ -46,8 +48,16 @@ export function RevenueProvider({ children }) {
         // Org-prefixed deterministic id (ADR-0002): every org has the same dates,
         // so the date alone would collide across orgs.
         const docId = orgDocId(orgId, day.date, day.location || 'global');
-        batch.set(doc(db, REVENUE_COL, docId), { ...day, orgId, createdByUid: uid }); // setDoc via batch → overwrites
-        sbEntries.push({ id: docId, data: { ...day, orgId, createdByUid: uid } });
+        // #559 — stamp fleetId (canonical fleet key) alongside the existing city/location
+        // field. fleetForCity returns null when no fleet covers the city (e.g. before
+        // fleets are configured); omit the field rather than writing null, so scopeByFleet
+        // treats the doc as "unassigned" and includes it in every fleet view.
+        const cityKey = day.location || day.city || null;
+        const fleet = cityKey ? fleetForCity(cityKey) : null;
+        const fleetId = fleet?._docId ?? null;
+        const docData = { ...day, orgId, createdByUid: uid, ...(fleetId ? { fleetId } : {}) };
+        batch.set(doc(db, REVENUE_COL, docId), docData); // setDoc via batch → overwrites
+        sbEntries.push({ id: docId, data: docData });
       });
       await safeWrite(
         () => batch.commit(),
@@ -57,7 +67,7 @@ export function RevenueProvider({ children }) {
     // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
     void dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
-  }, [orgId]);
+  }, [orgId, fleetForCity]);
 
   // ── Delete a single day ───────────────────────────────────────────────────
   const deleteRevenueDay = useCallback(async (docId) => {

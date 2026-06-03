@@ -1,6 +1,7 @@
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
+import { useFleet } from '../../context/FleetContext.jsx';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import styles from './PulseStrip.module.css';
 
@@ -82,6 +83,7 @@ export default function PulseStrip() {
   const { costs, config } = useCosts();
   const revenueCtx = useRevenueSafe();
   const maintenanceCtx = useMaintenanceSafe();
+  const fleetCtx = useFleetSafe();
 
   const revenueData = revenueCtx?.revenueData || [];
 
@@ -99,9 +101,16 @@ export default function PulseStrip() {
     .filter(c => c.startDate?.startsWith(monthKey))
     .reduce((s, c) => s + (c.amount || 0), 0);
 
-  /* Active fleet: live count of scooters with status === 'Active' from MaintenanceContext */
+  /* Active fleet: live count of scooters with status === 'Active' from MaintenanceContext.
+   * For the denominator, prefer the fleet-scoped total scooter count when FleetContext
+   * is available; fall back to config.fleetSize (manual scalar) when it is not. */
   const activeScooterCount = maintenanceCtx?.scooters?.filter(s => s.status === 'Active').length;
-  const totalFleet = config?.fleetSize;
+  const liveTotalFleet = (() => {
+    if (!fleetCtx || !maintenanceCtx?.scooters || !maintenanceCtx.scooters.length) return null;
+    if (fleetCtx.isAllFleets) return maintenanceCtx.scooters.length;
+    return fleetCtx.scopeByFleet(maintenanceCtx.scooters).length || null;
+  })();
+  const totalFleet = liveTotalFleet ?? config?.fleetSize;
   const activeFleet = activeScooterCount != null
     ? (totalFleet != null ? `${activeScooterCount} / ${totalFleet}` : String(activeScooterCount))
     : '—';
@@ -165,4 +174,7 @@ function useRevenueSafe() {
 }
 function useMaintenanceSafe() {
   try { return useMaintenance(); } catch { return null; }
+}
+function useFleetSafe() {
+  try { return useFleet(); } catch { return null; }
 }
