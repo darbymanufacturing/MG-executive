@@ -102,7 +102,7 @@ export async function orgWrite(collectionName, data, opts = {}) {
 }
 
 export async function orgUpdate(collectionName, docId, patch, opts = {}) {
-  const orgId = requireOrgDoc(`update ${collectionName}/${docId}`, docId);
+  const orgId = requireOrg(`update ${collectionName}/${docId}`);
   // ADR-0015 seam: Supabase patch (shallow data||patch, arrayUnion→$append).
   if (layerFor(collectionName) === 'supabase') {
     return safeWrite(
@@ -120,7 +120,7 @@ export async function orgUpdate(collectionName, docId, patch, opts = {}) {
 }
 
 export async function orgDelete(collectionName, docId, opts = {}) {
-  const orgId = requireOrgDoc(`delete ${collectionName}/${docId}`, docId);
+  const orgId = requireOrg(`delete ${collectionName}/${docId}`);
   if (layerFor(collectionName) === 'supabase') {
     return safeWrite(
       () => sbDelete(collectionName, orgId, docId),
@@ -144,7 +144,7 @@ export async function orgDelete(collectionName, docId, opts = {}) {
  * Throws on network failure (matches orgUpdate rethrow:true behaviour).
  */
 export async function orgTransaction(collectionName, docId, mutator) {
-  const orgId = requireOrgDoc(`transaction on ${collectionName}/${docId}`, docId);
+  const orgId = requireOrg(`transaction on ${collectionName}/${docId}`);
   // ADR-0015 seam: Supabase optimistic RMW (rmw_read → mutator → rmw_commit CAS).
   if (layerFor(collectionName) === 'supabase') {
     return sbTransaction(collectionName, orgId, docId, mutator);

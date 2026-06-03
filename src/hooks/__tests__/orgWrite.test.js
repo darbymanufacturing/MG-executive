@@ -164,35 +164,87 @@ describe('orgTransaction — atomic array mutation', () => {
   });
 });
 
-describe('bug #424 — cross-org docId rejection', () => {
-  it('orgDelete rejects a docId that belongs to a different org and never calls deleteDoc', async () => {
-    // Active org is 'org-A' (set in beforeEach); 'other-org_doc-1' has wrong prefix.
-    await expect(orgDelete('costs', 'other-org_doc-1')).rejects.toThrow(/does not belong to active org/);
+describe('bug #424 — cross-org docId: server-side rules guard; client allows all when org active', () => {
+  // After BUG #502 fix: orgUpdate/orgDelete/orgTransaction use requireOrg (not requireOrgDoc),
+  // so the client-side prefix check is NOT applied here. The server-side Firestore security
+  // rules remain the real guard against cross-org writes (ADR-0003). These tests verify
+  // that ops still block when there is NO active org.
+
+  it('orgDelete blocks when no org is active (ADR-0003 invariant)', async () => {
+    setActiveOrg(null);
+    await expect(orgDelete('costs', 'other-org_doc-1')).rejects.toThrow(/no active orgId/);
     expect(deleteDoc).not.toHaveBeenCalled();
   });
 
-  it('orgUpdate rejects a cross-org docId and never calls updateDoc', async () => {
-    await expect(orgUpdate('costs', 'other-org_doc-1', { amount: 42 })).rejects.toThrow(/does not belong to active org/);
+  it('orgUpdate blocks when no org is active', async () => {
+    setActiveOrg(null);
+    await expect(orgUpdate('costs', 'other-org_doc-1', { amount: 42 })).rejects.toThrow(/no active orgId/);
     expect(updateDoc).not.toHaveBeenCalled();
   });
 
-  it('orgTransaction rejects a cross-org docId and never calls runTransaction', async () => {
+  it('orgTransaction blocks when no org is active', async () => {
+    setActiveOrg(null);
     await expect(
       orgTransaction('projects', 'other-org_doc-1', () => ({ phases: [] })),
-    ).rejects.toThrow(/does not belong to active org/);
+    ).rejects.toThrow(/no active orgId/);
     expect(runTransaction).not.toHaveBeenCalled();
   });
 
-  it('orgDelete with a correctly org-prefixed docId succeeds normally', async () => {
+  it('orgDelete with an org-prefixed docId succeeds when org is active', async () => {
     await orgDelete('costs', 'org-A_doc-1');
     expect(deleteDoc).toHaveBeenCalledTimes(1);
   });
 
-  it('orgUpdate with a correctly org-prefixed docId succeeds normally', async () => {
+  it('orgUpdate with an org-prefixed docId succeeds when org is active', async () => {
     await orgUpdate('costs', 'org-A_doc-1', { amount: 77 });
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, patch] = updateDoc.mock.calls[0];
     expect(patch).toMatchObject({ amount: 77 });
+  });
+});
+
+describe('bug #502 — auto-generated (bare UUID) docIds must not be rejected', () => {
+  // Auto-id collections (issues, projects, notifications, repairSessions, etc.) call orgWrite
+  // without an `id` option; Firestore/Supabase generates a bare UUID with no orgId_ prefix.
+  // Subsequent orgUpdate/orgDelete/orgTransaction on those auto-IDs must succeed — the old
+  // requireOrgDoc prefix check incorrectly threw "does not belong to active org" on these.
+  const AUTO_ID = 'Xq1a5GHkLnMpQrT2'; // bare UUID, no orgId_ prefix
+
+  it('orgUpdate with a bare UUID docId succeeds when org is active', async () => {
+    await orgUpdate('issues', AUTO_ID, { status: 'resolved' });
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [, patch] = updateDoc.mock.calls[0];
+    expect(patch).toMatchObject({ status: 'resolved', updatedAt: '__SERVER_TS__' });
+  });
+
+  it('orgDelete with a bare UUID docId succeeds when org is active', async () => {
+    await orgDelete('issues', AUTO_ID);
+    expect(deleteDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('orgTransaction with a bare UUID docId reaches runTransaction when org is active', async () => {
+    await orgTransaction('projects', AUTO_ID, (data) => ({ phases: [...(data.phases || [])] }));
+    expect(runTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('orgUpdate with a bare UUID docId still blocks when no org is active', async () => {
+    setActiveOrg(null);
+    await expect(orgUpdate('issues', AUTO_ID, { status: 'open' })).rejects.toThrow(/no active orgId/);
+    expect(updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('orgDelete with a bare UUID docId still blocks when no org is active', async () => {
+    setActiveOrg(null);
+    await expect(orgDelete('issues', AUTO_ID)).rejects.toThrow(/no active orgId/);
+    expect(deleteDoc).not.toHaveBeenCalled();
+  });
+
+  it('orgTransaction with a bare UUID docId still blocks when no org is active', async () => {
+    setActiveOrg(null);
+    await expect(
+      orgTransaction('projects', AUTO_ID, () => ({ phases: [] })),
+    ).rejects.toThrow(/no active orgId/);
+    expect(runTransaction).not.toHaveBeenCalled();
   });
 });
 

@@ -1,52 +1,22 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { Upload, FileText } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { parseRepairLogCsv } from '../../../utils/parseRepairLogCsv.js';
-import { db } from '../../../lib/firebase.js';
-import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 import IngestSummary from './IngestSummary.jsx';
 import styles from './Importer.module.css';
 
-const BATCH_SIZE  = 450;
-const TICKETS_COL = 'maintenanceTickets';
-
 export default function RepairLogImporter() {
-  const { tickets } = useMaintenance();
+  const { tickets, importTickets } = useMaintenance();
   const [defaultId, setDefaultId] = useState('');
-  const [progress, setProgress]   = useState(null);
+  const [loading, setLoading]     = useState(false);
   const [result, setResult]       = useState(null);
   const [dragging, setDragging]   = useState(false);
   const fileRef = useRef();
 
-  const existingIds = new Set(tickets.map((t) => t._docId));
-
-  const importTickets = useCallback(async (parsedTickets, onProgress) => {
-    const newRows    = parsedTickets.filter((t) => !existingIds.has(t._docId));
-    const duplicates = parsedTickets.length - newRows.length;
-    let written = 0;
-
-    for (let i = 0; i < newRows.length; i += BATCH_SIZE) {
-      const chunk = newRows.slice(i, i + BATCH_SIZE);
-      const batch = writeBatch(db);
-      chunk.forEach(({ _docId, ...data }) => {
-        batch.set(doc(db, TICKETS_COL, _docId), {
-          ...data,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      });
-      await batch.commit();
-      written += chunk.length;
-      if (onProgress) onProgress(Math.round((written / newRows.length) * 100));
-    }
-
-    return { written, duplicates };
-  }, [existingIds]);
-
   async function processFile(file) {
     if (!file) return;
     setResult(null);
-    setProgress(0);
+    setLoading(true);
 
     const text = await file.text();
     const { tickets: parsed, errors, total: _total } = parseRepairLogCsv(
@@ -55,14 +25,18 @@ export default function RepairLogImporter() {
     );
 
     if (!parsed.length) {
-      setProgress(null);
+      setLoading(false);
       setResult({ written: 0, duplicates: 0, errors, label: 'Repairs' });
       return;
     }
 
-    const { written, duplicates } = await importTickets(parsed, setProgress);
-    setProgress(null);
-    setResult({ written, duplicates, errors, label: 'Repairs' });
+    // Compute duplicates before the call using the ids already in context.
+    const existingIds = new Set(tickets.map((t) => t._docId));
+    const duplicates = parsed.filter((t) => existingIds.has(t._docId)).length;
+
+    await importTickets(parsed);
+    setLoading(false);
+    setResult({ written: parsed.length - duplicates, duplicates, errors, label: 'Repairs' });
   }
 
   function onFileChange(e) { processFile(e.target.files[0]); }
@@ -106,12 +80,12 @@ export default function RepairLogImporter() {
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFileChange} />
       </div>
 
-      {progress !== null && (
+      {loading && (
         <div className={styles.progressWrap}>
           <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+            <div className={styles.progressFill} style={{ width: '100%', opacity: 0.5 }} />
           </div>
-          <span className={styles.progressLabel}>{progress}%</span>
+          <span className={styles.progressLabel}>Importing…</span>
         </div>
       )}
 
