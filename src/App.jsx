@@ -52,6 +52,7 @@ import Notifications from './pages/Notifications.jsx';
 import Contractors from './pages/Contractors.jsx';
 import FleetPnl from './pages/FleetPnl.jsx';
 import OwnerLedger from './pages/OwnerLedger.jsx';
+import BankImport from './pages/BankImport.jsx';
 
 import './styles/variables.css';
 import './styles/globals.css';
@@ -78,6 +79,7 @@ const ROUTE_TITLES = {
   '/investment':  'Investment',
   '/fleet-pnl':   'Fleet P&L',
   '/owner-ledger': 'Owner Ledger',
+  '/bank-import': 'Bank Import',
   '/spr':         'SPR',
   '/settings':    'Settings',
 };
@@ -293,6 +295,7 @@ function AppShell() {
             <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
             <Route path="/fleet-pnl"      element={<RouteErrorBoundary><FleetPnl /></RouteErrorBoundary>} />
             <Route path="/owner-ledger"   element={<RouteErrorBoundary><OwnerLedger /></RouteErrorBoundary>} />
+            <Route path="/bank-import"    element={<RouteErrorBoundary><BankImport /></RouteErrorBoundary>} />
             <Route path="/maintenance"    element={<RouteErrorBoundary><Maintenance /></RouteErrorBoundary>} />
             <Route path="/pow"            element={<RouteErrorBoundary><Pow /></RouteErrorBoundary>} />
             <Route path="/contractors"    element={<RouteErrorBoundary><Contractors /></RouteErrorBoundary>} />

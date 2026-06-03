@@ -1,0 +1,18 @@
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+.head { margin-bottom: var(--space-4); }
+.title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-xl);
+  color: var(--fg-strong);
+  margin: 0 0 var(--space-1);
+}
+.sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}

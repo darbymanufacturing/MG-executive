@@ -2,24 +2,14 @@
 // Salt Edge transaction shape:
 //   { id, made_on, amount, currency_code, description, category,
 //     account_id, extra: { payee, payee_information, ... } }
-
-const CATEGORY_RULES = [
-  { pattern: /SERVICE|REPAIR|ΣΕΡΒΙΣ|MAINTENANCE|ΣΥΝΤΗΡ/i, category: 'variable'     },
-  { pattern: /ΔΕΗ|ΔΕΔΔΗΕ|PPC|ELECTRICITY|ΗΛΕΚΤΡ|ELECTR/i, category: 'fixed'       },
-  { pattern: /ΜΙΣΘΩΜ|ΕΝΟΙΚΙ|RENT|LEASE|ΜΙΣΘ/i,             category: 'fixed'       },
-  { pattern: /INSURANCE|ΑΣΦΑΛ/i,                             category: 'fixed'       },
-  { pattern: /LOAN|ΔΑΝΕΙ|ANNUITY/i,                          category: 'loan'        },
-  { pattern: /CREDIT.?CARD|ΠΙΣΤΩΤ/i,                        category: 'credit-card' },
-  { pattern: /FUEL|ΒΕΝΖ|PETROL|CHARGING|ΦΟΡΤ/i,             category: 'variable'    },
-];
+//
+// FF-2: the category rules + matching now live in bankRulesEngine.js (shared with
+// the Alpha Bank CSV path). This module keeps the Salt-Edge-shaped adapter only.
+import { inferCategoryFromText } from './bankRulesEngine.js';
 
 export function inferCategory(tx) {
   const payee = tx.extra?.payee || tx.extra?.payee_information || '';
-  const desc  = `${payee} ${tx.description || ''}`.toUpperCase();
-  for (const { pattern, category } of CATEGORY_RULES) {
-    if (pattern.test(desc)) return category;
-  }
-  return 'variable';
+  return inferCategoryFromText(`${payee} ${tx.description || ''}`).category;
 }
 
 /** Returns true only for outgoing payments (debits have negative amount in Salt Edge) */

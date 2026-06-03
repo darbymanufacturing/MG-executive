@@ -11,6 +11,7 @@ import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
+import { orgDocId } from '../utils/orgDocId.js';
 
 // ── Firestore paths (ADR-0002: flat collections + orgId; ADR-0003 query layer) ──
 const COSTS_COL  = 'costs';
@@ -231,6 +232,49 @@ export function CostProvider({ children }) {
     }
   }, [costs, orgId, configDocId]);
 
+  // ── FF-2 bank import ─────────────────────────────────────────────────────────
+  // Import Alpha Bank CSV rows as cost entries. Only DEBIT rows become costs;
+  // credits (income) are shown read-only in the review and never written here
+  // (Hopp auto-sync already owns revenue — avoids double-counting). Idempotent:
+  // dedup is by `_bankTxId` (the bank's transaction id), and the doc id is
+  // deterministic, so re-importing the same file is a safe no-op. Writes go
+  // through orgWrite (the seam → Supabase, the live read path) — NOT the
+  // Firestore-only `importData` batch.
+  const importBankCosts = useCallback(async (rows) => {
+    if (!orgId) throw new Error('importBankCosts: no active org');
+    const debits = (rows || []).filter((r) => r.direction === 'debit');
+    const existingTxIds = new Set(costs.filter((c) => c._bankTxId).map((c) => c._bankTxId));
+    const toImport = debits.filter((r) => r._bankTxId && !existingTxIds.has(r._bankTxId));
+    const now = new Date().toISOString();
+    const CHUNK = 25; // bound concurrency
+
+    let written = 0;
+    for (let i = 0; i < toImport.length; i += CHUNK) {
+      const slice = toImport.slice(i, i + CHUNK);
+      await Promise.all(slice.map((r) => {
+        const id = orgDocId(orgId, 'banktx', r._bankTxId);
+        const cost = {
+          id,
+          name: r.cleanDesc || r.rawDesc || 'Bank transaction',
+          amount: Math.abs(Number(r.amount) || 0),
+          startDate: r.date,
+          frequency: 'one-time',
+          category: r.category || 'variable',
+          notes: r.rawDesc || null,
+          branch: r.branch || null,
+          _bankTxId: r._bankTxId,
+          source: 'alphabank-csv',
+          createdAt: now,
+          updatedAt: now,
+        };
+        return orgWrite(COSTS_COL, cost, { id, rethrow: true, errorMessage: 'Bank import failed' });
+      }));
+      written += slice.length;
+    }
+
+    return { written, duplicates: debits.length - toImport.length };
+  }, [costs, orgId]);
+
   return (
     <CostContext.Provider
       value={{
@@ -247,6 +291,7 @@ export function CostProvider({ children }) {
         loadSampleData,
         clearAllData,
         importData,
+        importBankCosts,
       }}
     >
       {children}
