@@ -46,7 +46,8 @@ export function buildBriefPayload(contexts, now = new Date()) {
     .reduce((s, c) => s + (c.amount || 0), 0);
   const activeProjectsCount = (projectCtx?.projects || [])
     .filter(p => p.effectiveStatus !== 'archived' && !p.archived).length;
-  const fleetSize = costsCtx?.config?.fleetSize ?? 0;
+  // #558: prefer the live scooter count for the brief; fall back to the config scalar.
+  const fleetSize = maintenanceCtx?.scooters?.length || costsCtx?.config?.fleetSize || 0;
 
   // Fix #bug-375: count scooters in repair, not Active+Backlog tickets
   const inRepair = maintenanceCtx?.scooters?.filter(s => s.status === 'In Repair').length ?? 0;

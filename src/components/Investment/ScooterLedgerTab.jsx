@@ -33,8 +33,9 @@ export default function ScooterLedgerTab() {
   const { config: costConfig } = useCosts();
   const financial = costConfig?.financial ?? null;
   const labourRate = maintConfig?.labourRatePerHour ?? 0;
-  // #175 — use ?? not || so fleetSize=0 is not silently rejected
-  const defaultFleetSize = costConfig?.fleetSize ?? scooters.length ?? 1;
+  // #558 — prefer the live scooter count over the stale config scalar; the trailing
+  // || 1 preserves the #175 guard against a 0 divisor when nothing is loaded.
+  const defaultFleetSize = scooters.length || costConfig?.fleetSize || 1;
 
   const [sortKey, setSortKey] = useState('netPosition');
   const [sortDir, setSortDir] = useState('asc'); // ascending = worst first (most negative)

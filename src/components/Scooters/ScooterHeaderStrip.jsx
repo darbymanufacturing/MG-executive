@@ -33,12 +33,14 @@ export default function ScooterHeaderStrip({ scooter }) {
   const { events }    = useTelemetry();
   const { trips }     = useTrips();
   const { revenueData } = useRevenue();
-  const { tickets } = useMaintenance();
+  const { tickets, scooters } = useMaintenance();
   const { config: costConfig } = useCosts();
 
   const scooterId    = scooter?.scooterId;
   const financial    = costConfig?.financial ?? null;
-  const defaultFleet = costConfig?.fleetSize || 1;
+  // #558: divide by the live org-wide scooter count (revenueData here is org-wide, so
+  // the divisor must match that scope); fall back to the config scalar when unloaded.
+  const defaultFleet = scooters?.length || costConfig?.fleetSize || 1;
 
   // Trip-based KPIs (from scooterTrips collection)
   const tripStats = useMemo(() => {

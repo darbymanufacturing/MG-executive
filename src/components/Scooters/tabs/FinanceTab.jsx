@@ -36,14 +36,16 @@ function buildTripRevenue(trips, scooterId) {
 }
 
 export default function FinanceTab({ scooter }) {
-  const { tickets, parts, config: maintConfig } = useMaintenance();
+  const { tickets, parts, config: maintConfig, scooters } = useMaintenance();
   const { revenueData } = useRevenue();
   const { config: costConfig } = useCosts();
   const { trips } = useTrips();
 
   const financial    = costConfig?.financial ?? null;
   const labourRate   = maintConfig?.labourRatePerHour ?? 0;
-  const defaultFleet = costConfig?.fleetSize || 1;
+  // #558: prefer the live org-wide scooter count over the stale config scalar
+  // (attribution uses org-wide revenueData, so the divisor stays org-wide).
+  const defaultFleet = scooters?.length || costConfig?.fleetSize || 1;
 
   // Use trip-level revenue when trips exist for this scooter
   const tripRevenue = useMemo(
