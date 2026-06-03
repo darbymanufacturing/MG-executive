@@ -145,6 +145,11 @@ service cloud.firestore {
       allow create: if orgManagerCreate();
       allow update, delete: if orgManagerWrite();
     }
+    match /maintenanceSchedules/{id} {
+      allow read:   if orgRead();
+      allow create: if orgManagerCreate();
+      allow update, delete: if orgManagerWrite();
+    }
 
     // ── Crew-writable: tickets + repair sessions ──
     // Crew may read org data and create/update these two; managers retain full access.

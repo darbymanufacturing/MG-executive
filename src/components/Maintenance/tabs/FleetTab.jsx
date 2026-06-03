@@ -23,7 +23,7 @@ export default function FleetTab() {
   // is not mounted here. The safe shim returns empty events → "No CSV" for all scooters.
   const { events: telemetryEvents } = useTelemetrySafe();
   const { config } = useCosts();
-  const cities = config.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
+  const cities = config.locations?.length ? config.locations : ['Nafplio', 'Corinth'];
 
   const [formOpen, setFormOpen]   = useState(false);
   const [editing, setEditing]     = useState(null);

@@ -18,6 +18,7 @@
  * NOTE (pre-deploy): add `parity_checks` to firestore.rules as server-only
  * (admin-SDK-written, client-denied) + docs/SCHEMA.md before the rules deploy.
  */
+import { timingSafeEqual } from 'node:crypto';
 import { getDb, FieldValue } from './_lib/firebase-admin.js';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
@@ -33,9 +34,16 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
+  // #548 — constant-time CRON_SECRET compare to eliminate timing side-channel.
   const authHeader = req.headers.authorization || '';
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-  if (!process.env.CRON_SECRET || bearer !== process.env.CRON_SECRET) {
+  const secret = process.env.CRON_SECRET || '';
+  const bearerBuf = Buffer.from(bearer || '');
+  const secretBuf = Buffer.from(secret);
+  const tokenValid = bearer && secret &&
+    bearerBuf.length === secretBuf.length &&
+    timingSafeEqual(bearerBuf, secretBuf);
+  if (!tokenValid) {
     return res.status(401).json({ ok: false, error: 'Unauthorized (CRON_SECRET required)' });
   }
 

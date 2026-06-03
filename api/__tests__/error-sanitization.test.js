@@ -203,6 +203,49 @@ describe('error-sanitization: sync-claim.js (BUG #436)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// delete-user.js (BUG #540)
+// ---------------------------------------------------------------------------
+describe('error-sanitization: delete-user.js (BUG #540)', () => {
+  test('returns safe error string when Firestore delete throws', async () => {
+    vi.resetModules();
+
+    vi.doMock('../_lib/require-auth.js', () => ({
+      requireUser: vi.fn().mockResolvedValue({ uid: 'admin-1', email: 'admin@test.com' }),
+    }));
+    vi.doMock('../_lib/firebase-admin.js', () => ({
+      getDb: () => ({
+        collection: () => ({
+          doc: (id) => ({
+            get: vi.fn().mockResolvedValue({
+              exists: true,
+              data: () =>
+                id === 'admin-1'
+                  ? { role: 'admin', orgId: 'org1' }
+                  : { role: 'staff', orgId: 'org1' },
+            }),
+            delete: vi.fn().mockRejectedValue(FIRESTORE_INDEX_ERROR),
+          }),
+        }),
+      }),
+      getAuth: () => ({
+        deleteUser: vi.fn().mockResolvedValue({}),
+      }),
+    }));
+
+    const mod = await import('../_delete-user.js');
+    const req = {
+      method: 'POST',
+      headers: { authorization: 'Bearer t' },
+      body: { uid: 'target-user-2' },
+    };
+    const res = mockRes();
+    await mod.default(req, res);
+
+    assertSanitized(res, 'Failed to remove user');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // delete-account.js
 // ---------------------------------------------------------------------------
 describe('error-sanitization: delete-account.js (BUG #436)', () => {

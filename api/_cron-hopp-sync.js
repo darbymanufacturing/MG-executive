@@ -12,7 +12,8 @@
  * See plan file Phase 1.8 for design rationale.
  */
 
-import { getDb, verifyIdToken, FieldValue } from './_lib/firebase-admin.js';
+import { getDb, FieldValue } from './_lib/firebase-admin.js';
+import { requireCronOrUser } from './_lib/require-auth.js';
 import { callHoppTool } from './_lib/hopp-mcp-client.js';
 import { rollupTripsToRevenue } from '../src/utils/hoppSyncRollup.js';
 import { createClient } from '@supabase/supabase-js';
@@ -42,51 +43,21 @@ const COLLECTIONS = {
   syncLogs:           'syncLogs',
 };
 
-const ADMIN_ROLES = ['admin', 'owner', 'staff']; // Phase 2 will use custom claims; for now we check the user doc
-
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
   const startedAt = Date.now();
-  let trigger = 'unknown';
-  let triggeredByUid = null;
 
-  // ── Dual auth ─────────────────────────────────────────────────────
-  try {
-    const authHeader = req.headers.authorization || '';
-    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  // ── Dual auth (constant-time compare via requireCronOrUser — #548) ──
+  // requireCronOrUser uses timingSafeEqual from node:crypto internally, eliminating
+  // the timing side-channel that existed when we did `bearer === process.env.CRON_SECRET`.
+  const auth = await requireCronOrUser(req, res);
+  if (!auth) return; // requireCronOrUser already sent 401/403
 
-    if (!bearer) {
-      return res.status(401).json({ ok: false, error: 'Missing Authorization header' });
-    }
-
-    if (process.env.CRON_SECRET && bearer === process.env.CRON_SECRET) {
-      trigger = 'cron';
-    } else {
-      // Try Firebase ID token
-      let decoded;
-      try {
-        decoded = await verifyIdToken(bearer);
-      } catch {
-        return res.status(401).json({ ok: false, error: 'Invalid bearer token (neither CRON_SECRET nor a valid Firebase ID token)' });
-      }
-      triggeredByUid = decoded.uid;
-      trigger = 'manual';
-
-      // Confirm the user has admin/owner role
-      const db = getDb();
-      const userDoc = await db.collection('users').doc(decoded.uid).get();
-      const role = userDoc.exists ? userDoc.data().role : null;
-      if (!ADMIN_ROLES.includes(role)) {
-        return res.status(403).json({ ok: false, error: `Role "${role}" cannot trigger sync` });
-      }
-    }
-  } catch (err) {
-    console.error('[cron-hopp-sync] auth error', err);
-    return res.status(500).json({ ok: false, error: 'Auth check failed: ' + err.message });
-  }
+  const trigger = auth.trigger;
+  const triggeredByUid = auth.uid ?? null;
 
   // ── Window (day-aligned: 00:00 UTC, LOOKBACK_DAYS back → now) ─────
   const db = getDb();
@@ -106,7 +77,7 @@ export default async function handler(req, res) {
   // onDelete Firestore trigger on the scooters collection — cron reads 1 doc not N.
   let scooters;
   try {
-    const snap = await db.collection(COLLECTIONS.scooters).select('scooterId', 'city', 'location', 'orgId').get();
+    const snap = await db.collection(COLLECTIONS.scooters).select('scooterId', 'city', 'location', 'orgId', 'fleetId').get();
     scooters = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
   } catch (err) {
     return finalize(res, db, {
@@ -140,6 +111,12 @@ export default async function handler(req, res) {
   // `${date}_Unknown` revenue doc (which #172 fixed for the absent-from-map path).
   const scooterCityMap = new Map(
     scooters.map((s) => [String(s.scooterId || s._docId), s.city || s.location || null]),
+  );
+
+  // #565 — fleet attribution: map scooterId → fleetId so every written row carries
+  // both orgId (tenant isolation) and fleetId (within-org fleet isolation).
+  const scooterFleetMap = new Map(
+    scooters.map((s) => [String(s.scooterId || s._docId), s.fleetId ?? null]),
   );
 
   // BUG #382 — multi-org guard: if any scooter belongs to a different org than the
@@ -260,7 +237,12 @@ export default async function handler(req, res) {
 
   try {
     // BUG #382 — stamp orgId into every Firestore doc so docs are org-scoped (SCHEMA.md: orgId field).
-    const stampOrg = (items) => items.map((item) => ({ ...item, orgId: ORG_ID }));
+    // #565 — also stamp fleetId derived from scooterFleetMap so fleet attribution is preserved.
+    const stampOrg = (items) => items.map((item) => ({
+      ...item,
+      orgId: ORG_ID,
+      fleetId: scooterFleetMap.get(String(item.scooterId ?? '')) ?? null,
+    }));
     written.trips    = await writeBatch(db, COLLECTIONS.trips,              stampOrg(aggregated.trips),   { merge: true, stampField: '_importedAt' });
     written.events   = await writeBatch(db, COLLECTIONS.telemetryEvents,    stampOrg(aggregated.events),  { merge: false, stampField: 'createdAt' });
     written.tickets  = await writeBatch(db, COLLECTIONS.maintenanceTickets, stampOrg(aggregated.tickets), { merge: true, stampField: 'updatedAt' });
@@ -275,10 +257,17 @@ export default async function handler(req, res) {
       );
       console.warn('[cron-hopp-sync] rollup skipped trips:', rollupErrors);
     }
+    // #565 — derive fleetId for revenue rows: if the rollup bucket carries a scooterId
+    // use the fleet map; otherwise (multi-scooter aggregate) stamp null.
     written.revenueDays = await writeBatch(
       db,
       COLLECTIONS.revenue,
-      revenueRows.map((r) => ({ ...r.data, orgId: ORG_ID, _docId: r.docId })),
+      revenueRows.map((r) => ({
+        ...r.data,
+        orgId: ORG_ID,
+        fleetId: r.data.scooterId ? (scooterFleetMap.get(String(r.data.scooterId)) ?? null) : null,
+        _docId: r.docId,
+      })),
       { merge: true, stampField: 'lastSyncedAt' },
     );
 
@@ -292,12 +281,22 @@ export default async function handler(req, res) {
           .map((t) => {
             const { _docId, ...data } = t;
             return _docId
-              ? toSupabaseRow('scooterTrips', ORG_ID, String(_docId), { ...data, orgId: ORG_ID })
+              ? toSupabaseRow('scooterTrips', ORG_ID, String(_docId), {
+                  ...data,
+                  orgId: ORG_ID,
+                  // #565 — carry fleetId into Supabase rows too
+                  fleetId: scooterFleetMap.get(String(data.scooterId ?? '')) ?? null,
+                })
               : null;
           })
           .filter(Boolean));
         supaResult.revenue = await upsertSupabase(supa, 'revenue_days', revenueRows
-          .map((r) => toSupabaseRow('revenue', ORG_ID, String(r.docId), { ...r.data, orgId: ORG_ID })));
+          .map((r) => toSupabaseRow('revenue', ORG_ID, String(r.docId), {
+            ...r.data,
+            orgId: ORG_ID,
+            // #565 — carry fleetId into Supabase revenue rows
+            fleetId: r.data.scooterId ? (scooterFleetMap.get(String(r.data.scooterId)) ?? null) : null,
+          })));
       }
     } catch (e) {
       console.warn('[cron-hopp-sync] Supabase dual-write skipped:', e?.message || e);

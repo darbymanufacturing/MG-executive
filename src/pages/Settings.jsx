@@ -98,6 +98,18 @@ export default function Settings() {
   const { success: toastSuccess, error: toastError } = useToast();
   const [clearConfirm, setClearConfirm] = useState(false);
   const [projFleet, setProjFleet] = useState(config.fleetSize);
+
+  // #553 — sync projFleet when the real config.fleetSize loads (it starts as the
+  // constants.js default of 10 before Firestore/Supabase data arrives).  If the
+  // user has already dragged the slider above the current fleet we leave it alone;
+  // if it is *below* the live fleet size we snap it up so the default scenario is
+  // always growth (or neutral), never a shrink.
+  useEffect(() => {
+    if (config.fleetSize && projFleet < config.fleetSize) {
+      setProjFleet(config.fleetSize);
+    }
+  }, [config.fleetSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [newLocation, setNewLocation] = useState('');
   const fileRef = useRef();
 

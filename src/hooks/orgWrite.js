@@ -73,8 +73,10 @@ function requireOrgDoc(op, docId) {
 }
 
 export async function orgWrite(collectionName, data, opts = {}) {
-  const orgId = requireOrg(`create in ${collectionName}`);
   const { id, merge = false, ...writeOpts } = opts;
+  const orgId = id
+    ? requireOrgDoc(`create in ${collectionName}`, id)
+    : requireOrg(`create in ${collectionName}`);
   const uid = _userUid;
   // ADR-0015 seam: Supabase create / upsert. merge:true at an explicit id =
   // create-or-shallow-merge (Firestore setDoc merge parity, no jsonb clobber).

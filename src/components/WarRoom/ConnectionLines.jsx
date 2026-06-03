@@ -17,8 +17,9 @@ export default function ConnectionLines({ cities }) {
   );
 
   // BUG #182 — stable string key so useEffect doesn't re-subscribe on every render
+  // BUG #536 — city objects from GreeceMap carry a `.city` property (not `.id`/`.name`)
   const citiesKey = useMemo(
-    () => cities?.map((c) => c.id || c.name).join(',') ?? '',
+    () => cities?.map((c) => c.city).join(',') ?? '',
     [cities],
   );
 

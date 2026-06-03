@@ -75,6 +75,25 @@ export default async function handler(req, res) {
         data: imageBase64.replace(/^data:[^;]+;base64,/, ''), /* strip data URI prefix if present */
       };
     } else {
+      // #539 — SSRF allowlist: only permit known image-hosting origins before
+      // forwarding the URL to the Anthropic API.
+      const ALLOWED_IMAGE_HOSTS = [
+        'firebasestorage.googleapis.com',
+        'storage.googleapis.com',
+        'res.cloudinary.com',
+      ];
+      let parsedImageUrl;
+      try {
+        parsedImageUrl = new URL(imageUrl);
+      } catch {
+        return res.status(400).json({ error: 'Invalid imageUrl' });
+      }
+      if (parsedImageUrl.protocol !== 'https:') {
+        return res.status(400).json({ error: 'imageUrl must use https' });
+      }
+      if (!ALLOWED_IMAGE_HOSTS.includes(parsedImageUrl.hostname)) {
+        return res.status(400).json({ error: 'imageUrl host not allowed' });
+      }
       imageSource = {
         type: 'url',
         url: imageUrl,

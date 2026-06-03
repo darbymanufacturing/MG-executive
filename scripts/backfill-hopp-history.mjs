@@ -249,9 +249,11 @@ async function main() {
   if (RESET && COMMIT) {
     const completedDocs = await progRef.collection(COMPLETED_SUBCOLL).listDocuments();
     if (completedDocs.length) {
-      const b = db.batch();
-      completedDocs.forEach((ref) => b.delete(ref));
-      await b.commit();
+      for (let i = 0; i < completedDocs.length; i += BATCH_SIZE) {
+        const b = db.batch();
+        completedDocs.slice(i, i + BATCH_SIZE).forEach((ref) => b.delete(ref));
+        await b.commit();
+      }
     }
     await progRef.delete().catch(() => {});
     console.log('Progress reset.');

@@ -256,9 +256,18 @@ export default function CaptureModal({ open, onClose }) {
     }
   }, [open]);
 
+  /* Body-scroll lock — mirrors Shared/Modal.jsx #31 pattern */
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   /* ESC to close */
   useEffect(() => {
-    const handler = e => { if (e.key === 'Escape' && open) onClose(); };
+    if (!open) return;
+    const handler = e => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);

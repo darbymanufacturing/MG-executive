@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, Check, Layers, Plus, X, Trash2, Settings2, Building2 } from 'lucide-react';
+import { ChevronDown, Check, Layers, Plus, Trash2, Settings2, Building2 } from 'lucide-react';
 import { useFleet } from '../../context/FleetContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import Modal from '../Shared/Modal.jsx';
 import styles from './FleetSwitcher.module.css';
 
 /* FF-3 — the header fleet switcher: pick a fleet or "All Fleets"; manage fleets. */
@@ -81,7 +82,7 @@ export default function FleetSwitcher() {
 
 function FleetManageModal({ onClose }) {
   const { fleets, addFleet, deleteFleet } = useFleet();
-  const { config } = useCosts();
+  const { config, updateConfig } = useCosts();
   const { success, error } = useToast();
   const locations = config?.locations ?? [];
 
@@ -102,7 +103,12 @@ function FleetManageModal({ onClose }) {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      await addFleet({ name, cities: selCities });
+      const newFleet = { name: name.trim(), cities: selCities };
+      await addFleet(newFleet);
+      // #561 — keep config.locations in sync when a fleet is created with cities
+      if (selCities.length) {
+        updateConfig({ locations: [...new Set([...(config?.locations ?? []), ...selCities])] });
+      }
       success(`Fleet "${name.trim()}" created.`);
       setName('');
       setSelCities([]);
@@ -110,7 +116,14 @@ function FleetManageModal({ onClose }) {
   }
 
   async function handleCreateFromCities() {
-    const missing = locations.filter((c) => !coveredCities.has(String(c).toLowerCase()));
+    // #566 — deduplicate the city list: trim + case-insensitive uniqueness before filtering
+    const seenKeys = new Set();
+    const dedupedLocations = locations.reduce((acc, c) => {
+      const key = String(c).trim().toLowerCase();
+      if (key && !seenKeys.has(key)) { seenKeys.add(key); acc.push(String(c).trim()); }
+      return acc;
+    }, []);
+    const missing = dedupedLocations.filter((c) => !coveredCities.has(String(c).toLowerCase()));
     if (!missing.length) { success('Every city already has a fleet.'); return; }
     setBusy(true);
     try {
@@ -125,72 +138,67 @@ function FleetManageModal({ onClose }) {
     catch (e) { error(e.message || 'Could not remove the fleet.'); } finally { setBusy(false); }
   }
 
+  // #537 — use Shared <Modal> to inherit scroll-lock, inert, focus-trap, and ESC
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className={styles.modalHead}>
-          <span className={styles.modalTitle}>Manage fleets</span>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Close"><X size={18} /></button>
-        </div>
-        <p className={styles.modalDesc}>
-          A fleet is usually one city. Operational screens (Scooters, Maintenance, Revenue) can then be
-          viewed per fleet or rolled up across all of them.
-        </p>
+    <Modal isOpen onClose={onClose} title="Manage fleets" width={520}>
+      <p className={styles.modalDesc}>
+        A fleet is usually one city. Operational screens (Scooters, Maintenance, Revenue) can then be
+        viewed per fleet or rolled up across all of them.
+      </p>
 
-        {fleets.length > 0 ? (
-          <div className={styles.fleetList}>
-            {fleets.map((f) => (
-              <div key={f._docId} className={styles.fleetRow}>
-                <div className={styles.fleetInfo}>
-                  <span className={styles.fleetName}>{f.name}</span>
-                  <span className={styles.fleetCities}>{f.cities?.length ? f.cities.join(', ') : 'no cities set'}</span>
-                </div>
-                <button className={styles.delBtn} onClick={() => handleDelete(f)} disabled={busy} aria-label={`Delete ${f.name}`}>
-                  <Trash2 size={14} />
-                </button>
+      {fleets.length > 0 ? (
+        <div className={styles.fleetList}>
+          {fleets.map((f) => (
+            <div key={f._docId} className={styles.fleetRow}>
+              <div className={styles.fleetInfo}>
+                <span className={styles.fleetName}>{f.name}</span>
+                <span className={styles.fleetCities}>{f.cities?.length ? f.cities.join(', ') : 'no cities set'}</span>
               </div>
+              <button className={styles.delBtn} onClick={() => handleDelete(f)} disabled={busy} aria-label={`Delete ${f.name}`}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={styles.emptyFleets}>No fleets yet — add one below, or generate from your cities.</div>
+      )}
+
+      {locations.length > 0 && (
+        <button className={styles.fromCities} onClick={handleCreateFromCities} disabled={busy}>
+          <Plus size={14} /> Create a fleet for each of my cities ({locations.join(', ')})
+        </button>
+      )}
+
+      <div className={styles.addForm}>
+        <div className={styles.addRow}>
+          <input
+            className={styles.input}
+            placeholder="Fleet name (e.g. Corinth)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+          />
+          <button className={styles.addBtn} onClick={handleAdd} disabled={busy || !name.trim()}>
+            <Plus size={14} /> Add
+          </button>
+        </div>
+        {locations.length > 0 && (
+          <div className={styles.cityPick}>
+            <span className={styles.cityPickLabel}>Cities:</span>
+            {locations.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`${styles.cityChip} ${selCities.includes(c) ? styles.cityChipOn : ''}`}
+                onClick={() => toggleCity(c)}
+              >
+                {c}
+              </button>
             ))}
           </div>
-        ) : (
-          <div className={styles.emptyFleets}>No fleets yet — add one below, or generate from your cities.</div>
         )}
-
-        {locations.length > 0 && (
-          <button className={styles.fromCities} onClick={handleCreateFromCities} disabled={busy}>
-            <Plus size={14} /> Create a fleet for each of my cities ({locations.join(', ')})
-          </button>
-        )}
-
-        <div className={styles.addForm}>
-          <div className={styles.addRow}>
-            <input
-              className={styles.input}
-              placeholder="Fleet name (e.g. Corinth)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-            />
-            <button className={styles.addBtn} onClick={handleAdd} disabled={busy || !name.trim()}>
-              <Plus size={14} /> Add
-            </button>
-          </div>
-          {locations.length > 0 && (
-            <div className={styles.cityPick}>
-              <span className={styles.cityPickLabel}>Cities:</span>
-              {locations.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`${styles.cityChip} ${selCities.includes(c) ? styles.cityChipOn : ''}`}
-                  onClick={() => toggleCity(c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

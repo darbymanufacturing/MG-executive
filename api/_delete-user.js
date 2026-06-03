@@ -68,6 +68,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('delete-user error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to remove user' });
+    return res.status(500).json({ error: 'Failed to remove user' });
   }
 }

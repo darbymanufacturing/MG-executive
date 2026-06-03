@@ -140,8 +140,9 @@ export default function Issues() {
   const [filter, setFilter] = useState('open'); /* open | all | done */
 
   // #105: snoozed issues with a past snoozeUntil should appear in Open tab
-  const now = new Date().toISOString();
-  const isEffectivelyOpen = (i) => {
+  // #546: pure function — takes `now` as a param so callers provide a fresh timestamp
+  //       and the tabCounts memo doesn't need to close over a stale render-scope `now`.
+  const isEffectivelyOpen = (i, now) => {
     if (i.status === 'done') return false;
     // A snoozed issue whose snooze has expired is treated as open
     if (i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil <= now) return true;
@@ -151,18 +152,22 @@ export default function Issues() {
   };
 
   const filtered = issues.filter(i => {
-    if (filter === 'open') return isEffectivelyOpen(i);
+    if (filter === 'open') return isEffectivelyOpen(i, new Date().toISOString());
     if (filter === 'done') return i.status === 'done';
     return true;
   });
 
   // #107: wrap tab counts in useMemo to avoid recomputing on every render
-  const tabCounts = useMemo(() => ({
-    open: issues.filter(i => isEffectivelyOpen(i)).length,
-    all:  issues.length,
-    done: issues.filter(i => i.status === 'done').length,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [issues]);
+  // #546: compute fresh `now` inside the callback so expired snoozes are counted correctly
+  //       even when `issues` hasn't changed (no eslint-disable needed — no stale closure).
+  const tabCounts = useMemo(() => {
+    const now = new Date().toISOString();
+    return {
+      open: issues.filter(i => isEffectivelyOpen(i, now)).length,
+      all:  issues.length,
+      done: issues.filter(i => i.status === 'done').length,
+    };
+  }, [issues]);
 
   const handleCreate = async (fields) => {
     await createIssue(fields);

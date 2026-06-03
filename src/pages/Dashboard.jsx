@@ -510,7 +510,7 @@ export default function Dashboard() {
             <KpiCard
               icon={DollarSign}
               label="Revenue / Scooter / Month"
-              value={formatEUR(actualRevPerScooter)}
+              value={formatEUR(actualRevPerScooter !== null ? actualRevPerScooter : (hasPeriodData ? 0 : null))}
               sub="Actual from data"
             />
             <KpiCard

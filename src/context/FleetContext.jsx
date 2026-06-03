@@ -58,6 +58,11 @@ export function FleetProvider({ children }) {
 
   // Filter a list of city-bearing operational docs by the active fleet.
   // 'All Fleets' (or a fleet with no cities configured) returns everything unchanged.
+  //
+  // Bug #562 fix: docs that carry NO fleet identity at all (no fleetId, no city, no
+  // location) are "unassigned" — they are included in every fleet view rather than
+  // silently dropped. Only docs that DO carry an identity that mismatches the active
+  // fleet are excluded.
   const scopeByFleet = useCallback((items = []) => {
     if (isAllFleets || !activeFleet) return items;
     const cities = (activeFleet.cities ?? []).map((c) => String(c).toLowerCase());
@@ -68,14 +73,31 @@ export function FleetProvider({ children }) {
       if (!it) return false;
       if (it.fleetId) return it.fleetId === activeFleet._docId;
       const c = it.city ?? it.location ?? null;
-      return c != null && cities.includes(String(c).toLowerCase());
+      // No identity at all → treat as unassigned; include in every fleet view.
+      if (c == null) return true;
+      return cities.includes(String(c).toLowerCase());
     });
   }, [isAllFleets, activeFleet]);
 
   // Which city a given fleet covers, label-friendly (first city or the fleet name).
+  // Bug #563 fix: first-wins policy — once a city is claimed by a fleet, a later fleet
+  // covering the same city does NOT silently overwrite it. A console.warn fires so the
+  // collision is visible during development / ops without affecting production callers.
   const cityToFleet = useMemo(() => {
     const m = new Map();
-    for (const f of fleets) for (const c of f.cities ?? []) m.set(String(c).toLowerCase(), f);
+    for (const f of fleets) {
+      for (const c of f.cities ?? []) {
+        const key = String(c).toLowerCase();
+        if (m.has(key)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[FleetContext] City "${c}" is claimed by both fleet "${m.get(key).name}" and fleet "${f.name}". First-wins rule keeps "${m.get(key).name}".`,
+          );
+        } else {
+          m.set(key, f);
+        }
+      }
+    }
     return m;
   }, [fleets]);
   const fleetForCity = useCallback((city) => (city ? cityToFleet.get(String(city).toLowerCase()) ?? null : null), [cityToFleet]);

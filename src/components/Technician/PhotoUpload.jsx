@@ -28,7 +28,8 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
 
     try {
       // Get Firebase ID token for the sign request
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Session expired - please sign in again');
 
       const folder    = `repair-photos/${sessionId}`;
       const public_id = `${stepNumber}-${Date.now()}`;
@@ -98,7 +99,8 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
     // Extract public_id by splitting on "/upload/" and stripping the extension,
     // then remove any version prefix ("v12345678/").
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Session expired - please sign in again');
 
       const afterUpload  = urlToRemove.split('/upload/')[1] ?? '';
       const withoutExt   = afterUpload.replace(/\.[^/.]+$/, '');           // drop extension

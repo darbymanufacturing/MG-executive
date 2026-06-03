@@ -29,7 +29,7 @@ export default function Scooters() {
   const { scooters, tickets, addScooter, updateScooter } = useMaintenance();
   const { config } = useCosts();
   const { events } = useTelemetry();
-  const cities = config?.locations?.length ? config.locations : ['Nafplion', 'Corinth'];
+  const cities = config?.locations?.length ? config.locations : ['Nafplio', 'Corinth'];
 
   // FF-3 — scope the roster to the active fleet (All Fleets = the full roll-up).
   const { scopeByFleet, fleetForCity } = useFleet();

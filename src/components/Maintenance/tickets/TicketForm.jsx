@@ -37,7 +37,7 @@ function blank() {
 export default function TicketForm({ isOpen, onClose, onSave, initialData, isAtMaxActive }) {
   const { config } = useCosts();
   const { config: mConfig, addCustomTag } = useMaintenance();
-  const cities = config.locations?.length ? config.locations : ['Corinth', 'Nafplion'];
+  const cities = config.locations?.length ? config.locations : ['Corinth', 'Nafplio'];
 
   const [form,   setForm]   = useState(blank());
   const [errors, setErrors] = useState({});

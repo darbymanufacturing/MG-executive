@@ -9,8 +9,20 @@ import {
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
+// #551 — Validate required env var before any Firebase SDK call so a missing
+// VITE_FIREBASE_WEB_API_KEY throws a clear, catchable Error (caught in main.jsx)
+// instead of an opaque Firebase-internal exception that leaves #root blank.
+const _apiKey = import.meta.env.VITE_FIREBASE_WEB_API_KEY;
+if (!_apiKey) {
+  throw new Error(
+    '[firebase] VITE_FIREBASE_WEB_API_KEY is not set. ' +
+    'Add it to your .env.local (dev) or Vercel environment variables (prod). ' +
+    'The app cannot start without a valid Firebase API key.'
+  );
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_WEB_API_KEY,
+  apiKey: _apiKey,
   authDomain: "mg-executive.firebaseapp.com",
   projectId: "mg-executive",
   storageBucket: "mg-executive.firebasestorage.app",

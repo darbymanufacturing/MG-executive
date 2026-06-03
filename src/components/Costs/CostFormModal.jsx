@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Modal from '../Shared/Modal.jsx';
 import Button from '../Shared/Button.jsx';
 import { CATEGORIES, FREQUENCIES, CATEGORY_KEYS, FREQUENCY_KEYS } from '../../utils/constants.js';
@@ -47,6 +47,31 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
       setSaving(false);
     }
   }, [isOpen, initialData]);
+
+  // #564 — derive which locations are valid for the currently-selected fleet.
+  // When a fleet is chosen, only its configured cities are valid location options;
+  // when no fleet is chosen (company-wide overhead), all locations remain available.
+  const allowedLocations = useMemo(() => {
+    if (!form.fleetId || !fleets.length) return locations ?? [];
+    const selectedFleet = fleets.find((f) => f._docId === form.fleetId);
+    if (!selectedFleet?.cities?.length) return locations ?? [];
+    // Intersect fleet.cities with the prop-provided locations list so we never
+    // surface a city that has no cost-location mapping in the parent component.
+    const fleetCitySet = new Set((selectedFleet.cities).map((c) => String(c).toLowerCase()));
+    return (locations ?? []).filter((loc) => fleetCitySet.has(String(loc).toLowerCase()));
+  }, [form.fleetId, fleets, locations]);
+
+  // #564 — when the fleet changes, clear location if it is no longer in allowedLocations.
+  // This prevents a stale location from persisting and causing double-counting in FleetPnl.
+  useEffect(() => {
+    if (!form.location) return;
+    const stillValid = allowedLocations.some(
+      (loc) => String(loc).toLowerCase() === String(form.location).toLowerCase()
+    );
+    if (!stillValid) {
+      setForm((f) => ({ ...f, location: '' }));
+    }
+  }, [form.fleetId]); // intentionally only re-run when fleetId changes
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -128,16 +153,26 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
           </div>
         </div>
 
-        {/* Location (only when locations are configured) */}
+        {/* Location — filtered to the selected fleet's cities to prevent cross-fleet mismatch (#564) */}
         {locations?.length > 0 && (
           <div className={styles.field}>
-            <label className={styles.label}>Location</label>
+            <label className={styles.label}>
+              Location
+              {form.fleetId && allowedLocations.length < (locations?.length ?? 0) && (
+                <span className={styles.optional}> (filtered to fleet)</span>
+              )}
+            </label>
             <select className={styles.select} value={form.location} onChange={set('location')}>
               <option value="">All Locations (fleet-wide)</option>
-              {locations.map((loc) => (
+              {allowedLocations.map((loc) => (
                 <option key={loc} value={loc}>{loc}</option>
               ))}
             </select>
+            {form.fleetId && allowedLocations.length === 0 && (
+              <span className={styles.error}>
+                No locations configured for this fleet — add cities in Fleet Settings.
+              </span>
+            )}
           </div>
         )}
 
