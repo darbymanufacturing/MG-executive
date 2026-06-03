@@ -72,6 +72,8 @@ const EXPECTED_HEADERS = [
  * Returns { rows: [...], errors: [...], total: n }
  */
 export function parseRevenueCSV(csvText) {
+  // Strip UTF-8 BOM (0xFEFF) so "Date" header is recognised on Windows exports (#533)
+  if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
   const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) {
     return { rows: [], errors: ['File appears to be empty or has no data rows.'], total: 0 };

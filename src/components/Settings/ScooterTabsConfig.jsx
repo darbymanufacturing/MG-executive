@@ -5,7 +5,7 @@
  * Drag-and-drop uses native HTML5 drag events (no framer-motion).
  */
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GripVertical, Eye, EyeOff } from 'lucide-react';
 import { useScooterConfig } from '../../context/ScooterConfigContext.jsx';
 import { TAB_REGISTRY } from '../Scooters/tabRegistry.js';
@@ -20,10 +20,10 @@ export default function ScooterTabsConfig() {
   const dragIdx  = useRef(null);
   const dragOver = useRef(null);
 
-  // Sync with context when it changes
-  useState(() => {
+  // Sync with context when it changes (e.g. after a remote save or first non-empty load)
+  useEffect(() => {
     setLocalTabs([...tabs].sort((a, b) => a.order - b.order));
-  });
+  }, [tabs]);
 
   function handleDragStart(idx) { dragIdx.current = idx; }
   function handleDragEnter(idx) { dragOver.current = idx; }

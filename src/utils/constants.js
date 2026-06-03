@@ -77,6 +77,26 @@ export const FREQUENCIES = {
     monthlyMultiplier: 1 / 12,
     annualMultiplier: 1,
   },
+  // #505 / #525 — yearly/weekly/daily were missing; normalizeToMonthly returned 0 for these
+  // and parseCostsCSV rejected them because FREQUENCY_SET derived from Object.keys(FREQUENCIES).
+  yearly: {
+    label: 'Yearly',
+    shortLabel: '/yr',
+    monthlyMultiplier: 1 / 12,
+    annualMultiplier: 1,
+  },
+  weekly: {
+    label: 'Weekly',
+    shortLabel: '/wk',
+    monthlyMultiplier: 52 / 12,
+    annualMultiplier: 52,
+  },
+  daily: {
+    label: 'Daily',
+    shortLabel: '/day',
+    monthlyMultiplier: 365 / 12,
+    annualMultiplier: 365,
+  },
 };
 
 export const FREQUENCY_KEYS = Object.keys(FREQUENCIES);

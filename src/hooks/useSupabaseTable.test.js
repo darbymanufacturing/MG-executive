@@ -380,11 +380,15 @@ describe('useSupabaseTable', () => {
     expect(result.current.items).toHaveLength(50);
   });
 
-  it('throws when org resolved but absent', () => {
-    useOrg.mockReturnValue({ orgId: null, loading: false });
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => renderHook(() => useSupabaseTable('telemetry_events'))).toThrow(/requires an orgId/);
-    errSpy.mockRestore();
+  it('returns an error state (does NOT throw) when org resolved but absent and a user is signed in', () => {
+    // #523/#291: peer hooks fail loud via an error-state return, not a synchronous
+    // throw (a throw crashed RevenueContext via the ErrorBoundary→reload loop).
+    useOrg.mockReturnValue({ orgId: null, loading: false, hasUser: true });
+    const { result } = renderHook(() => useSupabaseTable('telemetry_events'));
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error.message).toMatch(/requires an orgId/);
+    expect(result.current.items).toEqual([]);
+    expect(result.current.loading).toBe(false);
   });
 
   it('sets error and loading=false when isSupabaseConfigured is false', async () => {

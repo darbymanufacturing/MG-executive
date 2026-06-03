@@ -30,6 +30,12 @@ const flag = (n, d = null) => { const i = args.indexOf(n); const v = args[i + 1]
 const ORG_ID = flag('--org-id', 'mg-executive-org');
 const BATCH = Number(flag('--batch', '500'));
 if (!Number.isFinite(BATCH) || BATCH <= 0) throw new Error('--batch must be a positive integer');
+// PAGE controls how many Firestore docs are buffered in memory at once during the
+// read pass. Keeping this at 1000 (the backfill-firestore-to-supabase.mjs default)
+// avoids OOM on large collections (e.g. telemetryEvents). Independent of BATCH
+// (which controls SQL output file size).
+const PAGE = Number(flag('--page', '1000'));
+if (!Number.isFinite(PAGE) || PAGE <= 0) throw new Error('--page must be a positive integer');
 // Named collection presets. `operational` = the 14 ADR-0015 collections (config + pow
 // both fold into the app_config table). Reads LIVE Firestore so PoW is current.
 const PRESETS = {
@@ -137,15 +143,29 @@ async function main() {
   for (const coll of ONLY) {
     const table = SUPABASE_TABLE[coll];
     if (!table) { console.warn(`⚠️  unknown collection "${coll}" — skipping`); continue; }
-    const snap = await db.collection(coll).get(); // 1 read/doc against Spark quota
-    const rows = snap.docs.map((d) => {
-      const docData = d.data();
-      const effectiveOrgId = docData.orgId || ORG_ID;
-      if (!docData.orgId) console.warn(`⚠️  doc ${d.id} missing orgId field — falling back to CLI flag "${ORG_ID}"`);
-      return normalizeDates(toSupabaseRow(coll, effectiveOrgId, d.id, docData), COLS[table]);
-    });
-    (rowsByTable[table] ??= []).push(...rows);
-    console.log(`  read ${coll.padEnd(18)} → ${table.padEnd(20)} ${String(rows.length).padStart(6)} docs`);
+    // Paginated read — avoids loading the entire collection into memory at once
+    // (mirrors backfill-firestore-to-supabase.mjs). Each page is PAGE docs; rows
+    // are appended incrementally so peak memory is O(PAGE), not O(collection).
+    let collCount = 0;
+    let lastDoc = null;
+    for (;;) {
+      let q = db.collection(coll)
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(PAGE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      lastDoc = snap.docs[snap.docs.length - 1];
+      for (const d of snap.docs) {
+        const docData = d.data();
+        const effectiveOrgId = docData.orgId || ORG_ID;
+        if (!docData.orgId) console.warn(`⚠️  doc ${d.id} missing orgId field — falling back to CLI flag "${ORG_ID}"`);
+        (rowsByTable[table] ??= []).push(normalizeDates(toSupabaseRow(coll, effectiveOrgId, d.id, docData), COLS[table]));
+      }
+      collCount += snap.size;
+      if (snap.size < PAGE) break; // last page
+    }
+    console.log(`  read ${coll.padEnd(18)} → ${table.padEnd(20)} ${String(collCount).padStart(6)} docs`);
   }
 
   // Pass 2: write batched, idempotent .sql files per table.

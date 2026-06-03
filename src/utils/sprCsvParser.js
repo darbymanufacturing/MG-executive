@@ -57,6 +57,8 @@ const _OPTIONAL_HEADERS = [
  * Returns { rows, errors, total }
  */
 export function parseEventsCSV(csvText, zones = []) {
+  // Strip UTF-8 BOM (0xFEFF) so "ScooterID" header is recognised on Windows exports (#534)
+  if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
   const lines = csvText
     .split('\n')
     .map((l) => l.trim())

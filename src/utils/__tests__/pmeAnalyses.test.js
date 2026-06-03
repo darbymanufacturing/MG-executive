@@ -1,5 +1,5 @@
 /**
- * Contract tests for pmeAnalyses.js — bug #367.
+ * Contract tests for pmeAnalyses.js — bug #367, bug #506.
  * Guards the PME KPI exports against silent regressions.
  * All time-sensitive tests use data far in the future so Date.now()-based filters stay stable.
  */
@@ -9,6 +9,7 @@ import {
   overturnToRepairCorrelation,
   trueOverturnsReport,
   downtimeByCause,
+  overturnBaseline,
 } from '../pmeAnalyses.js';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -68,6 +69,19 @@ describe('countRealTrips', () => {
       ev('SC1', 'on trip',   'available',  '2025-06-01T10:30:00Z'),
     ];
     // One trip that includes a pause
+    expect(countRealTrips(events)).toBe(1);
+  });
+
+  // bug #506 — null-guard regression test
+  it('does not throw when an event is missing a timestamp (bug #506)', () => {
+    const events = [
+      ev('SC1', 'available', 'on trip',   '2025-06-01T10:00:00Z'),
+      // event without a timestamp — previously crashed with TypeError
+      { scooterId: 'SC1', beforeState: 'on trip', afterState: 'available', timestamp: null, eventType: 'other' },
+      ev('SC1', 'on trip',   'available', '2025-06-01T10:15:00Z'),
+    ];
+    expect(() => countRealTrips(events)).not.toThrow();
+    // The null-timestamp event is silently filtered; the valid pair still counts
     expect(countRealTrips(events)).toBe(1);
   });
 });
@@ -187,5 +201,28 @@ describe('downtimeByCause', () => {
     ];
     const { byCause } = downtimeByCause(events);
     expect(byCause.rebalance).toBe(0);
+  });
+});
+
+// ─── overturnBaseline null-timestamp guard (bug #506) ────────────────────────
+
+describe('overturnBaseline', () => {
+  it('returns zero baseline for a scooter with no events', () => {
+    const result = overturnBaseline([], 'SC1');
+    expect(result.lifetimeMean).toBe(0);
+    expect(result.anomaly).toBe(false);
+  });
+
+  // bug #506 — null-guard regression test
+  it('does not throw when an overturn event is missing a timestamp (bug #506)', () => {
+    const events = [
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: '2025-01-01T00:00:00Z', reason: '' },
+      // event without a timestamp — previously crashed with TypeError in sort comparator
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: null, reason: '' },
+    ];
+    expect(() => overturnBaseline(events, 'SC1')).not.toThrow();
+    const result = overturnBaseline(events, 'SC1');
+    // Only the valid-timestamp event is counted (null-ts event filtered out)
+    expect(result.totalCount).toBe(1);
   });
 });

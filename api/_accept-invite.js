@@ -107,8 +107,11 @@ export default async function handler(req, res) {
   }
 
   // Mirror {orgId, role} into custom claims so the rules admit the contractor.
+  // IMPORTANT: Supabase reads the JWT 'role' claim as the Postgres role for SET ROLE, so it
+  // MUST be 'authenticated'. The app's RBAC role lives in 'user_role' (mirrors _sync-claim.js).
   try {
-    await getAuth().setCustomUserClaims(uid, { orgId, role });
+    const existing = (await getAuth().getUser(uid)).customClaims ?? {};
+    await getAuth().setCustomUserClaims(uid, { ...existing, orgId, role: 'authenticated', user_role: role });
   } catch (err) {
     console.error('accept-invite claim set failed:', err);
     // Profile is written; claims can be re-synced via /api/sync-claim. Surface a soft warning.

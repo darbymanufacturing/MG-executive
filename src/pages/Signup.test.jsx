@@ -182,7 +182,7 @@ describe('Signup — (3) profile-write failure', () => {
 });
 
 describe('Signup — (4) syncClaims failure', () => {
-  it('calls deleteDoc for org AND currentUser.delete when syncClaims rejects', async () => {
+  it('rolls back org doc, user profile doc, AND auth user when syncClaims rejects', async () => {
     mockSignUp.mockResolvedValue();
     setDoc.mockResolvedValue(); // both org + profile writes succeed
     mockSyncClaims.mockRejectedValue(new Error('Claims sync failed'));
@@ -194,10 +194,11 @@ describe('Signup — (4) syncClaims failure', () => {
       expect(screen.getByText(/claims sync failed/i)).toBeInTheDocument()
     );
 
-    // Org doc was committed → must be rolled back
-    expect(deleteDoc).toHaveBeenCalledTimes(1);
-    const deletedRef = deleteDoc.mock.calls[0][0];
-    expect(deletedRef.col).toBe('organizations');
+    // #526: both the org doc AND the orphan-prone user profile doc must be rolled back
+    expect(deleteDoc).toHaveBeenCalledTimes(2);
+    const deletedCols = deleteDoc.mock.calls.map((c) => c[0].col);
+    expect(deletedCols).toContain('organizations');
+    expect(deletedCols).toContain('users');
 
     // Auth user must also be rolled back
     expect(auth.currentUser.delete).toHaveBeenCalledTimes(1);

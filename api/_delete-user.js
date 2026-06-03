@@ -56,7 +56,8 @@ export default async function handler(req, res) {
   const target = targetSnap.data();
 
   // Cross-org guard: can only remove members within the same org.
-  if (target.orgId && target.orgId !== caller.orgId) {
+  // Fail-closed: if target has no orgId (malformed profile), deny rather than allow.
+  if (!target.orgId || target.orgId !== caller.orgId) {
     return res.status(403).json({ error: 'Cannot remove a user from another organisation.' });
   }
 

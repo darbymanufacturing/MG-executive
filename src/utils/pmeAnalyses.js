@@ -52,7 +52,9 @@ export function countRealTrips(events, minSecs = MIN_TRIP_SECS) {
 
   let total = 0;
   for (const evs of Object.values(byScooter)) {
-    const sorted = [...evs].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const sorted = [...evs]
+      .filter((e) => e.timestamp != null)
+      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''));
     let tripStart = null;
     for (const ev of sorted) {
       const before = (ev.beforeState || '').trim().toLowerCase();
@@ -192,7 +194,9 @@ export function downtimeByCause(events) {
   const scooterDowntime = {};
 
   for (const [scooterId, evs] of Object.entries(byScooter)) {
-    const sorted = [...evs].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const sorted = [...evs]
+      .filter((e) => e.timestamp != null)
+      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''));
     let inDowntime = null;
     let cause      = null;
     let total      = 0;
@@ -228,16 +232,20 @@ export function overturnBaseline(events, scooterId, windowDays = 30) {
   const trueOvt = events.filter((e) => e.scooterId === scooterId && isTrueOverturn(e));
   if (!trueOvt.length) return { lifetimeMean: 0, last30Rate: 0, ratio: 1, anomaly: false };
 
-  // Sort by date to find lifetime span
-  const sorted  = [...trueOvt].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  // Sort by date to find lifetime span (filter nulls first to avoid TypeError)
+  const sorted  = [...trueOvt]
+    .filter((e) => e.timestamp != null)
+    .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''));
+  // Use only the null-filtered set for all calculations so null-ts events are excluded.
+  if (!sorted.length) return { lifetimeMean: 0, last30Rate: 0, ratio: 1, anomaly: false };
   const firstEv = sorted[0].timestamp;
   const _lastEv = sorted[sorted.length - 1].timestamp;
   const lifetimeDays = Math.max(1, daysBetween(firstEv, new Date().toISOString()));
 
-  const lifetimeMean = trueOvt.length / lifetimeDays; // per day
+  const lifetimeMean = sorted.length / lifetimeDays; // per day (null-ts events excluded)
 
   const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
-  const last30 = trueOvt.filter((e) => e.timestamp >= cutoff);
+  const last30 = sorted.filter((e) => e.timestamp >= cutoff);
   const last30Rate = last30.length / windowDays;
 
   const ratio   = lifetimeMean > 0 ? last30Rate / lifetimeMean : 1;
@@ -249,7 +257,7 @@ export function overturnBaseline(events, scooterId, windowDays = 30) {
     ratio:        +ratio.toFixed(2),
     anomaly,
     last30Count:  last30.length,
-    totalCount:   trueOvt.length,
+    totalCount:   sorted.length, // null-ts events excluded from count
   };
 }
 

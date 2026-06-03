@@ -106,7 +106,7 @@ export function computeCPM(phases) {
   const LS = {};
   const LF = {};
 
-  for (const ph of [...phases].reverse()) {
+  for (const ph of [...orderedPhases].reverse()) {
     const succs = successors[ph.id] || [];
     LF[ph.id] = succs.length > 0
       ? Math.min(...succs.map((sid) => LS[sid] ?? projectDuration))

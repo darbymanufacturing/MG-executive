@@ -81,12 +81,15 @@ export function NotificationProvider({ children }) {
       if (powFirestoreDoc) {
         await orgUpdate(NOTIFICATIONS_COL, powFirestoreDoc._docId, { dismissed: true });
       } else {
-        // Write the minimal dismissed marker for the first time
+        // Write the minimal dismissed marker for the first time.
+        // No explicit Firestore docId — orgWrite auto-generates one so requireOrgDoc
+        // is never invoked. The logical id field ('__pow_day__') in the payload is
+        // what powFirestoreDoc looks up via firestoreNotifications.find(n => n.id).
         await orgWrite(NOTIFICATIONS_COL, {
           id: '__pow_day__',
           dismissed: true,
           createdAt: new Date().toISOString(),
-        }, { id: '__pow_day__', merge: true });
+        });
       }
       // Optimistically update local state so UI reflects immediately
       setPowNotification((prev) => prev ? { ...prev, dismissed: true } : prev);

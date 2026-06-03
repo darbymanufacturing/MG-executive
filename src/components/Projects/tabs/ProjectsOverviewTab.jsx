@@ -5,7 +5,14 @@ import styles from './ProjectsOverviewTab.module.css';
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
-  return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+  // Use Date.UTC on both sides to avoid UTC+2/+3 off-by-one:
+  // new Date("YYYY-MM-DD") parses as midnight UTC, making the difference
+  // wrong relative to local wall-clock date in Greece timezone.
+  const [ty, tm, td] = dateStr.split('-').map(Number);
+  const now = new Date();
+  const target = Date.UTC(ty, tm - 1, td);
+  const today  = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.ceil((target - today) / 86400000);
 }
 
 function StatCard({ label, value, sub, color }) {

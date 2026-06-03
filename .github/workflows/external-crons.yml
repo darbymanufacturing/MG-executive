@@ -1,0 +1,47 @@
+name: External Crons
+
+# Triggers the two scheduled API endpoints that cannot fit in vercel.json because
+# the Vercel Hobby plan allows a maximum of 2 cron entries (both slots are already
+# used by cron-daily-brief and cron-hopp-sync).
+#
+# Handlers that run here:
+#   - /api/cron-purge-deleted-orgs   (Phase 2.6 — purges orgs past 30-day grace)
+#   - /api/cron-supabase-parity-check (Supabase/Firestore row-count diff check)
+#
+# Prerequisites:
+#   - Repo secret CRON_SECRET must be set (GitHub → repo Settings → Secrets →
+#     Actions). Use the same value as the CRON_SECRET env var in Vercel.
+#   - GitHub Actions must be enabled for the repository.
+
+on:
+  schedule:
+    # Daily at 06:00 UTC (09:00 Athens summer / 08:00 Athens winter).
+    # Offset from the Vercel crons (05:00 and 05:30) so they don't compete.
+    - cron: '0 6 * * *'
+  # Allow manual runs from the Actions tab for testing / on-demand backfills.
+  workflow_dispatch:
+
+jobs:
+  run-external-crons:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Purge deleted orgs
+        run: |
+          response=$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --header "Content-Type: application/json" \
+            "https://mg-executive.vercel.app/api/cron-purge-deleted-orgs")
+          echo "Response: $response"
+
+      - name: Supabase parity check
+        run: |
+          response=$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --header "Content-Type: application/json" \
+            "https://mg-executive.vercel.app/api/cron-supabase-parity-check")
+          echo "Response: $response"

@@ -53,14 +53,32 @@ async function pollForConnection(customerId, maxAttempts = 6, intervalMs = 3000)
   return null;
 }
 
+// ── localStorage key helpers (org-scoped, fix #511) ──────────────────────────
+
+/** Org-scoped localStorage key helpers (fix #511: global keys caused cross-tenant leaks) */
+function lsKey(base, orgId) {
+  return orgId ? `${base}_${orgId}` : base;
+}
+function lsGet(base, orgId) {
+  return localStorage.getItem(lsKey(base, orgId)) || '';
+}
+function lsSet(base, orgId, value) {
+  localStorage.setItem(lsKey(base, orgId), value);
+}
+function lsRemove(base, orgId) {
+  localStorage.removeItem(lsKey(base, orgId));
+}
+
 // ── component ──────────────────────────────────────────────────────────────────
 
 export default function BankConnect({ onNewTransactions }) {
   const { orgId } = useOrg();
   const [status,       setStatus]       = useState('idle'); // idle | connecting | polling | syncing | done | error
   const [message,      setMessage]      = useState('');
-  const [connectionId, setConnectionId] = useState(() => localStorage.getItem('se_connection_id') || '');
-  const [customerId,   setCustomerId]   = useState(() => localStorage.getItem('se_customer_id')   || '');
+  // #511: do NOT use lazy initializers here — orgId is not yet known at that point.
+  // Instead, seed from localStorage in a useEffect keyed on orgId (see below).
+  const [connectionId, setConnectionId] = useState('');
+  const [customerId,   setCustomerId]   = useState('');
 
   // #167: prevent state updates after unmount
   const mountedRef = useRef(true);
@@ -69,38 +87,65 @@ export default function BankConnect({ onNewTransactions }) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // ── Detect return from Salt Edge (sessionStorage flag set before redirect) ───
+  // #511: load org-scoped localStorage values whenever orgId becomes known or changes.
+  // Also clear local state when the org changes so the prior org's connection is never shown.
   useEffect(() => {
+    if (!orgId) return;
+    setConnectionId(lsGet('se_connection_id', orgId));
+    setCustomerId(lsGet('se_customer_id',   orgId));
+    setStatus('idle');
+    setMessage('');
+  }, [orgId]);
+
+  // ── Detect return from Salt Edge (sessionStorage flag set before redirect) ───
+  // #535: orgId is stable across re-renders once set, but the flag and key reads
+  //        must use the current (post-return) orgId, so include it in deps.
+  //        Add .catch() so a pollForConnection failure is surfaced to the user.
+  useEffect(() => {
+    if (!orgId) return; // #535: wait until orgId is known before processing return
     if (!sessionStorage.getItem('se_connecting')) return;
-    const storedCustomerId = localStorage.getItem('se_customer_id');
+    // #511: read the org-scoped customer_id key
+    const storedCustomerId = lsGet('se_customer_id', orgId);
     if (!storedCustomerId) return;
 
     sessionStorage.removeItem('se_connecting');
     setStatus('polling');
     setMessage('Waiting for bank connection to activate…');
 
-    pollForConnection(storedCustomerId).then(async (connId) => {
-      if (!mountedRef.current) return; // #167: guard against unmount
-      if (!connId) {
+    pollForConnection(storedCustomerId)
+      .then(async (connId) => {
+        if (!mountedRef.current) return; // #167: guard against unmount
+        if (!connId) {
+          setStatus('error');
+          setMessage('Connection not found. Please try connecting again.');
+          return;
+        }
+        // #511: write to org-scoped key
+        lsSet('se_connection_id', orgId, connId);
+        setConnectionId(connId);
+        // #399: use org-scoped config doc id instead of global 'config/bank' singleton
+        const bankCfgDocId = orgId ? orgDocId(orgId, 'bank') : 'bank';
+        await setDoc(doc(db, 'config', bankCfgDocId), {
+          connectionId: connId, customerId: storedCustomerId, connectedAt: new Date().toISOString(),
+          orgId: orgId ?? null,
+        });
+        if (!mountedRef.current) return; // #167: guard after async setDoc
+        // #535: pass orgId explicitly so fetchTransactions uses the current (non-stale) value
+        await fetchTransactions(connId, orgId);
+      })
+      .catch((err) => {
+        // #535: surface poll / setDoc errors instead of silently swallowing them
+        if (!mountedRef.current) return;
         setStatus('error');
-        setMessage('Connection not found. Please try connecting again.');
-        return;
-      }
-      localStorage.setItem('se_connection_id', connId);
-      setConnectionId(connId);
-      // #399: use org-scoped config doc id instead of global 'config/bank' singleton
-      const bankCfgDocId = orgId ? orgDocId(orgId, 'bank') : 'bank';
-      await setDoc(doc(db, 'config', bankCfgDocId), {
-        connectionId: connId, customerId: storedCustomerId, connectedAt: new Date().toISOString(),
-        orgId: orgId ?? null,
+        setMessage(err?.message || 'Bank connection failed. Please try again.');
       });
-      if (!mountedRef.current) return; // #167: guard after async setDoc
-      await fetchTransactions(connId);
-    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [orgId]); // re-run if orgId changes (covers the post-redirect case correctly)
 
-  const fetchTransactions = useCallback(async (connId) => {
+  // #535: accept explicit orgId arg so the post-return effect can pass the current value
+  //        rather than relying on the closed-over one (which could still be null at mount time).
+  const fetchTransactions = useCallback(async (connId, currentOrgId) => {
+    const resolvedOrgId = currentOrgId ?? orgId;
     setStatus('syncing');
     setMessage('Fetching transactions…');
     try {
@@ -112,7 +157,7 @@ export default function BankConnect({ onNewTransactions }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
 
-      const count = await writeTransactions(data.transactions || [], orgId);
+      const count = await writeTransactions(data.transactions || [], resolvedOrgId);
       setStatus('done');
       setMessage(`${count} new transaction${count !== 1 ? 's' : ''} staged for review.`);
       onNewTransactions?.(count);
@@ -135,8 +180,8 @@ export default function BankConnect({ onNewTransactions }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
 
-      // Persist customer_id and set redirect flag before leaving
-      localStorage.setItem('se_customer_id', data.customer_id);
+      // #511: Persist customer_id under the org-scoped key before leaving
+      lsSet('se_customer_id', orgId, data.customer_id);
       setCustomerId(data.customer_id);
       sessionStorage.setItem('se_connecting', '1');
 
@@ -160,6 +205,7 @@ export default function BankConnect({ onNewTransactions }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
 
+      // orgId is current here (this is a user-initiated action, not a post-redirect effect)
       const count = await writeTransactions(data.transactions || [], orgId);
       setStatus('done');
       setMessage(`${count} new transaction${count !== 1 ? 's' : ''} staged.`);
@@ -171,8 +217,9 @@ export default function BankConnect({ onNewTransactions }) {
   };
 
   const handleDisconnect = () => {
-    localStorage.removeItem('se_connection_id');
-    localStorage.removeItem('se_customer_id');
+    // #511: remove org-scoped keys, not the global ones
+    lsRemove('se_connection_id', orgId);
+    lsRemove('se_customer_id',   orgId);
     setConnectionId('');
     setCustomerId('');
     setStatus('idle');

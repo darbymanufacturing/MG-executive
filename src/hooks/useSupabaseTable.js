@@ -47,7 +47,7 @@ export function mapRow(row) {
 }
 
 export function useSupabaseTable(table, opts = {}) {
-  const { orgId, loading: orgLoading } = useOrg();
+  const { orgId, loading: orgLoading, hasUser } = useOrg();
   const { error: toastError } = useToast();
   const orderByOpt = opts.orderBy ?? null;
   const baseLimit = opts.limit ?? DEFAULT_LIMIT;
@@ -66,9 +66,17 @@ export function useSupabaseTable(table, opts = {}) {
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
 
-  // Fail loud (ADR-0003 parity): org resolved but absent → never query unscoped.
-  if (!orgLoading && !orgId) {
-    throw new Error(`useSupabaseTable('${table}') requires an orgId — none in context.`);
+  // #523/#291: org resolved-but-absent (user IS signed in) fails loud via an ERROR
+  // STATE — never a synchronous throw (a throw reached the outermost ErrorBoundary
+  // whose reset reloaded the page, tearing down every listener and crashing
+  // RevenueContext). The `hasUser` guard keeps the auth-race window (orgId=null,
+  // hasUser=false) in a loading state. Mirrors useOrgCollection / useSupabaseCollectionLive.
+  if (!orgLoading && !orgId && hasUser) {
+    return {
+      items: [], loading: false,
+      error: new Error(`useSupabaseTable('${table}') requires an orgId — none in context.`),
+      loadMore: () => {}, hasMore: false,
+    };
   }
 
   // When the filter/table changes, reset offset to 0 and clear items in a single

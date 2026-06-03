@@ -47,7 +47,7 @@ export default function BankTransactionReview() {
       });
     });
     return unsub;
-  }, []);
+  }, [orgId]);
 
   // ── Category edit ────────────────────────────────────────────────────────
   // #170: capture previous value for rollback on failure

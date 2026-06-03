@@ -156,6 +156,14 @@ export async function orgTransaction(collectionName, docId, mutator) {
     const snap = await tx.get(ref);
     const data = snap.exists() ? snap.data() : {};
     const patch = await mutator(data);
-    tx.update(ref, { ...patch, updatedAt: serverTimestamp() });
+    const updatedAt = serverTimestamp();
+    if (snap.exists()) {
+      // Doc already exists — patch in place (FAILED_PRECONDITION if we used set here without merge).
+      tx.update(ref, { ...patch, updatedAt });
+    } else {
+      // Doc does not exist — create it with full org stamps so it is properly scoped.
+      // merge:false is intentional: the caller controls the full payload via mutator().
+      tx.set(ref, { ...patch, updatedAt, orgId }, { merge: false });
+    }
   });
 }

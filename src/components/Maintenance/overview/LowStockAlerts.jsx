@@ -31,7 +31,7 @@ export default function LowStockAlerts() {
             className={`${styles.row} ${isCritical ? styles.critical : ''}`}
           >
             <div className={styles.partInfo}>
-              <span className={styles.partName}>{part.name ?? part._docId}</span>
+              <span className={styles.partName}>{part.partName ?? part._docId}</span>
               <span className={styles.sku}>{part.sku ?? part._docId}</span>
             </div>
             <div className={styles.stockInfo}>

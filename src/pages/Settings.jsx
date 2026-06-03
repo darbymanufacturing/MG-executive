@@ -430,23 +430,18 @@ export default function Settings() {
               </p>
             </div>
 
-            {/* Monthly SIM cost */}
-            <div className={styles.field}>
-              <label className={styles.label}>Monthly SIM Cost (€)</label>
-              <div className={styles.amountWrap}>
-                <span className={styles.eurSymbol}>€</span>
-                <input
-                  type="number"
-                  className={`${styles.input} ${styles.amountInput}`}
-                  value={config.financial?.monthlySimCost ?? 150}
-                  onChange={(e) => updateConfig({
-                    financial: { ...(config.financial || {}), monthlySimCost: e.target.value === '' ? 0 : parseFloat(e.target.value) },
-                  })}
-                  placeholder="150"
-                  min="0"
-                  step="1"
-                />
-              </div>
+            {/* Monthly SIM cost — #507: use MoneyField so write fires on blur, not per keystroke */}
+            <div>
+              <MoneyField
+                label="Monthly SIM Cost (€)"
+                value={config.financial?.monthlySimCost ?? 150}
+                onCommit={(v) => updateConfig({
+                  financial: { ...(config.financial || {}), monthlySimCost: v ?? 0 },
+                })}
+                styles={styles}
+                placeholder="150"
+                step="1"
+              />
               <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                 Fleet-level flat SIM cost (≈ €3/scooter regardless of active status). Update when fleet size changes.
               </p>

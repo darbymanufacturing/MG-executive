@@ -193,7 +193,7 @@ export function MaintenanceProvider({ children }) {
   const ticketsWithCalc = useMemo(() =>
     tickets.map((t) => {
       const daysOpen  = computeDaysOpen(t);
-      const entryDate = t.dateEntered ? new Date(t.dateEntered) : new Date();
+      const entryDate = t.dateEntered ? new Date(t.dateEntered + 'T12:00:00') : new Date();
       const monthKey  = MONTH_KEYS[entryDate.getMonth()];
       const dailyRate = config.seasonalityIndex?.[monthKey] ?? config.revenueRatePerDay ?? 3.67;
       const revenueLost = daysOpen * dailyRate;

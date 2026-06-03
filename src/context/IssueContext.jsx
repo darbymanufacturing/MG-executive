@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo } from 'react';
 import { arrayUnion } from 'firebase/firestore';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { orgWrite, orgUpdate } from '../hooks/orgWrite.js';
@@ -25,7 +25,7 @@ export function IssueProvider({ children }) {
     [items],
   );
 
-  async function createIssue(fields) {
+  const createIssue = useCallback(async (fields) => {
     if (!user) throw new Error('Not authenticated');
     const issueData = {
       title: '',
@@ -49,43 +49,45 @@ export function IssueProvider({ children }) {
       rethrow: true, errorMessage: 'Failed to create issue',
     });
     return { ...issueData, id: result.data?.id };
-  }
+  }, [user]);
 
-  async function updateIssue(id, fields) {
+  const updateIssue = useCallback(async (id, fields) => {
     const result = await orgUpdate(COLLECTION, id, fields, {
       rethrow: true, errorMessage: 'Failed to update issue',
     });
     return result.data;
-  }
+  }, []);
 
-  async function snoozeIssue(id, until) {
+  const snoozeIssue = useCallback(async (id, until) => {
     return updateIssue(id, { status: 'snoozed', snoozeUntil: until });
-  }
+  }, [updateIssue]);
 
-  async function resolveIssue(id) {
+  const resolveIssue = useCallback(async (id) => {
     return updateIssue(id, { status: 'done' });
-  }
+  }, [updateIssue]);
 
-  async function addNote(id, text) {
+  const addNote = useCallback(async (id, text) => {
     if (!user) throw new Error('Not authenticated');
     const result = await orgUpdate(COLLECTION, id, {
       notes: arrayUnion({ text, authorUid: user.uid, at: new Date().toISOString() }),
     }, { rethrow: true, errorMessage: 'Failed to add note' });
     return result.data;
-  }
+  }, [user]);
 
   /* Active issues: not done, and not snoozed (unless snoozeUntil has passed) */
-  const activeIssues = issues.filter((i) =>
-    i.status !== 'done' &&
-    !(i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil > new Date().toISOString())
+  const activeIssues = useMemo(() =>
+    issues.filter((i) =>
+      i.status !== 'done' &&
+      !(i.status === 'snoozed' && i.snoozeUntil && i.snoozeUntil > new Date().toISOString())
+    ),
+    [issues],
   );
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({
     issues, activeIssues, loading, snapshotError: error ? error.message : null,
     createIssue, updateIssue, snoozeIssue, resolveIssue, addNote,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [issues, activeIssues, loading, error]);
+  }), [issues, activeIssues, loading, error, createIssue, updateIssue, snoozeIssue, resolveIssue, addNote]);
 
   return (
     <IssueContext.Provider value={value}>

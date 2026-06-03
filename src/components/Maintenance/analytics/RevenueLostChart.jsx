@@ -16,7 +16,7 @@ function buildData(tickets) {
   tickets
     .filter((t) => OPEN_STATUSES.includes(t.status) && t.dateEntered)
     .forEach((t) => {
-      const d = new Date(t.dateEntered);
+      const d = new Date(t.dateEntered + 'T12:00:00');
       if (isNaN(d.getTime())) return;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}`;

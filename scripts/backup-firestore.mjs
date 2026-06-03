@@ -29,9 +29,15 @@ const PAGE_SIZE = 500;
 // --skip <coll,coll> — exclude collections from the backup (e.g. the huge
 // telemetryEvents when the Spark read quota is tight). Skipped collections are
 // recorded in the manifest as { skipped: true } so the backup is self-describing.
+//
+// DEFAULT_SKIP: operational-progress subcollections that are not business data
+// and that contain nested subcollections (backfill_state) — always excluded so the
+// script never aborts FATAL on them regardless of --skip arguments.
+const DEFAULT_SKIP = new Set(['backfill_state']);
 const SKIP = (() => {
   const i = process.argv.indexOf('--skip');
-  return i >= 0 && process.argv[i + 1] ? new Set(process.argv[i + 1].split(',').map((s) => s.trim())) : new Set();
+  const cli = i >= 0 && process.argv[i + 1] ? new Set(process.argv[i + 1].split(',').map((s) => s.trim())) : new Set();
+  return new Set([...DEFAULT_SKIP, ...cli]);
 })();
 
 function initAdmin() {

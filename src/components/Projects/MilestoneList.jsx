@@ -62,8 +62,17 @@ function EditableRow({ milestone, onUpdate, onDelete, onToggle }) {
   }
 
   // ── Normal display row ────────────────────────────────────────────────────
-  const isOverdue = milestone.dueDate && !milestone.done
-    && new Date(milestone.dueDate) < new Date();
+  // Compare calendar dates via Date.UTC to avoid UTC+2/+3 off-by-one:
+  // new Date("YYYY-MM-DD") parses as midnight UTC which is already "past"
+  // in Greece timezone on the deadline day itself.
+  const isOverdue = (() => {
+    if (!milestone.dueDate || milestone.done) return false;
+    const [ty, tm, td] = milestone.dueDate.split('-').map(Number);
+    const now = new Date();
+    const target = Date.UTC(ty, tm - 1, td);
+    const today  = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return target < today;
+  })();
 
   return (
     <li className={`${styles.item} ${milestone.done ? styles.done : ''}`}>

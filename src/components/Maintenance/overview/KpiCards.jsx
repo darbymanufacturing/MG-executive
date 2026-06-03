@@ -63,7 +63,7 @@ export default function KpiCards({ filteredTickets }) {
     // 8. Completed this month (filtered)
     const completedThisMonth = filteredTickets.filter((t) => {
       if (t.status !== 'Completed' || !t.dateCompleted) return false;
-      const d = new Date(t.dateCompleted);
+      const d = new Date(t.dateCompleted + 'T12:00:00');
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }).length;
 

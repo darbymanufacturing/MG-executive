@@ -87,10 +87,18 @@ const SPECIAL = new Set(SPECIAL_LIST);
 const args = process.argv.slice(2);
 const COMMIT     = args.includes('--commit');
 const STAMP_ONLY = args.includes('--stamp-only');   // treat MIGRATE collections as STAMP (field only; defer id-prefix)
-const ONLY       = (() => { const i = args.indexOf('--only'); return i >= 0 ? new Set(args[i + 1].split(',')) : null; })();
-const EXCLUDE    = (() => { const i = args.indexOf('--exclude'); return i >= 0 ? new Set(args[i + 1].split(',')) : new Set(); })();
-const MAX_WRITES = (() => { const i = args.indexOf('--max-writes'); return i >= 0 ? parseInt(args[i + 1], 10) : 15000; })();
-const OWNER_UID  = (() => { const i = args.indexOf('--owner-uid'); return i >= 0 ? args[i + 1] : null; })();
+// Safe flag() helper: returns the value after the flag, or `def` if the flag is
+// absent, is the last argument (no value), or is immediately followed by another
+// flag (e.g. `--only --commit`). Mirrors backfill-firestore-to-supabase.mjs.
+const flag = (name, def = null) => {
+  const i = args.indexOf(name);
+  const v = args[i + 1];
+  return i >= 0 && v !== undefined && !v.startsWith('--') ? v : def;
+};
+const ONLY       = (() => { const v = flag('--only'); return v ? new Set(v.split(',')) : null; })();
+const EXCLUDE    = (() => { const v = flag('--exclude'); return v ? new Set(v.split(',')) : new Set(); })();
+const MAX_WRITES = (() => { const v = flag('--max-writes'); return v ? parseInt(v, 10) : 15000; })();
+const OWNER_UID  = flag('--owner-uid');
 
 let writes = 0;                 // writes performed (or, in dry-run, that WOULD be performed)
 const report = {};              // per-collection { migrated|stamped, skipped, would }

@@ -41,6 +41,7 @@ export default function Signup() {
     // knows exactly what to undo if a later step fails.
     let authCreated = false;
     let orgDocId = null;
+    let userDocCreated = false;
 
     try {
       // 1. Create the auth user (this also signs them in).
@@ -78,7 +79,7 @@ export default function Signup() {
         }),
         { rethrow: true, errorMessage: 'Account created, but saving your profile failed. Contact support.' },
       );
-
+      userDocCreated = true;
       // 4. Mirror {orgId, role:'owner'} into custom claims so the B4 Firestore rules
       //    admit this user, then refresh the local token (ADR-0004).
       await syncClaims(uid);
@@ -86,11 +87,16 @@ export default function Signup() {
       // 5. Into the onboarding wizard.
       navigate('/onboarding', { replace: true });
     } catch (err) {
-      // Rollback: delete org doc first (while auth session is still valid),
-      // then delete the Auth user. Errors are swallowed so the original error
-      // message is still surfaced to the user.
+      // Rollback (order matters — Firestore deletes need a live auth session, and
+      // auth.delete() invalidates it): org doc, then the user profile doc, then the
+      // Auth user. #526 — the users/{uid} doc is NOT auto-removed when the auth user
+      // is deleted, so without this it orphans (role:'owner' pointing at a deleted org).
+      // Errors are swallowed so the original error message reaches the user.
       if (orgDocId) {
         try { await deleteDoc(doc(db, 'organizations', orgDocId)); } catch (_) { /* rollback best-effort */ }
+      }
+      if (userDocCreated && auth.currentUser) {
+        try { await deleteDoc(doc(db, 'users', auth.currentUser.uid)); } catch (_) { /* rollback best-effort */ }
       }
       if (authCreated && auth.currentUser) {
         try { await auth.currentUser.delete(); } catch (_) { /* rollback best-effort */ }

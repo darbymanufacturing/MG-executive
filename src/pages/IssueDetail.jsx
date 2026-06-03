@@ -40,13 +40,24 @@ export default function IssueDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const issue = useIssue(id);
-  const { updateIssue, resolveIssue, addNote } = useIssues();
+  const { updateIssue, resolveIssue, addNote, loading } = useIssues();
   const { user } = useAuth();
 
   const [newNote, setNewNote] = useState('');
   const [noteError, setNoteError] = useState(null);
   const [editingNextAction, setEditingNextAction] = useState(false);
   const [nextActionVal, setNextActionVal] = useState('');
+
+  if (loading) {
+    return (
+      <div className={styles.page}>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/issues')}>
+          <ArrowLeft size={14} />Back to Issues
+        </button>
+        <div className={styles.notFound} style={{ color: 'var(--fg-muted)' }}>Loading…</div>
+      </div>
+    );
+  }
 
   if (!issue) {
     return (
