@@ -57,6 +57,7 @@ export const SUPABASE_TABLE = Object.freeze({
   fleets: 'fleets', // FF-3 multi-fleet
   ownerLedger: 'owner_ledger', // FF-1 owner ledger
   bankRules: 'bank_rules', // FF-2 founder-editable categorization rules
+  loans: 'loans', // FF-2 multi-loan module
   // The two singleton-config collections both fold into one app_config table
   // (source_doc_id keeps the existing composite ids, which are globally unique).
   config: 'app_config',
@@ -150,6 +151,7 @@ const TYPED_COLUMNS = Object.freeze({
   fleets: () => ({}),
   ownerLedger: () => ({}),
   bankRules: () => ({}),
+  loans: () => ({}),
   config: () => ({}),
   pow: () => ({}),
 });

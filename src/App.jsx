@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/Shared/ErrorBoundary.jsx';
 import { OrgProvider } from './context/OrgContext.jsx';
 import { FleetProvider } from './context/FleetContext.jsx';
 import { CostProvider } from './context/CostContext.jsx';
+import { LoansProvider } from './context/LoansContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
@@ -53,6 +54,7 @@ import Contractors from './pages/Contractors.jsx';
 import FleetPnl from './pages/FleetPnl.jsx';
 import OwnerLedger from './pages/OwnerLedger.jsx';
 import BankImport from './pages/BankImport.jsx';
+import Loans from './pages/Loans.jsx';
 
 import './styles/variables.css';
 import './styles/globals.css';
@@ -80,6 +82,7 @@ const ROUTE_TITLES = {
   '/fleet-pnl':   'Fleet P&L',
   '/owner-ledger': 'Owner Ledger',
   '/bank-import': 'Bank Import',
+  '/loans':       'Loans',
   '/spr':         'SPR',
   '/settings':    'Settings',
 };
@@ -296,6 +299,7 @@ function AppShell() {
             <Route path="/fleet-pnl"      element={<RouteErrorBoundary><FleetPnl /></RouteErrorBoundary>} />
             <Route path="/owner-ledger"   element={<RouteErrorBoundary><OwnerLedger /></RouteErrorBoundary>} />
             <Route path="/bank-import"    element={<RouteErrorBoundary><BankImport /></RouteErrorBoundary>} />
+            <Route path="/loans"          element={<RouteErrorBoundary><Loans /></RouteErrorBoundary>} />
             <Route path="/maintenance"    element={<RouteErrorBoundary><Maintenance /></RouteErrorBoundary>} />
             <Route path="/pow"            element={<RouteErrorBoundary><Pow /></RouteErrorBoundary>} />
             <Route path="/contractors"    element={<RouteErrorBoundary><Contractors /></RouteErrorBoundary>} />
@@ -405,6 +409,7 @@ export default function App() {
                     <OrgProvider>
                       <FleetProvider>
                       <CostProvider>
+                        <LoansProvider>
                         <RevenueProvider>
                           <MaintenanceProvider>
                             <RepairProcedureProvider>
@@ -432,6 +437,7 @@ export default function App() {
                             </RepairProcedureProvider>
                           </MaintenanceProvider>
                         </RevenueProvider>
+                        </LoansProvider>
                       </CostProvider>
                       </FleetProvider>
                     </OrgProvider>

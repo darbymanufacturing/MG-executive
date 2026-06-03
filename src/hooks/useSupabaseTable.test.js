@@ -209,8 +209,10 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.ownerLedger).toBe('owner_ledger');
     // FF-2 founder-editable bank rules
     expect(SUPABASE_TABLE.bankRules).toBe('bank_rules');
-    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules = 24 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(24);
+    // FF-2 multi-loan module
+    expect(SUPABASE_TABLE.loans).toBe('loans');
+    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans = 25 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(25);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

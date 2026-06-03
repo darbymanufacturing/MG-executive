@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Upload, FileText, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import { parseAlphaBankCsv, reconcile } from '../../utils/parseAlphaBankCsv.js';
+import { parseAlphaBankLoanCsv } from '../../utils/parseAlphaBankLoanCsv.js';
 import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './BankImportPanel.module.css';
 
@@ -10,7 +11,7 @@ import styles from './BankImportPanel.module.css';
  * date range, opening/closing balance and the (advisory) reconciliation cue, then
  * hands the parsed result up via onParsed.
  */
-export default function BankImportPanel({ onParsed }) {
+export default function BankImportPanel({ onParsed, onParsedLoan }) {
   const fileRef = useRef();
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -23,8 +24,10 @@ export default function BankImportPanel({ onParsed }) {
     const reader = new FileReader();
     reader.onload = (e) => {
       setError(null);
-      const parsed = parseAlphaBankCsv(e.target.result);
-      setResult(parsed);
+      const text = e.target.result;
+      const parsed = parseAlphaBankCsv(text);
+      // Loan feeds are parsed by the dedicated loan parser and routed to the loan flow.
+      setResult(parsed.feedType === 'loan' ? { ...parsed, _loan: parseAlphaBankLoanCsv(text) } : parsed);
     };
     reader.readAsText(file);
   }
@@ -65,8 +68,21 @@ export default function BankImportPanel({ onParsed }) {
       {error && <div className={styles.errorBox}><AlertCircle size={14} /> {error}</div>}
 
       {result?.feedType === 'loan' && (
-        <div className={styles.warnBox}>
-          <AlertCircle size={14} /> This looks like a <strong>loan</strong> export — import it from the <strong>Loans</strong> page.
+        <div className={styles.detected}>
+          <div className={styles.warnBox}>
+            <AlertCircle size={14} /> This is a <strong>loan</strong> export{result._loan?.name ? ` — ${result._loan.name}` : ''}.
+          </div>
+          <div className={styles.metaGrid}>
+            <Meta label="Outstanding" value={result._loan?.currentBalance != null ? formatEUR(result._loan.currentBalance) : '—'} />
+            <Meta label="Entries" value={result._loan?.entries?.length ?? 0} />
+            <Meta label="Total interest" value={formatEUR(result._loan?.totalInterest ?? 0)} />
+          </div>
+          <div className={styles.actions}>
+            <Button variant="secondary" size="sm" onClick={() => setResult(null)}>Choose another file</Button>
+            <Button variant="primary" size="sm" onClick={() => onParsedLoan?.(result._loan)} disabled={!result._loan?.entries?.length}>
+              Review loan
+            </Button>
+          </div>
         </div>
       )}
 

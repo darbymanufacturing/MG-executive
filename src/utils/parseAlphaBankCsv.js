@@ -29,7 +29,7 @@ const GREEK_DEBIT = 'Χ';  // U+03A7 — money out
 const GREEK_CREDIT = 'Π'; // U+03A0 — money in
 
 /** Split a `;`-delimited Alpha row, unwrapping `="…"` cells (`;` inside quotes is literal). */
-function splitRow(line) {
+export function splitRow(line) {
   const out = [];
   let cur = '';
   let inQ = false;
@@ -45,7 +45,7 @@ function splitRow(line) {
 }
 
 /** "08/04/2026" → "2026-04-08"; null if unparseable. */
-function parseGreekDate(raw) {
+export function parseGreekDate(raw) {
   const s = String(raw ?? '').replace(/[="]/g, '').trim();
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (!m) return null;
