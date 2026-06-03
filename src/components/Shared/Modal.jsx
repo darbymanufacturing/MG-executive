@@ -1,4 +1,5 @@
 import { useEffect, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import styles from './Modal.module.css';
 
@@ -77,7 +78,12 @@ export default function Modal({ isOpen, onClose, title, children, width = 520 })
 
   if (!isOpen) return null;
 
-  return (
+  // #286 sets `inert` on #root to hide background content. The modal MUST be portaled
+  // to document.body (OUTSIDE #root) — otherwise the modal, being a descendant of the
+  // inerted #root, becomes inert itself and the whole dialog is unclickable in browsers
+  // that support `inert` (e.g. Chrome). Portaling keeps the background-inert a11y win
+  // while leaving the dialog interactive.
+  return createPortal(
     <div
       className={styles.overlay}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -101,6 +107,7 @@ export default function Modal({ isOpen, onClose, title, children, width = 520 })
         </div>
         <div className={styles.body}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
