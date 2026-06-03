@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   inferCategoryFromText,
   countRuleMatches,
+  buildRules,
   DEFAULT_CATEGORY_RULES,
 } from '../bankRulesEngine.js';
 
@@ -34,6 +35,34 @@ describe('inferCategoryFromText (built-in rules)', () => {
       { contains: 'STAR', category: 'variable' },
     ];
     expect(inferCategoryFromText('SΤΑRLΙΝΚ', rules).category).toBe('fixed');
+  });
+});
+
+describe('buildRules (org rules first, then built-in fallback)', () => {
+  it('puts org rules before the defaults, sorted by priority', () => {
+    const org = [
+      { contains: 'B', category: 'fixed', priority: 2 },
+      { contains: 'A', category: 'variable', priority: 1 },
+    ];
+    const built = buildRules(org);
+    expect(built[0]).toMatchObject({ contains: 'A' });
+    expect(built[1]).toMatchObject({ contains: 'B' });
+    expect(built.length).toBe(org.length + DEFAULT_CATEGORY_RULES.length);
+  });
+
+  it('lets a custom org rule override a built-in keyword', () => {
+    // ΣΕΡΒΙΣ defaults to 'variable'; an org rule reclassifies it to 'fixed'.
+    const org = [{ contains: 'ΣΕΡΒΙΣ', category: 'fixed', priority: 1 }];
+    expect(inferCategoryFromText('ΣΕΡΒΙΣ ΜΟΤΟ', buildRules(org))).toEqual({ category: 'fixed', matched: true });
+  });
+
+  it('falls back to defaults for descriptions no org rule covers', () => {
+    const org = [{ contains: 'ZZZ', category: 'loan', priority: 1 }];
+    expect(inferCategoryFromText('ΔΕΗ', buildRules(org)).category).toBe('fixed'); // built-in electricity rule, not the org 'loan'
+  });
+
+  it('empty org rules == defaults', () => {
+    expect(buildRules([])).toEqual(DEFAULT_CATEGORY_RULES);
   });
 });
 

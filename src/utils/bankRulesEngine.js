@@ -55,3 +55,15 @@ export function countRuleMatches(rule, descriptions = []) {
     0,
   );
 }
+
+/**
+ * Phase B — the effective rule list: the org's founder-editable rules (evaluated
+ * first, ordered by ascending `priority`), then the built-in defaults as a
+ * fallback. So a custom rule overrides a built-in, but unmatched descriptions
+ * still get the Greek/Latin keyword defaults. Pass the result to
+ * `inferCategoryFromText(text, buildRules(orgRules))`.
+ */
+export function buildRules(orgRules = []) {
+  const sorted = [...orgRules].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+  return [...sorted, ...DEFAULT_CATEGORY_RULES];
+}

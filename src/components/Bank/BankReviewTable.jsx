@@ -4,6 +4,8 @@ import Button from '../Shared/Button.jsx';
 import CategoryBadge from '../Costs/CategoryBadge.jsx';
 import IngestSummary from '../PME/ingest/IngestSummary.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import { useBankRules } from '../../context/BankRulesContext.jsx';
+import { inferCategoryFromText, buildRules } from '../../utils/bankRulesEngine.js';
 import { CATEGORIES, CATEGORY_KEYS } from '../../utils/constants.js';
 import { formatEUR, formatDate } from '../../utils/formatters.js';
 import styles from './BankReviewTable.module.css';
@@ -16,6 +18,18 @@ import styles from './BankReviewTable.module.css';
  */
 export default function BankReviewTable({ result, onBack, onCommitted }) {
   const { costs, importBankCosts } = useCosts();
+  const { rules } = useBankRules();
+
+  // Effective categorization: re-run the engine with the founder's org rules
+  // (priority) + built-in defaults, matching on description + branch code.
+  const effective = useMemo(() => {
+    const all = buildRules(rules);
+    const map = {};
+    for (const r of result.rows) {
+      map[r._bankTxId] = inferCategoryFromText(`${r.rawDesc} ${r.branch || ''}`, all);
+    }
+    return map;
+  }, [result, rules]);
 
   const existingTxIds = useMemo(
     () => new Set(costs.filter((c) => c._bankTxId).map((c) => c._bankTxId)),
@@ -36,11 +50,12 @@ export default function BankReviewTable({ result, onBack, onCommitted }) {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState(null);
 
-  const catOf = (r) => overrides[r._bankTxId] ?? r.category;
+  const catOf = (r) => overrides[r._bankTxId] ?? effective[r._bankTxId]?.category ?? r.category;
+  const matchedOf = (r) => effective[r._bankTxId]?.matched ?? r.matched;
   const toggle = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const visibleDebits = attnOnly ? debits.filter((r) => !r.matched) : debits;
-  const attnCount = debits.filter((r) => !r.matched).length;
+  const visibleDebits = attnOnly ? debits.filter((r) => !matchedOf(r)) : debits;
+  const attnCount = debits.filter((r) => !matchedOf(r)).length;
 
   function applyBulk() {
     if (!bulkCat) return;
@@ -137,7 +152,7 @@ export default function BankReviewTable({ result, onBack, onCommitted }) {
                   <td className={styles.nowrap}>{formatDate(r.date)}</td>
                   <td>
                     <span className={styles.desc}>{showRaw ? r.rawDesc : (r.cleanDesc || r.rawDesc)}</span>
-                    {!r.matched && <span className={styles.ruleFlag} title="No rule matched — please confirm">~rule</span>}
+                    {!matchedOf(r) && <span className={styles.ruleFlag} title="No rule matched — please confirm">~rule</span>}
                     {dup && <span className={styles.dupFlag}>already imported</span>}
                   </td>
                   <td className={styles.muted}>{r.branch || '—'}</td>
