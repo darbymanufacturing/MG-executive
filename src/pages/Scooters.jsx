@@ -78,6 +78,7 @@ export default function Scooters() {
     active:   scoped.filter((s) => s.status === 'Active').length,
     inRepair: scoped.filter((s) => s.status === 'In Repair').length,
     retired:  scoped.filter((s) => s.status === 'Retired').length,
+    donor:    scoped.filter((s) => s.status === 'Donor').length,
   }), [scoped]);
 
   async function handleSave(form) {
@@ -114,6 +115,10 @@ export default function Scooters() {
         <div className={styles.summaryItem}>
           <span className={styles.summaryVal} style={{ color: 'var(--color-text-muted)' }}>{summary.retired}</span>
           <span className={styles.summaryKey}>Retired</span>
+        </div>
+        <div className={styles.summaryItem}>
+          <span className={styles.summaryVal} style={{ color: 'var(--color-danger)' }}>{summary.donor}</span>
+          <span className={styles.summaryKey}>Donor</span>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Inbox, Sparkles, Activity, Bell, Flag, Wrench,
+  Inbox, Activity, Bell, Flag, Wrench,
   Users, Receipt, Landmark, Settings, ChevronLeft, ChevronRight,
   LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, ClipboardList, Scale, Wallet, Banknote, HandCoins,
 } from 'lucide-react';
@@ -91,16 +91,18 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
   const issueCtx = useSafeIssues();
   const maintenanceCtx = useSafeMaintenance();
   const openIssueCount = (issueCtx?.issues ?? []).filter(i => i.status !== 'done').length;
-  const activeCount = maintenanceCtx?.activeCount ?? 0;
+  // #585 — use totalOpenCount (status !== 'Completed') to match the Maintenance KPI "Total Open";
+  // previously used activeCount (status === 'Active') which excluded Backlog/Investigation/Blocked/Donor.
+  const totalOpenCount = maintenanceCtx?.totalOpenCount ?? 0;
 
   // #299 — last-known-good cache so a transient provider null / post-crash
   // re-subscription gap doesn't erase the badge entirely.
   const lastIssueCount = useRef(0);
   const lastActiveCount = useRef(0);
   if (openIssueCount > 0) lastIssueCount.current = openIssueCount;
-  if (activeCount > 0) lastActiveCount.current = activeCount;
+  if (totalOpenCount > 0) lastActiveCount.current = totalOpenCount;
   const displayIssueCount = openIssueCount > 0 ? openIssueCount : lastIssueCount.current;
-  const displayActiveCount = activeCount > 0 ? activeCount : lastActiveCount.current;
+  const displayActiveCount = totalOpenCount > 0 ? totalOpenCount : lastActiveCount.current;
 
   const navigate = useNavigate();
 
@@ -148,7 +150,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
         {/* Primary nav */}
         <nav className={styles.nav}>
           <NavItem to="/" icon={Inbox} label="Inbox" badge={badgeCount > 0 ? badgeCount : undefined} collapsed={collapsed} end />
-          <NavItem to="/brief" icon={Sparkles} label="Daily Brief" collapsed={collapsed} />
+          {/* /brief removed — it routed to the same Home page as / (#576) */}
           <NavItem to="/pulse" icon={Activity} label="Pulse" collapsed={collapsed} />
           <NavItem to="/notifications" icon={Bell} label="Notifications" collapsed={collapsed} />
         </nav>

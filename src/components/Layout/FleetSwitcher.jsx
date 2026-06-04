@@ -20,7 +20,9 @@ export default function FleetSwitcher() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const label = isAllFleets ? (hasFleets ? 'All Fleets' : 'Fleets') : (activeFleet?.name ?? 'Fleets');
+  // #584 — always show 'All Fleets' when isAllFleets; the prior hasFleets gate caused a flicker
+  //        from 'Fleets' → 'All Fleets' while the Supabase fetch was still in flight.
+  const label = isAllFleets ? 'All Fleets' : (activeFleet?.name ?? 'Fleets');
 
   return (
     <div className={styles.wrap} ref={ref}>

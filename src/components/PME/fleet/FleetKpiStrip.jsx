@@ -35,8 +35,9 @@ export default function FleetKpiStrip() {
         sub={`${kpis.activeScooters} active`}
       />
       <KpiCard
-        label="Utilisation"
+        label="Fleet Active %"
         value={`${kpis.utilisationPct}%`}
+        sub="Active scooters ÷ total fleet"
         color={kpis.utilisationPct >= 70 ? '#00C896' : kpis.utilisationPct >= 50 ? '#F5A623' : '#E84545'}
       />
       <KpiCard

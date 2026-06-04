@@ -276,7 +276,10 @@ export function fleetRiskRanking(events, tickets, scooters) {
   const now         = new Date().toISOString();
   const cutoff30    = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const scored = scooters.map((sc) => {
+  // #594 — exclude Donor/Retired scooters from the Maintenance Priority Queue
+  const operationalScooters = scooters.filter((s) => !['Donor', 'Retired'].includes(s.status));
+
+  const scored = operationalScooters.map((sc) => {
     const id = sc.scooterId;
 
     // Overturn ratio (last 30d vs lifetime baseline)
@@ -287,16 +290,17 @@ export function fleetRiskRanking(events, tickets, scooters) {
       (t) => t.scooterId === id && t.dateEntered >= cutoff30.slice(0, 10),
     ).length;
 
-    // Days since last service — use purchaseDate as fallback; if neither, score 0 (neutral)
+    // Days since last service — no fallback to purchaseDate (purchase date ≠ service date;
+    // using it caused all scooters with purchase date >180 days ago to hit the 180-cap,
+    // showing an artificial '180' in the table). Score 0 (neutral) when no service history.
     const allRepairs = goodTickets.filter((t) => t.scooterId === id);
-    const fallback = sc.purchaseDate || null;
     const lastService = allRepairs.reduce((latest, t) => {
       const d = t.dateCompleted || t.dateEntered;
       return d > latest ? d : latest;
-    }, fallback || '');
+    }, '');
     const daysSinceService = lastService
       ? daysBetween(lastService, now.slice(0, 10))
-      : 0; // neutral when no service history and no purchase date
+      : 0; // neutral when no service history
 
     return {
       scooterId:      id,

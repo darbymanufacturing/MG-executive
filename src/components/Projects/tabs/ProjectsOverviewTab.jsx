@@ -29,9 +29,9 @@ export default function ProjectsOverviewTab() {
   const { activeProjects, gates } = useProjects();
 
   const counts = useMemo(() => ({
-    green: activeProjects.filter((p) => p.status === 'Green').length,
-    amber: activeProjects.filter((p) => p.status === 'Amber').length,
-    red:   activeProjects.filter((p) => p.status === 'Red').length,
+    green: activeProjects.filter((p) => p.effectiveStatus === 'onTrack').length,
+    amber: activeProjects.filter((p) => p.effectiveStatus === 'needsAttention').length,
+    red:   activeProjects.filter((p) => p.effectiveStatus === 'blocked').length,
   }), [activeProjects]);
 
   const upcomingMilestones = useMemo(() => {

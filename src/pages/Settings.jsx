@@ -343,6 +343,17 @@ export default function Settings() {
             {field('companyName', 'Company Name')}
             {field('fleetSize', 'Fleet Size (scooters)', 'number', { min: 1, step: 1 })}
           </div>
+          {liveFleetSize != null && liveFleetSize !== config.fleetSize && (
+            <p style={{ margin: '8px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+              Currently live: <strong>{liveFleetSize}</strong> scooters · configured target: {config.fleetSize}.{' '}
+              <button
+                onClick={() => updateConfig({ fleetSize: liveFleetSize })}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-brand)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}
+              >
+                Sync to live count
+              </button>
+            </p>
+          )}
         </section>
 
         {/* Financial Targets */}
@@ -435,7 +446,7 @@ export default function Settings() {
                 step="1"
               />
               <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                Fleet-level flat SIM cost (≈ €3/scooter regardless of active status). Update when fleet size changes.
+                Fleet-level flat SIM cost (≈ €{effectiveFleetSize ? ((config.financial?.monthlySimCost ?? 150) / effectiveFleetSize).toFixed(2) : '—'}/scooter regardless of active status). Update when fleet size changes.
               </p>
             </div>
 

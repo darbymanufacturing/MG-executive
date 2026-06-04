@@ -522,9 +522,9 @@ export default function Dashboard() {
             )}
             <KpiCard
               icon={DollarSign}
-              label="Revenue / Scooter / Month"
+              label="Revenue / Scooter (total fleet) / Month"
               value={formatEUR(actualRevPerScooter !== null ? actualRevPerScooter : (hasPeriodData ? 0 : null))}
-              sub="Actual from data"
+              sub="Actual from data · all fleet statuses"
             />
             <KpiCard
               icon={Activity}
@@ -536,7 +536,7 @@ export default function Dashboard() {
               icon={Users}
               label="Vehicle Utilization"
               value={formatPercent(utilization)}
-              sub={`of ${effectiveFleetSize} scooters active`}
+              sub={`avg scooters generating revenue / day · ${effectiveFleetSize} total fleet`}
             />
           </div>
         )}
@@ -554,7 +554,7 @@ export default function Dashboard() {
                 <span style={{ textAlign: 'right' }}>Revenue</span>
                 <span style={{ textAlign: 'right' }}>Trips</span>
                 <span style={{ textAlign: 'right' }}>Active Scooters</span>
-                <span style={{ textAlign: 'right' }}>Rev / Scooter</span>
+                <span style={{ textAlign: 'right' }}>Rev / Active Scooter</span>
               </div>
               {cityBreakdown.map((row) => (
                 <div key={row.city} className={styles.cityRow}>
@@ -691,7 +691,7 @@ export default function Dashboard() {
                 icon={Package}
                 label="Parts Low Stock"
                 value={lowStockParts.length}
-                sub={lowStockParts.length > 0 ? `${lowStockParts.map((p) => p.sku).slice(0, 2).join(', ')}${lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ''}` : 'All parts above reorder point'}
+                sub={lowStockParts.length > 0 ? `${lowStockParts.map((p) => p.partName ?? p.name ?? p.sku).slice(0, 2).join(', ')}${lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ''}` : 'All parts above reorder point'}
                 healthColor={lowStockParts.length > 3 ? 'danger' : lowStockParts.length > 0 ? 'warning' : 'good'}
               />
             </div>

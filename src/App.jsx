@@ -66,7 +66,6 @@ const ROUTE_TITLES = {
   '/':            'Inbox',
   '/issues':      'Issues',
   '/pulse':       'Pulse',
-  '/brief':       'Daily Brief',
   '/notifications':'Notifications',
   '/maintenance': 'Tickets',
   '/projects':    'Projects',
@@ -288,7 +287,7 @@ function AppShell() {
             <Route path="/issues"         element={<RouteErrorBoundary><Issues /></RouteErrorBoundary>} />
             <Route path="/issues/:id"     element={<RouteErrorBoundary><IssueDetail /></RouteErrorBoundary>} />
             <Route path="/pulse"          element={<RouteErrorBoundary><Dashboard /></RouteErrorBoundary>} />
-            <Route path="/brief"          element={<RouteErrorBoundary><Home /></RouteErrorBoundary>} />
+            {/* /brief intentionally removed — it duplicated Home; the brief is surfaced at the top of / (#576) */}
             <Route path="/notifications"  element={<RouteErrorBoundary><Notifications /></RouteErrorBoundary>} />
             <Route path="/projects"       element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
             <Route path="/projects/:id"   element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />

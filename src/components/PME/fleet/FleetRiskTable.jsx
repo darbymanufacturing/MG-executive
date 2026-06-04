@@ -85,7 +85,7 @@ export default function FleetRiskTable({ onSelectScooter }) {
               <td style={{ color: row.recentRepairs > 0 ? 'var(--color-warning)' : 'inherit' }}>
                 {row.recentRepairs}
               </td>
-              <td>{Math.round(row.daysSinceService)}</td>
+              <td>{row.daysSinceService > 0 ? Math.round(row.daysSinceService) : '—'}</td>
             </tr>
           ))}
         </tbody>

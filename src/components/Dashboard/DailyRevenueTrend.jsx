@@ -92,7 +92,8 @@ export default function DailyRevenueTrend({ data }) {
             tick={{ fill: '#888', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            width={56}
+            width={72}
+            domain={['auto', 'auto']}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           <Legend

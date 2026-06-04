@@ -233,18 +233,36 @@ export function scooterLedgerRow(scooter, revenueRows, allTickets, parts, financ
     );
   }
 
-  const totalCost = (purchasePrice || 0) + repairTotal;
-  const netPosition = revenueTotal - totalCost;
+  // Straight-line depreciation: scooter depreciates over 60 months (5 years).
+  // depreciatedCost = purchasePrice × min(monthsInService, 60) / 60
+  // When purchaseDate is unknown we fall back to the full purchase price (conservative).
+  const DEPRECIATION_MONTHS = 60;
+  const depreciatedCost =
+    purchasePrice != null && monthsInService != null
+      ? parseFloat((purchasePrice * (Math.min(monthsInService, DEPRECIATION_MONTHS) / DEPRECIATION_MONTHS)).toFixed(2))
+      : (purchasePrice || 0);
+
+  // Book P&L: revenue minus depreciated purchase cost + repairs (shown as Net Position)
+  const totalCost = parseFloat((depreciatedCost + repairTotal).toFixed(2));
+  const netPosition = parseFloat((revenueTotal - totalCost).toFixed(2));
+
+  // Cash P&L: revenue minus full purchase price + repairs (useful for payback tracking)
+  const cashTotalCost = parseFloat(((purchasePrice || 0) + repairTotal).toFixed(2));
+  const cashPnl = parseFloat((revenueTotal - cashTotalCost).toFixed(2));
+
+  // paybackPct based on depreciated cost basis (positive = scooter is earning above its current book cost)
   const paybackPct = purchasePrice
     ? parseFloat(((netPosition / purchasePrice) * 100).toFixed(1))
     : null;
 
   return {
     ...scooter,
-    revenueTotal: parseFloat(revenueTotal.toFixed(2)),
-    repairTotal:  parseFloat(repairTotal.toFixed(2)),
-    totalCost:    parseFloat(totalCost.toFixed(2)),
-    netPosition:  parseFloat(netPosition.toFixed(2)),
+    revenueTotal:    parseFloat(revenueTotal.toFixed(2)),
+    repairTotal:     parseFloat(repairTotal.toFixed(2)),
+    depreciatedCost,
+    totalCost,
+    netPosition,
+    cashPnl,
     paybackPct,
     monthsInService,
     revenueMonthly,

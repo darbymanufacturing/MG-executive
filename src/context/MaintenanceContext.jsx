@@ -203,6 +203,9 @@ export function MaintenanceProvider({ children }) {
 
   const activeTickets   = useMemo(() => ticketsWithCalc.filter((t) => t.status === 'Active'), [ticketsWithCalc]);
   const activeCount     = activeTickets.length;
+  // #585 — totalOpenCount matches the Maintenance KPI "Total Open" definition (non-Completed),
+  // which includes Backlog, Investigation, Active, Blocked, Donor statuses.
+  const totalOpenCount  = useMemo(() => ticketsWithCalc.filter((t) => t.status !== 'Completed').length, [ticketsWithCalc]);
   const isAtMaxActive   = activeCount >= (config.maxActiveTickets ?? 3);
   const totalRevenueLost = useMemo(() =>
     ticketsWithCalc.filter((t) => t.status !== 'Completed').reduce((s, t) => s + t.revenueLost, 0),
@@ -410,6 +413,7 @@ export function MaintenanceProvider({ children }) {
     // Computed
     activeTickets,
     activeCount,
+    totalOpenCount,
     isAtMaxActive,
     totalRevenueLost,
     lowStockParts,
@@ -446,7 +450,7 @@ export function MaintenanceProvider({ children }) {
     patchPartModels,
   }), [
     ticketsWithCalc, parts, scooters, config, loading, error,
-    activeTickets, activeCount, isAtMaxActive, totalRevenueLost, lowStockParts,
+    activeTickets, activeCount, totalOpenCount, isAtMaxActive, totalRevenueLost, lowStockParts,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
     addScooter, updateScooter, deleteScooter,
     schedules, schedulesLoading, addSchedule, updateSchedule, deleteSchedule, markScheduleDone,
