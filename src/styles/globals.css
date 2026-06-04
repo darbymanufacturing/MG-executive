@@ -71,8 +71,11 @@ input, select, textarea {
     box-shadow 520ms cubic-bezier(.4,0,.2,1) !important;
 }
 
-/* Sidebar collapse */
-.omni-sidebar { transition: width 280ms cubic-bezier(.2,.7,.2,1); overflow: hidden; }
+/* Sidebar collapse — clip HORIZONTALLY only (labels during the width transition).
+   overflow-y is left to Sidebar.module.css (.sidebar = overflow-y:auto) so the nav
+   scrolls vertically on short screens / hover-wheel; a plain `overflow:hidden` here
+   was overriding that and killing the scroll. */
+.omni-sidebar { transition: width 280ms cubic-bezier(.2,.7,.2,1); overflow-x: hidden; }
 .omni-sidebar[data-collapsed="true"] .omni-sidebar-label,
 .omni-sidebar[data-collapsed="true"] .omni-sidebar-section,
 .omni-sidebar[data-collapsed="true"] .omni-sidebar-brandtext,
