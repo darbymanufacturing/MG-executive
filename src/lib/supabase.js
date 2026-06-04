@@ -43,6 +43,23 @@ export const isSupabaseConfigured = Boolean(
   SUPABASE_URL && SUPABASE_ANON_KEY && /^https:\/\/.+/.test(SUPABASE_URL),
 );
 
+// #485 — module-level token cache: all parallel supabase-js requests at mount time
+// share one Firebase getIdToken() call instead of each triggering their own refresh.
+// The 50-minute TTL means we re-fetch well before the 60-minute Firebase expiry but
+// don't call getIdToken() on every query.
+let _tok = null;
+let _tokExp = 0;
+let _tokUser = null; // the auth.currentUser the cached token was minted for
+// Invalidate on ANY auth transition (sign-out OR user switch) so a new session never
+// reuses the prior user's token — a multi-tenant safety guard. Wrapped defensively so a
+// partial/absent `auth` (e.g. a Firebase mock in tests that omits onAuthStateChanged)
+// never throws at module load; the cache simply works without sign-out invalidation.
+try {
+  if (auth && typeof auth.onAuthStateChanged === 'function') {
+    auth.onAuthStateChanged(() => { _tok = null; _tokExp = 0; _tokUser = null; });
+  }
+} catch { /* auth unavailable in this environment — token cache still functions */ }
+
 export const supabase = isSupabaseConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -52,8 +69,15 @@ export const supabase = isSupabaseConfigured
         // Before auth resolves, currentUser is null — return null so RLS fails
         // closed while the app is loading. This is intentional and silent.
         if (!auth.currentUser) return null;
+        // #485 — serve the cached token only when it is still valid AND was minted for
+        // the SAME currentUser (binding the token to its user prevents ever handing one
+        // user's token to another, independent of the onAuthStateChanged listener).
+        if (_tok && _tokUser === auth.currentUser && Date.now() < _tokExp) return _tok;
         try {
-          return await auth.currentUser.getIdToken();
+          _tok = await auth.currentUser.getIdToken();
+          _tokExp = Date.now() + 50 * 60 * 1000; // 50 min
+          _tokUser = auth.currentUser;
+          return _tok;
         } catch (err) {
           // Auth is resolved but the token fetch failed (offline, expired session,
           // rotated key). Re-throw so supabase-js surfaces a request error that
@@ -70,28 +94,40 @@ export const supabase = isSupabaseConfigured
  * Firestore write in each import path, so a Supabase failure NEVER breaks the app
  * — it logs and returns. Idempotent: upsert ON CONFLICT (source_doc_id).
  *
+ * Returns { written, failed, failedChunks } so callers can detect partial success
+ * and emit metrics. (#494 — was void; fire-and-forget callers are unaffected.)
+ *
  * @param {string} collectionName  Firestore collection (a key of SUPABASE_TABLE)
  * @param {string} orgId           tenant id (the RLS key)
  * @param {{id: string, data: object}[]} entries  id = full Firestore doc id; data = plain doc
  */
 export async function dualWriteSupabase(collectionName, orgId, entries) {
-  if (!isSupabaseConfigured || !supabase || !orgId || !entries?.length) return;
+  if (!isSupabaseConfigured || !supabase || !orgId || !entries?.length) {
+    return { written: 0, failed: 0, failedChunks: [] };
+  }
   const table = SUPABASE_TABLE[collectionName];
   if (!table) {
     // #483 — an unknown collection is a PROGRAMMING error, not a transient API failure;
     // don't swallow it silently. Loud in dev (fails the test), logged-and-skipped in prod.
     console.error(`[supabase dual-write] unknown collection "${collectionName}" — programming error`);
     if (import.meta.env.DEV) throw new Error(`dualWriteSupabase: unknown collection "${collectionName}"`);
-    return;
+    return { written: 0, failed: entries.length, failedChunks: [0] };
   }
+  let written = 0;
+  let failed = 0;
+  const failedChunks = [];
   for (let i = 0; i < entries.length; i += 500) {
+    const chunkSize = Math.min(500, entries.length - i);
     let rows;
     try {
       rows = entries.slice(i, i + 500).map((e) => toSupabaseRow(collectionName, orgId, e.id, e.data));
     } catch (mapErr) {
       // #483 — a mapper throw is a bug in TYPED_COLUMNS/jsonbSafe; surface loudly in dev.
       console.error(`[supabase dual-write] mapper error on chunk ${i}:`, mapErr);
+      Sentry.captureException(mapErr, { extra: { table, chunkStart: i } }); // #381
       if (import.meta.env.DEV) throw mapErr;
+      failed += chunkSize;
+      failedChunks.push(i);
       continue; // skip the bad chunk in prod
     }
     try {
@@ -99,12 +135,26 @@ export async function dualWriteSupabase(collectionName, orgId, entries) {
       // propagate to Supabase so the two stores stay in sync during the parity window.
       // (#379 — `continue` not `break` so one bad chunk doesn't drop the rest.)
       const { error } = await supabase.from(table).upsert(rows, { onConflict: 'source_doc_id' });
-      if (error) { console.warn(`[supabase dual-write] ${table} chunk ${i}: ${error.message}`); continue; }
+      if (error) {
+        // #381 — capture write errors in Sentry so they appear in the dashboard;
+        // previously only console.warn which was silently invisible in production.
+        console.warn(`[supabase dual-write] ${table} chunk ${i}: ${error.message}`);
+        Sentry.captureException(new Error(error.message), { extra: { table, chunkStart: i } });
+        failed += chunkSize;
+        failedChunks.push(i);
+        continue;
+      }
+      written += rows.length;
     } catch (netErr) {
+      // #381 — network errors also captured to Sentry for observability.
       console.warn(`[supabase dual-write] ${table} chunk ${i} network error: ${netErr?.message ?? netErr}`);
+      Sentry.captureException(netErr, { extra: { table, chunkStart: i, kind: 'network' } });
+      failed += chunkSize;
+      failedChunks.push(i);
       continue;
     }
   }
+  return { written, failed, failedChunks }; // #494
 }
 
 /**

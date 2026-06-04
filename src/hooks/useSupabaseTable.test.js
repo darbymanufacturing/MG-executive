@@ -546,15 +546,21 @@ describe('useOrgTable', () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('throws (not silently falls back) when DATA_LAYER=supabase but Supabase is not configured (BUG #384)', () => {
+  // #482 — BUG #384 test updated: the old throw-to-ErrorBoundary behavior was itself
+  // a bug (HIGH severity). useOrgTable now gracefully falls back to Firestore instead
+  // of crashing every page that uses a Supabase-backed context.
+  it('falls back to Firestore (not throws) when DATA_LAYER=supabase but Supabase is not configured (BUG #482 fix)', () => {
     _mockDataLayer = 'supabase';
     _mockIsConfigured = false;
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Must NOT throw — the ErrorBoundary crash is the bug we are fixing.
     expect(() =>
-      renderHook(() => useOrgTable('revenue', 'revenue_days', {}))
-    ).toThrow(/VITE_SUPABASE_URL/);
-    // Must NOT silently fall back to Firestore
-    expect(useOrgCollection).not.toHaveBeenCalled();
+      renderHook(() => useOrgTable('revenue', 'revenue_days', { firestore: { orderBy: ['date', 'desc'] } }))
+    ).not.toThrow();
+    // Must fall back to useOrgCollection so the app stays usable.
+    expect(useOrgCollection).toHaveBeenCalledWith('revenue', { orderBy: ['date', 'desc'] });
+    // Must log a loud console.error (not silently swallow the misconfiguration).
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('VITE_SUPABASE_URL'));
     errSpy.mockRestore();
   });
 });

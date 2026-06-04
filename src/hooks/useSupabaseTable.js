@@ -163,7 +163,15 @@ export function useSupabaseTable(table, opts = {}) {
     [baseLimit]
   );
 
-  return { items, loading, error, loadMore, hasMore };
+  // #387 — expose a refresh callback so callers (e.g. RevenueContext after a write)
+  // can force a re-fetch without a full navigation cycle. Resetting to offset:0 with
+  // the current filterKey re-runs the fetch effect and replaces items from scratch.
+  const refresh = useCallback(
+    () => setFetchSpec({ filterKey, offset: 0 }),
+    [filterKey]
+  );
+
+  return { items, loading, error, loadMore, hasMore, refresh };
 }
 
 /**
@@ -192,19 +200,37 @@ export function useSupabaseTable(table, opts = {}) {
 export const _useOrgTableAdapterCache = { fn: null };
 
 export function useOrgTable(firestoreCollection, supabaseTable, perLayer = {}) {
+  // #482 — when DATA_LAYER=supabase but credentials are absent, a synchronous throw
+  // here crashed every page that uses a Supabase-backed context into the ErrorBoundary.
+  // Instead: log loudly and fall back to Firestore so the app stays usable without a
+  // redeploy. The _useOrgTableAdapterCache is forced to useOrgCollection for this
+  // module lifetime (or until the cache is reset in tests).
   if (DATA_LAYER === 'supabase' && !isSupabaseConfigured) {
-    throw new Error(
-      'useOrgTable: VITE_DATA_LAYER=supabase but Supabase is not configured. ' +
-      'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or set VITE_DATA_LAYER=firestore.'
-    );
+    if (!_useOrgTableAdapterCache.fn) {
+      // One-time warning — subsequent renders reuse the cached fn and stay silent.
+      console.error(
+        '[useOrgTable] VITE_DATA_LAYER=supabase but Supabase is not configured. ' +
+        'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY, or set VITE_DATA_LAYER=firestore. ' +
+        'Falling back to Firestore for this session.'
+      );
+    }
+    // Force the adapter to Firestore so rules-of-hooks are still satisfied: the
+    // same hook (useOrgCollection) will be called on every subsequent render.
+    _useOrgTableAdapterCache.fn = useOrgCollection;
+    return useOrgCollection(firestoreCollection, perLayer.firestore ?? {});
   }
+
   // Populate the adapter once per module lifetime (or per test file when reset
   // via _useOrgTableAdapterCache.fn = null in beforeEach). After the first call
   // the same hook reference is used on every render — rules-of-hooks hold.
   if (!_useOrgTableAdapterCache.fn) {
     _useOrgTableAdapterCache.fn = DATA_LAYER === 'supabase' ? useSupabaseTable : useOrgCollection;
   }
-  const collection = DATA_LAYER === 'supabase' ? supabaseTable : firestoreCollection;
+  const col = DATA_LAYER === 'supabase' ? supabaseTable : firestoreCollection;
   const opts = DATA_LAYER === 'supabase' ? (perLayer.supabase ?? {}) : (perLayer.firestore ?? {});
-  return _useOrgTableAdapterCache.fn(collection, opts);
+  const result = _useOrgTableAdapterCache.fn(col, opts);
+  // #387 — forward the `refresh` callback that useSupabaseTable now exposes.
+  // useOrgCollection doesn't have one (Firestore onSnapshot self-updates), so we
+  // provide a no-op to keep the return shape stable for callers.
+  return { refresh: () => {}, ...result };
 }

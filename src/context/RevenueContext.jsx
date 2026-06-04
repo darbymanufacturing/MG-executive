@@ -24,7 +24,8 @@ export function RevenueProvider({ children }) {
   const { fleetForCity } = useFleet();
 
   // ── Org-scoped listener (ADR-0003); ADR-0013: Firestore OR Supabase per flag ──
-  const { items, loading: revenueLoading, error } = useOrgTable(REVENUE_COL, SB_TABLE, {
+  // #387 — destructure `refresh` so writes can force a re-fetch when DATA_LAYER=supabase.
+  const { items, loading: revenueLoading, error, refresh: refreshRevenue } = useOrgTable(REVENUE_COL, SB_TABLE, {
     firestore: { orderBy: ['date', 'desc'], limit: MAX_REVENUE_ROWS },
     supabase: { orderBy: ['revenue_date', 'desc'], limit: MAX_REVENUE_ROWS },
   });
@@ -67,14 +68,20 @@ export function RevenueProvider({ children }) {
     // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
     void dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
-  }, [orgId, fleetForCity]);
+    // #387 — force a re-fetch so the Supabase-backed table reflects the new rows
+    // immediately without requiring navigation. No-op when DATA_LAYER=firestore
+    // (onSnapshot self-updates).
+    refreshRevenue();
+  }, [orgId, fleetForCity, refreshRevenue]);
 
   // ── Delete a single day ───────────────────────────────────────────────────
   const deleteRevenueDay = useCallback(async (docId) => {
     await orgDelete(REVENUE_COL, docId, { rethrow: true, errorMessage: 'Failed to delete revenue entry' });
     // #479 — mirror the delete to Supabase so the stores don't drift after the flip.
     await dualDeleteSupabase(REVENUE_COL, orgId, docId);
-  }, [orgId]);
+    // #387 — re-fetch so the deleted row disappears immediately under DATA_LAYER=supabase.
+    refreshRevenue();
+  }, [orgId, refreshRevenue]);
 
   // ── Clear all revenue data (THIS org only) ────────────────────────────────
   const clearAllRevenue = useCallback(async () => {
@@ -96,7 +103,9 @@ export function RevenueProvider({ children }) {
     }
     // #479 — mirror the full clear to Supabase so the stores don't drift after the flip.
     await dualClearSupabase(REVENUE_COL, orgId);
-  }, [orgId]);
+    // #387 — re-fetch so the cleared table is reflected immediately under DATA_LAYER=supabase.
+    refreshRevenue();
+  }, [orgId, refreshRevenue]);
 
   // BUG #301 — memoize the context value to prevent unnecessary Firestore reconnects
   const value = useMemo(() => ({

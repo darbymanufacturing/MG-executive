@@ -34,8 +34,11 @@ service cloud.firestore {
       return isSignedIn() && (claims().role in roles);
     }
     // A new/updated doc must carry the caller's own orgId (no writing into another org).
+    // #337: also assert orgId IS a string — blocks boolean/null/missing bogus shapes.
     function writingOwnOrg() {
-      return isSignedIn() && request.resource.data.orgId == claims().orgId;
+      return isSignedIn()
+          && request.resource.data.orgId is string
+          && request.resource.data.orgId == claims().orgId;
     }
     // Existing doc belongs to the caller's org.
     function ownOrgDoc() {
@@ -60,14 +63,75 @@ service cloud.firestore {
     function orgManagerCreate() { return writingOwnOrg() && isOrgManager(); }
     function orgManagerWrite()  { return ownOrgDoc()   && isOrgManager(); }
 
+    // ── Per-collection shape validators (#337) ─────────────────────────────────
+    // These run on CREATE only (shape is validated once at insert; updates may be
+    // partial patches and are allowed to omit fields that already exist on the doc).
+    // Validates: presence of required fields + type of the most critical fields.
+    // Deliberately NOT exhaustive — covers the fields that carry financial meaning
+    // or are used as FK / filter keys so that totally bogus shapes are rejected.
+
+    // costs: financial record — must have orgId (checked by writingOwnOrg), name,
+    // amount (numeric), and category.
+    function hasValidCostShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'name', 'amount', 'category'])
+          && d.name     is string
+          && d.amount   is number
+          && d.category is string;
+    }
+
+    // revenue: time-series record — must have orgId and a date string.
+    function hasValidRevenueShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'date'])
+          && d.date is string;
+    }
+
+    // maintenanceTickets: must have orgId, scooterId (FK), and status.
+    function hasValidTicketShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'scooterId', 'status'])
+          && d.scooterId is string
+          && d.status    is string;
+    }
+
+    // repairSessions: audit records — must have orgId, ticketId (FK), scooterId (FK).
+    function hasValidRepairSessionShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'ticketId', 'scooterId'])
+          && d.ticketId  is string
+          && d.scooterId is string;
+    }
+
+    // scooters: registry — must have orgId and at least a model string.
+    function hasValidScooterShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'model'])
+          && d.model is string;
+    }
+
+    // projects: must have orgId and a name string.
+    function hasValidProjectShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId', 'name'])
+          && d.name is string;
+    }
+
+    // issues: must have orgId and a title or description (at least one text field).
+    function hasValidIssueShape() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['orgId'])
+          && (d.keys().hasAny(['title', 'description']));
+    }
+
     match /costs/{id} {
       allow read:   if orgRead();
-      allow create: if orgManagerCreate();
+      allow create: if orgManagerCreate() && hasValidCostShape();
       allow update, delete: if orgManagerWrite();
     }
     match /revenue/{id} {
       allow read:   if orgRead();
-      allow create: if orgManagerCreate();
+      allow create: if orgManagerCreate() && hasValidRevenueShape();
       allow update, delete: if orgManagerWrite();
     }
     match /maintenanceParts/{id} {
@@ -77,12 +141,12 @@ service cloud.firestore {
     }
     match /scooters/{id} {
       allow read:   if orgRead();
-      allow create: if orgManagerCreate();
+      allow create: if orgManagerCreate() && hasValidScooterShape();
       allow update, delete: if orgManagerWrite();
     }
     match /projects/{id} {
       allow read:   if orgRead();
-      allow create: if orgManagerCreate();
+      allow create: if orgManagerCreate() && hasValidProjectShape();
       allow update, delete: if orgManagerWrite();
     }
     match /decisionGates/{id} {
@@ -122,7 +186,7 @@ service cloud.firestore {
     }
     match /issues/{id} {
       allow read:   if orgRead();
-      allow create: if orgManagerCreate();
+      allow create: if orgManagerCreate() && hasValidIssueShape();
       allow update, delete: if orgManagerWrite();
     }
     match /repairProcedures/{id} {
@@ -155,13 +219,13 @@ service cloud.firestore {
     // Crew may read org data and create/update these two; managers retain full access.
     match /maintenanceTickets/{id} {
       allow read:   if orgRead();
-      allow create: if writingOwnOrg() && (isOrgManager() || isCrew());
+      allow create: if writingOwnOrg() && (isOrgManager() || isCrew()) && hasValidTicketShape();
       allow update: if ownOrgDoc()   && (isOrgManager() || isCrew());
       allow delete: if orgManagerWrite();
     }
     match /repairSessions/{id} {
       allow read:   if orgRead();
-      allow create: if writingOwnOrg() && (isOrgManager() || isCrew());
+      allow create: if writingOwnOrg() && (isOrgManager() || isCrew()) && hasValidRepairSessionShape();
       allow update: if ownOrgDoc()   && (isOrgManager() || isCrew());
       allow delete: if orgManagerWrite();
     }

@@ -9,6 +9,7 @@
 
 import { createContext, useContext, useCallback, useMemo } from 'react';
 import { collection, doc, writeBatch, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import * as Sentry from '@sentry/react';
 import { db, auth } from '../lib/firebase.js';
 import { classifyEventType } from '../utils/classifyEventType.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
@@ -57,16 +58,16 @@ export function TelemetryProvider({ children }) {
     if (!orgId) throw new Error('importEvents: no active org');
     const uid = auth.currentUser?.uid ?? null;
 
-    // Normalize stored _docId to the base fingerprint: strip the "orgId_" prefix when
-    // present (Phase-2 docs) so pre-Phase-2 un-prefixed docs also dedup correctly.
-    // Parser always emits the raw fingerprint (e.g. `70055_2026-01-01T100000_Available`).
-    // Phase-2 stored docs have `acme_70055_...`; legacy docs have `70055_...`.
-    // Stripping the prefix from Phase-2 docs makes both reduce to the same base key.
-    const orgPrefix = orgId + '_';
+    // Normalize stored _docId to the base fingerprint by stripping any org-id prefix.
+    // Org ids always start with a letter (e.g. "acme", "mg-executive"); scooter ids
+    // start with a digit (e.g. "70055"). The regex `^[a-z][a-z0-9-]*_` matches any
+    // leading alphabetic org prefix followed by an underscore and removes it, leaving
+    // the raw parser fingerprint (e.g. `70055_2026-01-01T100000_Available`).
+    // #489 — this handles docs written under ANY org prefix (cross-org legacy or test
+    // data), not only the active orgId, so duplicates are correctly deduped regardless
+    // of which org originally stored the document.
     const existingBaseIds = new Set(
-      events.map((e) =>
-        e._docId.startsWith(orgPrefix) ? e._docId.slice(orgPrefix.length) : e._docId
-      )
+      events.map((e) => e._docId.replace(/^[a-z][a-z0-9-]*_/, ''))
     );
     const newRows = parsedEvents.filter((e) => !existingBaseIds.has(e._docId));
     const duplicates = parsedEvents.length - newRows.length;
@@ -89,7 +90,9 @@ export function TelemetryProvider({ children }) {
         const fleetId = fleet?._docId ?? null;
         const stored = { ...data, orgId, createdByUid: uid, createdAt: serverTimestamp(), ...(fleetId ? { fleetId } : {}) };
         batch.set(doc(db, EVENTS_COL, fullId), stored);
-        sbEntries.push({ id: fullId, data: { ...data, orgId, createdByUid: uid, ...(fleetId ? { fleetId } : {}) } });
+        // #480 — include createdAt as an ISO string so Supabase rows match the
+        // Firestore field; serverTimestamp() sentinels are not serialisable to JSON.
+        sbEntries.push({ id: fullId, data: { ...data, orgId, createdByUid: uid, createdAt: new Date().toISOString(), ...(fleetId ? { fleetId } : {}) } });
       });
       await safeWrite(
         () => batch.commit(),
@@ -100,7 +103,17 @@ export function TelemetryProvider({ children }) {
     }
     // ADR-0013: mirror to Supabase — #481 fire-and-forget so the success toast isn't
     // blocked by the Supabase round-trip (best-effort; Firestore is authoritative).
+    // #494 — inspect the result and emit a Sentry event when chunks fail so parity
+    // drift is visible in the error dashboard before the next nightly parity-check cron.
     void dualWriteSupabase(EVENTS_COL, orgId, sbEntries)
+      .then(({ failed, failedChunks } = {}) => {
+        if (failed > 0) {
+          Sentry.captureMessage(`[telemetry dual-write] ${failed} rows failed in chunks: ${failedChunks?.join(', ')}`, {
+            level: 'warning',
+            extra: { orgId, failedChunks, collection: EVENTS_COL },
+          });
+        }
+      })
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written, duplicates };
   }, [events, orgId, fleetForCity]);

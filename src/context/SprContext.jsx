@@ -43,13 +43,18 @@ export function SprProvider({ children }) {
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
   // ADR-0013: reads Firestore OR Supabase per VITE_DATA_LAYER (default firestore).
+  // #366 — orderBy required so the cap keeps the NEWEST N rows, not an arbitrary slice.
+  // Firestore field: 'datetime' (ISO string on every sprEvents doc).
+  // Supabase typed column: 'datetime' (confirmed in spr_events table schema).
   const { items: events, loading, error } = useOrgTable(EVENTS_COL, SB_EVENTS, {
-    firestore: { limit: MAX_EVENTS },
-    supabase: { limit: MAX_EVENTS },
+    firestore: { orderBy: ['datetime', 'desc'], limit: MAX_EVENTS },
+    supabase:  { orderBy: ['datetime', 'desc'], limit: MAX_EVENTS },
   });
+  // #366 — orderBy required so the cap keeps the NEWEST N weather rows.
+  // Firestore field: 'date' (ISO date string). Supabase typed column: 'weather_date'.
   const { items: weather } = useOrgTable(WEATHER_COL, SB_WEATHER, {
-    firestore: { limit: MAX_WEATHER },
-    supabase: { limit: MAX_WEATHER },
+    firestore: { orderBy: ['date', 'desc'],         limit: MAX_WEATHER },
+    supabase:  { orderBy: ['weather_date', 'desc'], limit: MAX_WEATHER },
   });
   const { item: configItem, loading: configLoading } = useOrgDoc(CONFIG_COL, configDocId);
 

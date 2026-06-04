@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase.js';
+import { useOrg } from '../../context/OrgContext.jsx';
 import Modal from '../Shared/Modal.jsx';
 import Button from '../Shared/Button.jsx';
 import { validate } from '../../utils/validateForm.js';
@@ -17,7 +20,8 @@ const inputErrorStyle = {
 };
 
 const CATEGORIES = ['Expansion', 'Operations', 'Technology', 'Finance', 'Legal', 'Needs Setup'];
-const OWNERS     = ['Kostas', 'Panos', 'Both'];
+/** Fallback list used when org members have not loaded yet or are unavailable. */
+const FALLBACK_OWNERS = ['Kostas', 'Panos', 'Both'];
 const STATUSES   = [
   { value: 'onTrack',        label: '🟢 On Track' },
   { value: 'needsAttention', label: '🟡 Needs Attention' },
@@ -32,7 +36,7 @@ function todayLocal() {
 const EMPTY = {
   name:        '',
   description: '',
-  owner:       'Kostas',
+  owner:       '',
   status:      'onTrack',
   category:    'Operations',
   startDate:   '',
@@ -40,18 +44,41 @@ const EMPTY = {
 };
 
 export default function ProjectForm({ open, onClose, onSave, initial }) {
+  const { orgId } = useOrg();
+  const [orgUsers, setOrgUsers] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // Subscribe to the org's users collection (Firestore-only; not in Supabase table map).
+  useEffect(() => {
+    if (!orgId) return undefined;
+    const q = query(collection(db, 'users'), where('orgId', '==', orgId));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setOrgUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))),
+      (err) => console.error('[ProjectForm] users listener error:', err),
+    );
+    return unsub;
+  }, [orgId]);
+
+  // Derive owner list: display names of org members, falling back to the hardcoded list.
+  const ownerList = useMemo(() => {
+    if (orgUsers.length === 0) return FALLBACK_OWNERS;
+    const names = orgUsers
+      .map((u) => u.displayName || u.email?.split('@')[0])
+      .filter(Boolean);
+    return names.length > 0 ? names : FALLBACK_OWNERS;
+  }, [orgUsers]);
+
   useEffect(() => {
     if (open) {
-      const base = { ...EMPTY, startDate: todayLocal() };
+      const base = { ...EMPTY, startDate: todayLocal(), owner: ownerList[0] ?? '' };
       setForm(initial ? { ...base, ...initial } : base);
       setErrors({});
       setSaving(false);
     }
-  }, [open, initial]);
+  }, [open, initial, ownerList]);
 
   const set = (k, v) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -116,7 +143,7 @@ export default function ProjectForm({ open, onClose, onSave, initial }) {
               onChange={(e) => set('owner', e.target.value)}
               style={errors.owner ? inputErrorStyle : undefined}
             >
-              {OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {ownerList.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
             {errors.owner && <span style={errorStyle}>{errors.owner}</span>}
           </div>

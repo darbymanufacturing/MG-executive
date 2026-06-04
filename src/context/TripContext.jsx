@@ -6,6 +6,7 @@
 
 import { createContext, useContext, useCallback, useMemo } from 'react';
 import { collection, doc, writeBatch, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import * as Sentry from '@sentry/react';
 import { db, auth } from '../lib/firebase.js';
 import { safeWrite } from '../utils/firestoreWrite.js';
 import { useOrg } from './OrgContext.jsx';
@@ -69,7 +70,9 @@ export function TripProvider({ children }) {
           { ...row, orgId, createdByUid: uid, _importedAt: serverTimestamp(), ...fleetPatch },
           { merge: true },
         );
-        sbEntries.push({ id: docId, data: { ...row, orgId, createdByUid: uid, ...fleetPatch } });
+        // #480 — include _importedAt as an ISO string so the Supabase row matches the
+        // Firestore field; serverTimestamp() sentinels are not serialisable to JSON.
+        sbEntries.push({ id: docId, data: { ...row, orgId, createdByUid: uid, _importedAt: new Date().toISOString(), ...fleetPatch } });
         written++;
       });
       await safeWrite(
@@ -78,7 +81,17 @@ export function TripProvider({ children }) {
       );
     }
     // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
+    // #494 — inspect the result and emit a Sentry warning when chunks fail so parity
+    // drift is visible in the error dashboard before the next nightly parity-check cron.
     void dualWriteSupabase(TRIPS_COL, orgId, sbEntries)
+      .then(({ failed, failedChunks } = {}) => {
+        if (failed > 0) {
+          Sentry.captureMessage(`[trips dual-write] ${failed} rows failed in chunks: ${failedChunks?.join(', ')}`, {
+            level: 'warning',
+            extra: { orgId, failedChunks, collection: TRIPS_COL },
+          });
+        }
+      })
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     return { written };
   }, [orgId, fleetForCity]);

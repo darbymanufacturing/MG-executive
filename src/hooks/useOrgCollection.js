@@ -15,7 +15,7 @@
  * reloaded the page and tore down every listener). Matches the Supabase twin. While the
  * org is still resolving it returns `loading: true`.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, where, orderBy as fbOrderBy, limit as fbLimit, onSnapshot,
 } from 'firebase/firestore';
@@ -71,6 +71,15 @@ function useFirestoreCollection(collectionName, opts = {}) {
   const [pageLimit, setPageLimit] = useState(baseLimit);
   const [hasMore, setHasMore] = useState(false);
 
+  // #303: retain the last known items across re-subscriptions so that during the
+  // loading window (loading:true, new onSnapshot not yet fired) the UI shows stale
+  // counts rather than zero. A ref is used to avoid triggering renders.
+  const lastKnownItemsRef = useRef([]);
+  // #303 multi-tenant guard: the retained items belong to ONE org. Track which, so an
+  // org switch never flashes the prior tenant's data under the new orgId — on mismatch
+  // we drop to [] (the new org loads from empty, as before this cache existed).
+  const lastKnownOrgRef = useRef(null);
+
   // #291: org resolved-but-absent (user signed in) fails loud via an ERROR STATE — never
   // a synchronous throw (a throw reached the outermost ErrorBoundary whose reset reloaded
   // the page, tearing down every listener). Mirrors useSupabaseCollectionLive.
@@ -86,6 +95,11 @@ function useFirestoreCollection(collectionName, opts = {}) {
     // The missing-org case returned an error state above, so here we only handle:
     // still loading, or orgId present.
     if (orgLoading || !orgId) { setLoading(true); return undefined; }
+    // #303: seed items with last known value so chip counts stay non-zero during
+    // the re-subscription window (before the new onSnapshot fires) — but ONLY if the
+    // cached items belong to the current org (multi-tenant guard).
+    if (lastKnownOrgRef.current !== orgId) { lastKnownItemsRef.current = []; lastKnownOrgRef.current = orgId; }
+    setItems(lastKnownItemsRef.current);
     setLoading(true);
     setError(null);
 
@@ -104,8 +118,11 @@ function useFirestoreCollection(collectionName, opts = {}) {
       q,
       (snap) => {
         const docs = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+        const page = docs.slice(0, pageLimit);
+        lastKnownItemsRef.current = page; // #303: keep ref in sync for next re-subscription
+        lastKnownOrgRef.current = orgId; // #303: tag the cache with its owning org
         setHasMore(docs.length > pageLimit);
-        setItems(docs.slice(0, pageLimit));
+        setItems(page);
         setLoading(false);
       },
       (err) => { setError(err); setLoading(false); },

@@ -107,7 +107,7 @@ function PendingInvoiceBanner({ onConfirm }) {
 }
 
 export default function CostManager() {
-  const { costs, config, addCost, updateCost, deleteCost, importData } = useCosts();
+  const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, importData } = useCosts();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -240,7 +240,11 @@ export default function CostManager() {
               >
                 {t.label}
                 <span className={styles.tabCount}>
-                  {t.key === 'all' ? costs.length : costs.filter((c) => c.category === t.key).length}
+                  {costsLoading && costs.length === 0
+                    ? '—'
+                    : t.key === 'all'
+                      ? costs.length
+                      : costs.filter((c) => c.category === t.key).length}
                 </span>
               </button>
             ))}

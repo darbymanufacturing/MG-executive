@@ -88,7 +88,8 @@ describe('org isolation — reads', () => {
 describe('org isolation — writes', () => {
   it('a manager creates a cost in their own org', async () => {
     const db = ctx('uA', 'orgA', 'admin').firestore();
-    await assertSucceeds(setDoc(doc(db, 'costs', 'orgA_new'), { orgId: 'orgA', amount: 5 }));
+    // Full valid shape required since #337 shape validation was added.
+    await assertSucceeds(setDoc(doc(db, 'costs', 'orgA_new'), { orgId: 'orgA', name: 'fuel', amount: 5, category: 'fuel' }));
   });
 
   it("a manager CANNOT create a doc stamped with another org's id", async () => {
@@ -110,7 +111,8 @@ describe('role gating within an org', () => {
 
   it('crew CAN create a ticket in their own org', async () => {
     const db = ctx('uC', 'orgA', 'crew').firestore();
-    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'orgA_crewtix'), { orgId: 'orgA', status: 'Active' }));
+    // Full valid shape required since #337 shape validation was added.
+    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'orgA_crewtix'), { orgId: 'orgA', scooterId: '001', status: 'Active' }));
   });
 
   it('crew can READ org data (e.g. costs)', async () => {
@@ -120,7 +122,8 @@ describe('role gating within an org', () => {
 
   it('staff (manager tier) can write costs', async () => {
     const db = ctx('uS', 'orgA', 'staff').firestore();
-    await assertSucceeds(setDoc(doc(db, 'costs', 'orgA_staffcost'), { orgId: 'orgA', amount: 7 }));
+    // Full valid shape required since #337 shape validation was added.
+    await assertSucceeds(setDoc(doc(db, 'costs', 'orgA_staffcost'), { orgId: 'orgA', name: 'parts', amount: 7, category: 'parts' }));
   });
 });
 
@@ -147,12 +150,14 @@ describe('config singleton + users + organizations', () => {
 describe('F5 — contractor role (crew-tier)', () => {
   it('contractor CAN create a ticket in their own org', async () => {
     const db = ctx('uK', 'orgA', 'contractor').firestore();
-    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'orgA_ktix'), { orgId: 'orgA', status: 'Active' }));
+    // Full valid shape required since #337 shape validation was added.
+    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'orgA_ktix'), { orgId: 'orgA', scooterId: '70055', status: 'Active' }));
   });
 
   it('contractor CAN create a repair session in their own org', async () => {
     const db = ctx('uK', 'orgA', 'contractor').firestore();
-    await assertSucceeds(setDoc(doc(db, 'repairSessions', 'orgA_ksession'), { orgId: 'orgA', scooterId: '70055' }));
+    // Full valid shape required since #337 shape validation was added.
+    await assertSucceeds(setDoc(doc(db, 'repairSessions', 'orgA_ksession'), { orgId: 'orgA', ticketId: 'tix-x', scooterId: '70055' }));
   });
 
   it('contractor CANNOT create a cost (managers only)', async () => {
@@ -206,5 +211,94 @@ describe('default deny', () => {
     const db = ctx('uA', 'orgA', 'admin').firestore();
     await assertFails(getDoc(doc(db, 'someRandomCollection', 'x')));
     await assertFails(setDoc(doc(db, 'someRandomCollection', 'x'), { orgId: 'orgA' }));
+  });
+});
+
+// #337 — shape validation: bogus / missing required fields must be rejected on create
+describe('#337 — per-collection shape validation', () => {
+  // writingOwnOrg() now requires orgId IS a string
+  it('costs: rejected when orgId is not a string (boolean)', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'costs', 'bogus1'), { orgId: true, name: 'x', amount: 5, category: 'fuel' }));
+  });
+
+  it('costs: rejected when required fields missing (no amount)', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'costs', 'bogus2'), { orgId: 'orgA', name: 'x', category: 'fuel' }));
+  });
+
+  it('costs: rejected when amount is a string, not a number', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'costs', 'bogus3'), { orgId: 'orgA', name: 'x', amount: 'five', category: 'fuel' }));
+  });
+
+  it('costs: accepted with all required fields correctly typed', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertSucceeds(setDoc(doc(db, 'costs', 'good1'), { orgId: 'orgA', name: 'fuel', amount: 50, category: 'fuel' }));
+  });
+
+  it('revenue: rejected when date field is missing', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'revenue', 'bogus4'), { orgId: 'orgA', totalPaidRevenue: 100 }));
+  });
+
+  it('revenue: accepted with orgId + date', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertSucceeds(setDoc(doc(db, 'revenue', 'good2'), { orgId: 'orgA', date: '2026-06-01', totalPaidRevenue: 200 }));
+  });
+
+  it('maintenanceTickets: rejected when scooterId is missing', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'maintenanceTickets', 'bogus5'), { orgId: 'orgA', status: 'Open' }));
+  });
+
+  it('maintenanceTickets (crew): rejected when status is missing', async () => {
+    const db = ctx('uC', 'orgA', 'crew').firestore();
+    await assertFails(setDoc(doc(db, 'maintenanceTickets', 'bogus6'), { orgId: 'orgA', scooterId: '001' }));
+  });
+
+  it('maintenanceTickets (crew): accepted with all required fields', async () => {
+    const db = ctx('uC', 'orgA', 'crew').firestore();
+    await assertSucceeds(setDoc(doc(db, 'maintenanceTickets', 'good3'), { orgId: 'orgA', scooterId: '001', status: 'Open' }));
+  });
+
+  it('repairSessions: rejected when ticketId is missing', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'repairSessions', 'bogus7'), { orgId: 'orgA', scooterId: '001' }));
+  });
+
+  it('repairSessions (crew): accepted with ticketId + scooterId', async () => {
+    const db = ctx('uC', 'orgA', 'crew').firestore();
+    await assertSucceeds(setDoc(doc(db, 'repairSessions', 'good4'), { orgId: 'orgA', ticketId: 'tix1', scooterId: '001' }));
+  });
+
+  it('scooters: rejected when model is missing', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'scooters', 'bogus8'), { orgId: 'orgA', city: 'Athens' }));
+  });
+
+  it('scooters: accepted with orgId + model', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertSucceeds(setDoc(doc(db, 'scooters', 'good5'), { orgId: 'orgA', model: 'Segway E2' }));
+  });
+
+  it('projects: rejected when name is missing', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'projects', 'bogus9'), { orgId: 'orgA', description: 'no name' }));
+  });
+
+  it('projects: accepted with orgId + name', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertSucceeds(setDoc(doc(db, 'projects', 'good6'), { orgId: 'orgA', name: 'Fleet expansion' }));
+  });
+
+  it('issues: rejected when neither title nor description is present', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertFails(setDoc(doc(db, 'issues', 'bogus10'), { orgId: 'orgA', severity: 'high' }));
+  });
+
+  it('issues: accepted with orgId + title', async () => {
+    const db = ctx('uA', 'orgA', 'admin').firestore();
+    await assertSucceeds(setDoc(doc(db, 'issues', 'good7'), { orgId: 'orgA', title: 'Scooter stuck' }));
   });
 });

@@ -122,7 +122,22 @@ export default async function handler(req, res) {
   // BUG #382 — multi-org guard: if any scooter belongs to a different org than the
   // configured OMNI_ORG_ID, abort rather than stamp all their data with the wrong org_id.
   // This is a safe outage instead of silent cross-tenant data corruption.
-  const distinctOrgIds = new Set(scooters.map((s) => s.orgId).filter(Boolean));
+  //
+  // BUG #488 — check for scooters with no orgId BEFORE the foreign-org check.
+  // Previously `.filter(Boolean)` silently dropped null/undefined orgIds, meaning
+  // scooters missing orgId were never inspected and would be unconditionally stamped
+  // with OMNI_ORG_ID without any validation. Abort instead: an unscoped scooter
+  // likely indicates a data-ingestion problem that an operator should fix first.
+  const unscopedScooters = scooters.filter((s) => !s.orgId);
+  if (unscopedScooters.length > 0) {
+    const ids = unscopedScooters.map((s) => s._docId || s.scooterId || '(unknown)').join(', ');
+    return finalize(res, db, {
+      trigger, triggeredByUid, startedAt,
+      ok: false,
+      errorMessage: `Aborting: ${unscopedScooters.length} scooter(s) have no orgId and cannot be safely stamped with OMNI_ORG_ID without operator review. Fix the missing orgId field(s) in Firestore first. Scooter doc id(s): ${ids}`,
+    });
+  }
+  const distinctOrgIds = new Set(scooters.map((s) => s.orgId));
   const foreignOrgs = [...distinctOrgIds].filter((id) => id !== ORG_ID);
   if (foreignOrgs.length > 0) {
     return finalize(res, db, {
@@ -359,7 +374,12 @@ async function upsertSupabase(supa, table, rows) {
   let writtenChunks = 0, failedChunks = 0, totalRows = 0;
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
-    const { error } = await supa.from(table).upsert(chunk, { onConflict: 'source_doc_id' });
+    // BUG #487 — add ignoreDuplicates: true so the daily LOOKBACK_DAYS=2 re-pull
+    // skips rows already in Supabase instead of overwriting them. This matches the
+    // pattern in scripts/load-staged-sql-to-supabase.mjs:89. NOTE: do NOT apply
+    // this to dualWriteSupabase in src/lib/supabase.js — that path intentionally
+    // overwrites on conflict so corrected re-imports propagate during the parity window.
+    const { error } = await supa.from(table).upsert(chunk, { onConflict: 'source_doc_id', ignoreDuplicates: true });
     // #379 — continue (not break) so a transient chunk failure doesn't drop subsequent chunks
     if (error) { console.warn(`[cron-hopp-sync] supabase ${table} chunk ${i}: ${error.message}`); failedChunks++; continue; }
     writtenChunks++; totalRows += chunk.length;
