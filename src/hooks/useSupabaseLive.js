@@ -22,6 +22,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { mapRow, OP_MAP } from './useSupabaseTable.js';
+import { onSupabaseWrite } from '../lib/supabaseRealtimeBus.js';
 
 const DEFAULT_LIMIT = 50;
 
@@ -72,6 +73,9 @@ export function useSupabaseCollectionLive(table, opts = {}) {
   const [error, setError] = useState(null);
   const [pageLimit, setPageLimit] = useState(baseLimit);
   const [hasMore, setHasMore] = useState(false);
+  // #575 — bumped by a local Supabase write to THIS table (via the write bus) to force a
+  // refetch, because the realtime UPDATE stream doesn't reliably deliver RLS-gated events.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Fail loud (ADR-0003 parity): org resolved but absent → never query unscoped.
   // Bug #291: Return error state instead of throwing synchronously during render.
@@ -154,7 +158,20 @@ export function useSupabaseCollectionLive(table, opts = {}) {
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, orgId, orgLoading, orderKey, whereKey, pageLimit]);
+  }, [table, orgId, orgLoading, orderKey, whereKey, pageLimit, refreshTick]);
+
+  // #575 — when a local write to THIS table lands (write bus), refetch so the writer's own
+  // change reflects immediately even if the realtime UPDATE event doesn't arrive. Debounced
+  // to collapse bulk-write bursts (imports). Cross-client liveness still relies on realtime.
+  useEffect(() => {
+    let timer = null;
+    const off = onSupabaseWrite((writtenTable) => {
+      if (writtenTable !== table) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setRefreshTick((n) => n + 1), 200);
+    });
+    return () => { off(); if (timer) clearTimeout(timer); };
+  }, [table]);
 
   const items = useMemo(() => rawItems.map(mapRow).filter(Boolean), [rawItems]);
   const loadMore = useCallback(() => setPageLimit((p) => p + baseLimit), [baseLimit]);
@@ -167,6 +184,7 @@ export function useSupabaseDocLive(table, sourceDocId) {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0); // #575 — local-write refetch nudge
 
   // Bug #291: Return error state instead of throwing synchronously during render.
   if (!orgLoading && !orgId && hasUser) {
@@ -218,7 +236,18 @@ export function useSupabaseDocLive(table, sourceDocId) {
       });
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
-  }, [table, sourceDocId, orgId, orgLoading]);
+  }, [table, sourceDocId, orgId, orgLoading, refreshTick]);
+
+  // #575 — refetch this doc when a local write to its table lands (realtime gap).
+  useEffect(() => {
+    let timer = null;
+    const off = onSupabaseWrite((writtenTable) => {
+      if (writtenTable !== table) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setRefreshTick((n) => n + 1), 200);
+    });
+    return () => { off(); if (timer) clearTimeout(timer); };
+  }, [table]);
 
   return { item, loading, error };
 }

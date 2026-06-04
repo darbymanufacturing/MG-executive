@@ -13,6 +13,7 @@
  */
 import { supabase } from './supabase.js';
 import { SUPABASE_TABLE, toSupabaseRow, jsonbSafe } from './supabaseRowMap.js';
+import { emitSupabaseWrite } from './supabaseRealtimeBus.js';
 
 function tableFor(collectionName) {
   const t = SUPABASE_TABLE[collectionName];
@@ -79,6 +80,7 @@ export async function sbWrite(collectionName, orgId, userUid, data, opts = {}) {
   const row = toSupabaseRow(collectionName, orgId, id, stamped);
   const { error } = await supabase.from(table).upsert(row, { onConflict: 'source_doc_id' });
   if (error) throw friendlySupabaseError(error, `Failed to save ${collectionName}`);
+  emitSupabaseWrite(table); // #575 — nudge live read hooks to refetch (realtime gap)
   return { id };
 }
 
@@ -94,9 +96,9 @@ export async function sbUpsertMerge(collectionName, orgId, userUid, id, data) {
   const { plain, append } = prepareSupabasePatch(data);
   const p_patch = append ? { ...plain, $append: append } : plain;
   const { error } = await supabase.rpc('apply_doc_patch', { p_table: table, p_source_doc_id: id, p_patch });
-  if (!error) return { id };
+  if (!error) { emitSupabaseWrite(table); return { id }; } // #575 — nudge live read hooks
   if (/not found/i.test(error.message || '')) {
-    return sbWrite(collectionName, orgId, userUid, data, { id }); // first write — insert full doc
+    return sbWrite(collectionName, orgId, userUid, data, { id }); // first write — insert full doc (sbWrite emits)
   }
   throw friendlySupabaseError(error, `Failed to save ${collectionName}`);
 }
@@ -111,6 +113,7 @@ export async function sbUpdate(collectionName, orgId, docId, patch) {
     p_table: table, p_source_doc_id: docId, p_patch,
   });
   if (error) throw friendlySupabaseError(error, `Failed to update ${collectionName}`);
+  emitSupabaseWrite(table); // #575 — nudge live read hooks to refetch (realtime gap)
   return { id: docId };
 }
 
@@ -120,6 +123,7 @@ export async function sbDelete(collectionName, orgId, docId) {
   const table = tableFor(collectionName);
   const { error } = await supabase.from(table).delete().eq('org_id', orgId).eq('source_doc_id', docId);
   if (error) throw friendlySupabaseError(error, `Failed to delete ${collectionName}`);
+  emitSupabaseWrite(table); // #575 — nudge live read hooks to refetch (realtime gap)
   return { id: docId };
 }
 
@@ -143,7 +147,7 @@ export async function sbTransaction(collectionName, orgId, docId, mutator) {
       p_table: table, p_source_doc_id: docId, p_patch: cleanPatch, p_expected_version: read.version ?? 0,
     });
     if (cErr) throw friendlySupabaseError(cErr, `Failed to commit ${collectionName}`);
-    if ((rows ?? 0) > 0) return; // committed
+    if ((rows ?? 0) > 0) { emitSupabaseWrite(table); return; } // committed — #575 nudge live hooks
     // rows === 0 → another writer won the version race; re-read and retry.
   }
   throw new Error(`Transaction on ${collectionName}/${docId} contended — exceeded 5 retries.`);
