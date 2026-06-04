@@ -28,8 +28,13 @@ const PROJECT_ID = 'mg-executive-rules-test';
 
 let testEnv;
 
-// Authed contexts: (uid, { orgId, role }) — the claims the rules read.
-const ctx = (uid, orgId, role) => testEnv.authenticatedContext(uid, { orgId, role });
+// Authed contexts mirror the PROD claim shape (api/_sync-claim.js:85 · ADR-0017):
+// Supabase reserves `role` (='authenticated'); the app RBAC role is `user_role`.
+// #569: minting the role into `user_role` (not `role`) is what makes these tests
+// actually exercise hasRole() the way prod does — setting `role` directly masked a
+// prod-only lockout where every manager/crew write was denied.
+const ctx = (uid, orgId, role) =>
+  testEnv.authenticatedContext(uid, { orgId, role: 'authenticated', user_role: role });
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({

@@ -5,8 +5,10 @@ rules_version = '2';
 //
 // Org isolation: every org-scoped doc carries an `orgId` field; a request may only
 // touch docs whose orgId matches the caller's OWN org. The org + role are read from
-// CUSTOM CLAIMS on the ID token (request.auth.token.orgId / .role) — set server-side
-// by api/sync-claim.js, so a client can never forge them.
+// CUSTOM CLAIMS on the ID token (request.auth.token.orgId / .user_role) — set
+// server-side by api/sync-claim.js, so a client can never forge them. NOTE: the app
+// RBAC role is `user_role`, NOT `role` — Supabase reserves `role` (='authenticated'),
+// see ADR-0017 + #569.
 //
 // Role model (mirrors the current app, per product decision):
 //   owner / admin / staff  → full read+write on all org data
@@ -31,7 +33,12 @@ service cloud.firestore {
       return isSignedIn() && claims().orgId == oid;
     }
     function hasRole(roles) {
-      return isSignedIn() && (claims().role in roles);
+      // #569: read the APP role from `user_role`, NOT `role`. Supabase reserves the JWT
+      // `role` claim (minted as 'authenticated'); the RBAC role lives in `user_role`
+      // (ADR-0017 · api/_sync-claim.js:85). Reading `claims().role` here would deny EVERY
+      // manager/crew write in prod, while the emulator tests (which set `role` directly)
+      // passed — a prod-only lockout the tests masked until #569.
+      return isSignedIn() && (claims().user_role in roles);
     }
     // A new/updated doc must carry the caller's own orgId (no writing into another org).
     // #337: also assert orgId IS a string — blocks boolean/null/missing bogus shapes.
