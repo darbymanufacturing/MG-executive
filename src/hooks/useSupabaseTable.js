@@ -21,7 +21,7 @@
  *   single setState call so React only ever schedules ONE effect run per logical
  *   action, preventing the double-fetch that occurred with separate state values.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, DATA_LAYER } from '../lib/supabase.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { useOrgCollection } from './useOrgCollection.js';
@@ -65,6 +65,24 @@ export function useSupabaseTable(table, opts = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
+
+  // #495 — refresh-on-focus. These 5 time-series tables are fetch-on-mount (not a live
+  // onSnapshot/Realtime subscription), so rows the cron writes wouldn't appear until a
+  // manual reload. Re-fetch (reset offset→0, same as `refresh`) when the window regains
+  // focus, throttled so rapid alt-tabbing can't storm Supabase. Declared ABOVE the
+  // org-absent early return so it's an unconditional hook. (Firestore-path consumers use
+  // useOrgCollection/onSnapshot — already live — so this only runs on the Supabase path.)
+  const lastFocusRefreshRef = useRef(0);
+  useEffect(() => {
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefreshRef.current < 15000) return; // at most once / 15s
+      lastFocusRefreshRef.current = now;
+      setFetchSpec({ filterKey, offset: 0 });
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [filterKey]);
 
   // #523/#291: org resolved-but-absent (user IS signed in) fails loud via an ERROR
   // STATE — never a synchronous throw (a throw reached the outermost ErrorBoundary

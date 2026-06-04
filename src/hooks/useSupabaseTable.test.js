@@ -56,7 +56,7 @@ let _mockIsConfigured = true;
 let _mockDataLayer = 'supabase';
 
 import { mapRow, OP_MAP, useSupabaseTable, useOrgTable, _useOrgTableAdapterCache } from './useSupabaseTable.js';
-import { toSupabaseRow, SUPABASE_TABLE, jsonbSafe } from '../lib/supabaseRowMap.js';
+import { toSupabaseRow, SUPABASE_TABLE, jsonbSafe, TYPED_COLUMNS } from '../lib/supabaseRowMap.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { useOrgCollection } from './useOrgCollection.js';
 import { dualWriteSupabase } from '../lib/supabase.js';
@@ -213,6 +213,33 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.loans).toBe('loans');
     // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans = 25 keys
     expect(Object.keys(SUPABASE_TABLE)).toHaveLength(25);
+  });
+
+  // BUG #496 — schema-drift lock: pin the EXACT typed-column SET per time-series
+  // collection. Adding/removing a typed extractor field (without updating this test +
+  // the matching DB migration) fails CI, instead of silently dropping the field from
+  // SQL-queryable columns into jsonb-only. Every extractor uses ??/num()/bool() (no
+  // conditional spreads), so calling with {} yields the full, stable key set.
+  it('TYPED_COLUMNS drift lock — pins the typed-column set per time-series collection (#496)', () => {
+    expect(Object.keys(TYPED_COLUMNS.telemetryEvents({})).sort()).toEqual(
+      ['after_state', 'battery_level', 'before_state', 'city', 'event_ts', 'event_type', 'reason', 'scooter_id'],
+    );
+    expect(Object.keys(TYPED_COLUMNS.scooterTrips({})).sort()).toEqual(
+      ['city', 'cost', 'distance_km', 'duration_minutes', 'ended_at', 'is_paid', 'scooter_id', 'started_at'],
+    );
+    expect(Object.keys(TYPED_COLUMNS.sprEvents({})).sort()).toEqual(
+      ['action', 'after_state', 'city', 'datetime', 'lat', 'lon', 'scooter_id', 'zone'],
+    );
+    expect(Object.keys(TYPED_COLUMNS.sprWeather({})).sort()).toEqual(
+      ['city', 'is_rainy', 'temperature_c', 'total_rain_mm', 'weather_code', 'weather_date'],
+    );
+    expect(Object.keys(TYPED_COLUMNS.revenue({})).sort()).toEqual(
+      ['location', 'revenue_date', 'total_paid_revenue', 'total_trips', 'unique_users_count', 'unique_vehicles_count'],
+    );
+    // Operational collections intentionally carry NO typed columns (DB triggers re-derive
+    // them from `data`, ADR-0015) — lock a representative sample at empty.
+    expect(Object.keys(TYPED_COLUMNS.maintenanceTickets({}))).toEqual([]);
+    expect(Object.keys(TYPED_COLUMNS.costs({}))).toEqual([]);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

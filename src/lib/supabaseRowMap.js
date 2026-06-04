@@ -79,8 +79,19 @@ export const SUPABASE_QUERY_MAP = Object.freeze({
   repairProcedures: { createdAt: 'created_at_ts' },
 });
 
-/** Per-collection extractor of the typed/indexed columns (camelCase doc → snake_case cols). */
-const TYPED_COLUMNS = Object.freeze({
+/**
+ * Per-collection extractor of the typed/indexed columns (camelCase doc → snake_case cols).
+ *
+ * #496 — the jsonb-vs-typed contract: typed columns are an SQL-queryable SUBSET of the doc.
+ * The COMPLETE original doc always lives in the `data` jsonb column (via jsonbSafe), so no
+ * field is ever lost. BUT a field you intend to query/aggregate in SQL (SELECT ... WHERE col,
+ * GROUP BY, ORDER BY) MUST be added here as a typed column — otherwise it lives only in
+ * `data` and SQL predicates silently miss it. Data-only fields (no SQL use) need no entry.
+ * The "TYPED_COLUMNS drift lock" test in useSupabaseTable.test.js asserts the exact column
+ * SET per time-series collection, so adding/removing a typed column without updating that
+ * test (and the matching DB migration) fails CI — turning silent drift into a loud failure.
+ */
+export const TYPED_COLUMNS = Object.freeze({
   telemetryEvents: (d) => ({
     scooter_id: d.scooterId ?? null,
     event_ts: d.timestamp ?? null,
