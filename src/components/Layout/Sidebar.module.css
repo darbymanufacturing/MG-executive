@@ -12,7 +12,19 @@
   flex-shrink: 0;
   padding: 16px 0;
   color: rgba(255,255,255,.8);
+  /* Scrollable when the nav is taller than the viewport (short screens / many items),
+     but with NO visible scrollbar. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / legacy Edge */
 }
+/* Hide the scrollbar in WebKit/Chromium (Chrome, Safari, Edge). */
+.sidebar::-webkit-scrollbar { display: none; }
+/* Keep the real content rows at their natural height so the column SCROLLS instead of
+   squishing them. The flex:1 spacer (inline style) still collapses to push the footer
+   down when everything fits. */
+.sidebar > * { flex-shrink: 0; }
 
 .overlay {
   display: none;
