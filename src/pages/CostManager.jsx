@@ -8,7 +8,7 @@ import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CategoryBadge from '../components/Costs/CategoryBadge.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
-import { FREQUENCIES } from '../utils/constants.js';
+import { FREQUENCIES, CATEGORIES, CATEGORY_KEYS } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
 import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
@@ -107,7 +107,7 @@ function PendingInvoiceBanner({ onConfirm }) {
 }
 
 export default function CostManager() {
-  const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, importData } = useCosts();
+  const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -121,6 +121,10 @@ export default function CostManager() {
   const [csvMsg, setCsvMsg] = useState(null);
   const [csvLoading, setCsvLoading] = useState(false);
   const csvFileRef = useRef();
+  // Multi-edit (bulk) selection — by cost `id`
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const filtered = useMemo(() => {
     let list = filterCostsByLocation(costs, locationFilter);
@@ -145,6 +149,38 @@ export default function CostManager() {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortBy(field); setSortDir('asc'); }
   };
+
+  // ── Multi-edit selection ─────────────────────────────────────────────────────
+  const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const selectedVisibleCount = filteredIds.reduce((n, id) => (selected.has(id) ? n + 1 : n), 0);
+  const allVisibleSelected = filteredIds.length > 0 && selectedVisibleCount === filteredIds.length;
+
+  const toggleRow = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => setSelected((s) => {
+    const n = new Set(s);
+    if (allVisibleSelected) filteredIds.forEach((id) => n.delete(id));
+    else filteredIds.forEach((id) => n.add(id));
+    return n;
+  });
+  const clearSelection = () => setSelected(new Set());
+  const flash = (type, text) => { setCsvMsg({ type, text }); setTimeout(() => setCsvMsg(null), 6000); };
+
+  const runBulk = async (fn, label) => {
+    if (!selected.size) return;
+    setBulkBusy(true);
+    try {
+      const n = await fn([...selected]);
+      flash('success', `${label} ${n} cost item${n !== 1 ? 's' : ''}.`);
+      clearSelection();
+    } catch (err) {
+      flash('error', `Bulk action failed: ${err.message}`);
+    }
+    setBulkBusy(false);
+  };
+
+  const applyBulkCategory = (category) => category && runBulk((ids) => bulkUpdateCosts(ids, { category }), 'Re-categorized');
+  const applyBulkLocation = (location) => runBulk((ids) => bulkUpdateCosts(ids, { location: location || null }), 'Updated location for');
+  const confirmBulkDelete = async () => { await runBulk(bulkDeleteCosts, 'Deleted'); setBulkDeleteOpen(false); };
 
   const openAdd = () => { setEditingCost(null); setModalOpen(true); };
   const openEdit = (cost) => { setEditingCost(cost); setModalOpen(true); };
@@ -261,6 +297,42 @@ export default function CostManager() {
           </div>
         </div>
 
+        {/* Bulk action bar (multi-edit) */}
+        {selected.size > 0 && (
+          <div className={styles.bulkBar}>
+            <span className={styles.bulkCount}>{selected.size} selected</span>
+            <select
+              className={styles.bulkSelect}
+              value=""
+              disabled={bulkBusy}
+              onChange={(e) => applyBulkCategory(e.target.value)}
+              aria-label="Set category for selected costs"
+            >
+              <option value="">Set category…</option>
+              {CATEGORY_KEYS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+            </select>
+            {locations.length > 0 && (
+              <select
+                className={styles.bulkSelect}
+                value=""
+                disabled={bulkBusy}
+                onChange={(e) => applyBulkLocation(e.target.value === '__none__' ? '' : e.target.value)}
+                aria-label="Set location for selected costs"
+              >
+                <option value="">Set location…</option>
+                <option value="__none__">Fleet-wide</option>
+                {locations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+            )}
+            <button className={styles.bulkDelete} disabled={bulkBusy} onClick={() => setBulkDeleteOpen(true)}>
+              <Trash2 size={14} /> Delete
+            </button>
+            <button className={styles.bulkClear} disabled={bulkBusy} onClick={clearSelection}>
+              <X size={14} /> Clear
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         {filtered.length === 0 ? (
           <EmptyState
@@ -284,6 +356,15 @@ export default function CostManager() {
             <table className={styles.table}>
               <thead>
                 <tr>
+                  <th className={`${styles.th} ${styles.checkCol}`}>
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && selectedVisibleCount > 0; }}
+                      onChange={toggleAll}
+                      aria-label="Select all costs"
+                    />
+                  </th>
                   <th className={styles.th} onClick={() => toggleSort('name')}>
                     Name <SortIcon field="name" />
                   </th>
@@ -305,7 +386,15 @@ export default function CostManager() {
                 {filtered.map((cost) => {
                   const status = getCostStatus(cost);
                   return (
-                    <tr key={cost.id} className={styles.row}>
+                    <tr key={cost.id} className={`${styles.row} ${selected.has(cost.id) ? styles.rowSelected : ''}`}>
+                      <td className={`${styles.td} ${styles.checkCol}`}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(cost.id)}
+                          onChange={() => toggleRow(cost.id)}
+                          aria-label={`Select ${cost.name}`}
+                        />
+                      </td>
                       <td className={styles.td}>
                         <div className={styles.costName}>{cost.name}</div>
                         {cost.notes && <div className={styles.costNotes}>{cost.notes}</div>}
@@ -384,6 +473,15 @@ export default function CostManager() {
         onConfirm={() => { deleteCost(deleteTarget.id); setDeleteTarget(null); }}
         title="Delete Cost"
         message={`Remove "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+      />
+
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete selected costs"
+        message={`Delete ${selected.size} selected cost item${selected.size !== 1 ? 's' : ''}? This action cannot be undone.`}
         confirmLabel="Delete"
       />
     </div>

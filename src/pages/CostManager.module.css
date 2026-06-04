@@ -12,6 +12,53 @@
 .csvSuccess { background: rgba(76,175,80,0.1); color: var(--color-success); border: 1px solid rgba(76,175,80,0.3); }
 .csvError   { background: rgba(244,67,54,0.1); color: var(--color-danger);  border: 1px solid rgba(244,67,54,0.3); }
 
+/* Multi-edit (bulk action) bar */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-section));
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--border));
+  border-radius: var(--radius-md);
+}
+.bulkCount { font-size: var(--text-sm); font-weight: 600; color: var(--fg-strong); margin-right: var(--space-1); }
+.bulkSelect {
+  background: var(--bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: 5px 8px;
+  cursor: pointer;
+  outline: none;
+}
+.bulkDelete, .bulkClear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.bulkDelete { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); }
+.bulkDelete:hover { background: color-mix(in srgb, var(--color-danger) 10%, transparent); }
+.bulkClear:hover { background: var(--bg-hover); }
+.bulkDelete:disabled, .bulkClear:disabled, .bulkSelect:disabled { opacity: 0.5; cursor: not-allowed; }
+.bulkClear { margin-left: auto; }
+
+/* Multi-edit checkbox column + selected row */
+.checkCol { width: 36px; text-align: center; }
+.rowSelected { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+
 /* Pending invoice banner */
 .pendingBanner {
   background: color-mix(in oklab, var(--accent) 7%, var(--bg-section));

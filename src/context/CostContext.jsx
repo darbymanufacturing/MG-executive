@@ -92,6 +92,38 @@ export function CostProvider({ children }) {
 
   const getCostById = useCallback((id) => costs.find((c) => c.id === id), [costs]);
 
+  // ── Bulk (multi-edit) ─────────────────────────────────────────────────────────
+  // Apply a partial patch to (or delete) many costs at once. Both resolve the
+  // app-level `id` → Firestore `_docId` and go through the org-scoped write path
+  // (orgUpdate/orgDelete), chunked to bound concurrency.
+  const bulkUpdateCosts = useCallback(async (ids, patch) => {
+    const idSet = new Set(ids);
+    const targets = costs.filter((c) => idSet.has(c.id) && c._docId);
+    const stamp = new Date().toISOString();
+    const CHUNK = 25;
+    for (let i = 0; i < targets.length; i += CHUNK) {
+      const slice = targets.slice(i, i + CHUNK);
+      await Promise.all(slice.map((c) => orgUpdate(
+        COSTS_COL, c._docId, { ...patch, id: c.id, updatedAt: stamp },
+        { rethrow: true, errorMessage: 'Bulk update failed' },
+      )));
+    }
+    return targets.length;
+  }, [costs]);
+
+  const bulkDeleteCosts = useCallback(async (ids) => {
+    const idSet = new Set(ids);
+    const targets = costs.filter((c) => idSet.has(c.id) && c._docId);
+    const CHUNK = 25;
+    for (let i = 0; i < targets.length; i += CHUNK) {
+      const slice = targets.slice(i, i + CHUNK);
+      await Promise.all(slice.map((c) => orgDelete(
+        COSTS_COL, c._docId, { rethrow: true, errorMessage: 'Bulk delete failed' },
+      )));
+    }
+    return targets.length;
+  }, [costs]);
+
   // ── Config ─────────────────────────────────────────────────────────────────────
 
   const updateConfig = useCallback(async (updates) => {
@@ -284,6 +316,8 @@ export function CostProvider({ children }) {
         addCost,
         updateCost,
         deleteCost,
+        bulkUpdateCosts,
+        bulkDeleteCosts,
         getCostById,
         updateConfig,
         addLocation,
