@@ -14,10 +14,13 @@
  *     an admin can only invite into their OWN org.
  *   - role is clamped to crew-tier (contractor/crew/technician); you cannot invite an
  *     owner/admin via this funnel (privilege-escalation guard).
+ *
+ * ADR-0023 Stage-1: reads identity from Supabase (users / organizations / invites tables).
+ * Firebase Admin is used for AUTH only (verifyIdToken via requireUser).
  */
 import { randomBytes } from 'node:crypto';
-import { getDb, FieldValue } from './_lib/firebase-admin.js';
 import { requireUser } from './_lib/require-auth.js';
+import { sbGetDoc, sbPutDoc } from './_lib/supabase-admin.js';
 
 const INVITE_TTL_DAYS = 7;
 const INVITABLE_ROLES = ['contractor', 'crew', 'technician'];
@@ -38,23 +41,20 @@ export default async function handler(req, res) {
     ? req.body.assignedScooterIds.map(String).slice(0, 500)
     : [];
 
-  const db = getDb();
-
   // Org comes from the caller's verified profile — never the request body.
-  const callerSnap = await db.collection('users').doc(caller.uid).get();
-  const callerData = callerSnap.exists ? callerSnap.data() : {};
-  const orgId = callerData.orgId;
+  const callerDoc = await sbGetDoc('users', caller.uid);
+  const orgId = callerDoc?.orgId;
   if (!orgId) return res.status(400).json({ error: 'Your account is not linked to an organization.' });
 
-  const orgSnap = await db.collection('organizations').doc(orgId).get();
-  const orgName = orgSnap.exists ? (orgSnap.data().name ?? 'your operator') : 'your operator';
+  const orgDoc = await sbGetDoc('organizations', orgId);
+  const orgName = orgDoc?.name ?? 'your operator';
 
   // Single-use random token (URL-safe).
   const token = randomBytes(24).toString('base64url');
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86400000).toISOString();
 
   try {
-    await db.collection('invites').doc(token).set({
+    await sbPutDoc('invites', orgId, token, {
       orgId,
       orgName,
       email,
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       status: 'pending',
       expiresAt,
       createdBy: caller.uid,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('create-invite write failed:', err);

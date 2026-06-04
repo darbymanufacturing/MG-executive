@@ -1,9 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../../lib/firebase.js';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
-import { useOrg } from '../../../context/OrgContext.jsx';
+import { useOrgCollection } from '../../../hooks/useOrgCollection.js';
 import Button from '../../Shared/Button.jsx';
 import ActiveTicketsBanner from '../tickets/ActiveTicketsBanner.jsx';
 import TicketFilters from '../tickets/TicketFilters.jsx';
@@ -20,26 +18,23 @@ export default function RepairLogTab({ filteredTickets }) {
     config, isAtMaxActive, activeCount, loading,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
   } = useMaintenance();
-  const { orgId } = useOrg();
-
   const [filters,       setFilters]       = useState(EMPTY_FILTERS);
   const [showForm,      setShowForm]      = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
-  const [technicians,   setTechnicians]   = useState([]);
 
-  useEffect(() => {
-    if (!orgId) return;
-    // #165: include 'crew' role — crew members can be assigned to tickets
-    // #401: scope to caller's org to prevent cross-tenant user list leaks
-    const q = query(
-      collection(db, 'users'),
-      where('role', 'in', ['technician', 'crew']),
-      where('orgId', '==', orgId),
-    );
-    return onSnapshot(q, (snap) => {
-      setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
-    });
-  }, [orgId]);
+  // ADR-0023: useOrgCollection auto-scopes by orgId; role lives in data jsonb,
+  // NOT a column → fetch all org users then filter to technician/crew in JS.
+  // #165: include 'crew' role — crew members can be assigned to tickets.
+  // #401: org-isolation enforced by useOrgCollection (RLS + orgId auto-filter).
+  const TECH_ROLES = new Set(['technician', 'crew']);
+  const { items: orgUsers } = useOrgCollection('users', {});
+  const technicians = useMemo(
+    () => orgUsers
+      .filter((u) => TECH_ROLES.has(u.role))
+      .map((u) => ({ uid: u._docId, ...u })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orgUsers],
+  );
 
   function handleSearch(val) {
     setFilters((prev) => ({ ...prev, search: val }));

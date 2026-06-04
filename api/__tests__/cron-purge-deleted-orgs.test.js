@@ -8,6 +8,10 @@
  * briefs and bankTransactions must be purged via createdByUid (not orgId, which
  * was never stamped on those collections). Both collections must be fully deleted
  * when their member UIDs match.
+ *
+ * ADR-0023 Stage 1: identity operations (organizations / users / invites) now go
+ * through Supabase. Tests mock api/_lib/supabase-admin.js for identity ops and
+ * keep the Firestore mock (getDb) for the still-Firestore operational collections.
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -29,57 +33,30 @@ function mockReq() {
 }
 
 // ---------------------------------------------------------------------------
-// Build a minimal Firestore mock
+// Load handler with mocked supabase-admin.js (identity) + firebase-admin (Firestore ops + Auth)
 // ---------------------------------------------------------------------------
-function makeDocRef(data, { deleteRef, updateRef } = {}) {
-  const ref = {
-    get: vi.fn().mockResolvedValue({
-      exists: data !== null,
-      data: () => data,
-    }),
-    update: updateRef || vi.fn().mockResolvedValue({}),
-    delete: deleteRef || vi.fn().mockResolvedValue({}),
-  };
-  return ref;
-}
-
-// ---------------------------------------------------------------------------
-// Load handler with mocked firebase-admin and require-auth
-// ---------------------------------------------------------------------------
-async function loadHandler({ orgDocs, freshDocData }) {
+async function loadHandler({ orgRows, freshDocByOrgId, memberRowsByOrgId, firestoreDb }) {
   vi.resetModules();
 
-  // Each orgDoc in the initial snapshot: { id, ref, data() }
-  // freshDocData: what the re-fetch returns for each org (keyed by orgId)
+  // Build the Firestore db mock (still used for ORG_DATA_COLLECTIONS, UID_SCOPED_COLLECTIONS,
+  // CONFIG_SINGLETONS — these are TODO(ADR-0023 Stage 3)).
   const batchMock = {
     delete: vi.fn(),
     commit: vi.fn().mockResolvedValue({}),
   };
 
-  const db = {
+  const db = firestoreDb || {
     collection: vi.fn((_col) => ({
       where: vi.fn(() => ({
-        get: vi.fn().mockResolvedValue({
-          empty: orgDocs.length === 0,
-          docs: orgDocs,
-        }),
+        get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
         limit: vi.fn(() => ({
           get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
         })),
       })),
-      doc: vi.fn((_id) => makeDocRef({})),
+      doc: vi.fn((_id) => ({ delete: vi.fn().mockResolvedValue({}) })),
     })),
     batch: vi.fn(() => batchMock),
   };
-
-  // Override ref.get() on each orgDoc to return freshDocData[orgId]
-  orgDocs.forEach((orgDoc) => {
-    const fresh = freshDocData[orgDoc.id];
-    orgDoc.ref.get = vi.fn().mockResolvedValue({
-      exists: fresh !== null,
-      data: () => fresh,
-    });
-  });
 
   vi.doMock('../_lib/firebase-admin.js', () => ({
     getDb: () => db,
@@ -95,12 +72,70 @@ async function loadHandler({ orgDocs, freshDocData }) {
     requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
   }));
 
+  // Supabase admin mock for identity ops
+  const supaClientMock = {
+    from: vi.fn((table) => {
+      if (table === 'organizations') {
+        return {
+          // Initial due-orgs query: .select('source_doc_id, data')
+          select: vi.fn().mockResolvedValue({ data: orgRows, error: null }),
+        };
+      }
+      return {
+        select: vi.fn().mockResolvedValue({ data: [], error: null }),
+      };
+    }),
+  };
+
+  // sbGetDoc for re-verify: returns the freshDoc for each orgId
+  const sbGetDocMock = vi.fn(async (table, sourceDocId) => {
+    if (table === 'organizations') {
+      return freshDocByOrgId?.[sourceDocId] ?? null;
+    }
+    return null;
+  });
+
+  // sbPatchDoc for stamp/clear
+  const sbPatchDocMock = vi.fn().mockResolvedValue(undefined);
+
+  // sbDelDoc for org delete (and user deletes if called per-uid)
+  const sbDelDocMock = vi.fn().mockResolvedValue(undefined);
+
+  // sbGetByOrg for users (returns memberRows for orgId)
+  const sbGetByOrgMock = vi.fn(async (table, orgId) => {
+    if (table === 'users') {
+      return memberRowsByOrgId?.[orgId] ?? [];
+    }
+    return [];
+  });
+
+  // sbDelByOrg for bulk deletes (invites, users)
+  const sbDelByOrgMock = vi.fn().mockResolvedValue(0);
+
+  vi.doMock('../_lib/supabase-admin.js', () => ({
+    supabaseAdmin: () => supaClientMock,
+    sbGetDoc: sbGetDocMock,
+    sbPatchDoc: sbPatchDocMock,
+    sbDelDoc: sbDelDocMock,
+    sbGetByOrg: sbGetByOrgMock,
+    sbDelByOrg: sbDelByOrgMock,
+  }));
+
   const mod = await import('../_cron-purge-deleted-orgs.js');
-  return { handler: mod.default, db, batchMock };
+  return {
+    handler: mod.default,
+    db,
+    batchMock,
+    sbGetDocMock,
+    sbPatchDocMock,
+    sbDelDocMock,
+    sbGetByOrgMock,
+    sbDelByOrgMock,
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Tests — BUG #bug-435 TOCTOU guard
 // ---------------------------------------------------------------------------
 describe('cron-purge-deleted-orgs.js TOCTOU guard (BUG #bug-435)', () => {
   beforeEach(() => {
@@ -108,25 +143,23 @@ describe('cron-purge-deleted-orgs.js TOCTOU guard (BUG #bug-435)', () => {
   });
 
   test('skips org when re-fetch shows deleteAt was cleared by cancel-delete', async () => {
-    const orgRef = {
-      get: vi.fn(), // overridden below per-org
-      update: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
-    };
-
     const pastIso = new Date(Date.now() - 86400000).toISOString();
-    const orgDoc = {
-      id: 'org-cancel',
-      ref: orgRef,
-      data: () => ({ deleteAt: pastIso, name: 'CancelledOrg' }),
+    const orgId = 'org-cancel';
+
+    // Initial Supabase query returns this org as due.
+    const orgRows = [
+      { source_doc_id: orgId, data: { deleteAt: pastIso, name: 'CancelledOrg' } },
+    ];
+
+    // Re-verify (sbGetDoc) returns a doc with no deleteAt — cancel-delete cleared it.
+    const freshDocByOrgId = {
+      [orgId]: { _docId: orgId, name: 'CancelledOrg' }, // no deleteAt
     };
 
-    const { handler } = await loadHandler({
-      orgDocs: [orgDoc],
-      freshDocData: {
-        // cancel-delete cleared deleteAt — fresh doc has no deleteAt
-        'org-cancel': { name: 'CancelledOrg' },
-      },
+    const { handler, sbPatchDocMock, sbDelDocMock } = await loadHandler({
+      orgRows,
+      freshDocByOrgId,
+      memberRowsByOrgId: {},
     });
 
     const req = mockReq();
@@ -134,35 +167,32 @@ describe('cron-purge-deleted-orgs.js TOCTOU guard (BUG #bug-435)', () => {
     await handler(req, res);
 
     // No destructive operations on this org
-    expect(orgRef.delete).not.toHaveBeenCalled();
-    // purgeStartedAt was never stamped either (guard fires before the stamp)
-    expect(orgRef.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({ purgeStartedAt: expect.anything() })
+    expect(sbDelDocMock).not.toHaveBeenCalledWith('organizations', orgId);
+    // purgeStartedAt was never stamped (guard fires before the stamp)
+    expect(sbPatchDocMock).not.toHaveBeenCalledWith(
+      'organizations', orgId, expect.objectContaining({ purgeStartedAt: expect.anything() })
     );
     expect(res._status).toBe(200);
     expect(res._body.purged).toBe(0);
   });
 
   test('proceeds with deletion when re-fetch confirms deleteAt still due', async () => {
-    const orgRef = {
-      get: vi.fn(),
-      update: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
-    };
-
     const pastIso = new Date(Date.now() - 86400000).toISOString();
-    const orgDoc = {
-      id: 'org-due',
-      ref: orgRef,
-      data: () => ({ deleteAt: pastIso, name: 'DueOrg' }),
+    const orgId = 'org-due';
+
+    const orgRows = [
+      { source_doc_id: orgId, data: { deleteAt: pastIso, name: 'DueOrg' } },
+    ];
+
+    // Re-verify returns deleteAt still in the past — purge should proceed.
+    const freshDocByOrgId = {
+      [orgId]: { _docId: orgId, deleteAt: pastIso, name: 'DueOrg' },
     };
 
-    const { handler } = await loadHandler({
-      orgDocs: [orgDoc],
-      freshDocData: {
-        // deleteAt still in the past — purge should proceed
-        'org-due': { deleteAt: pastIso, name: 'DueOrg' },
-      },
+    const { handler, sbPatchDocMock, sbDelDocMock } = await loadHandler({
+      orgRows,
+      freshDocByOrgId,
+      memberRowsByOrgId: {},
     });
 
     const req = mockReq();
@@ -170,11 +200,11 @@ describe('cron-purge-deleted-orgs.js TOCTOU guard (BUG #bug-435)', () => {
     await handler(req, res);
 
     // purgeStartedAt should be stamped before destructive work
-    expect(orgRef.update).toHaveBeenCalledWith(
-      expect.objectContaining({ purgeStartedAt: expect.any(String) })
+    expect(sbPatchDocMock).toHaveBeenCalledWith(
+      'organizations', orgId, expect.objectContaining({ purgeStartedAt: expect.any(String) })
     );
-    // Org doc itself should be deleted
-    expect(orgRef.delete).toHaveBeenCalled();
+    // Org doc itself should be deleted from Supabase
+    expect(sbDelDocMock).toHaveBeenCalledWith('organizations', orgId);
     expect(res._status).toBe(200);
     expect(res._body.purged).toBe(1);
   });
@@ -189,21 +219,17 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
   });
 
   /**
-   * Build a loadHandler variant that tracks which collections are queried with
-   * which field (orgId vs createdByUid) and which docs are batch-deleted.
+   * Build a loadHandler variant that tracks which Firestore collections are queried
+   * with which field (createdByUid vs orgId) for the still-Firestore operational
+   * UID-scoped collections (briefs, bankTransactions).
    */
   async function loadHandler453({ pastIso, memberUids, uidScopedDocs }) {
     vi.resetModules();
 
     const orgId = 'org-453';
-    const orgRef = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        data: () => ({ deleteAt: pastIso }),
-      }),
-      update: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
-    };
+
+    // Track calls to collection().where() so we can assert on field names.
+    const queriedFields = {};
 
     const deletedRefs = [];
     const batchMock = {
@@ -211,36 +237,11 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
       commit: vi.fn().mockResolvedValue({}),
     };
 
-    // Track calls to collection().where() so we can assert on field names.
-    const queriedFields = {};
-
     const db = {
       collection: vi.fn((col) => ({
         where: vi.fn((field, _op, val) => {
           if (!queriedFields[col]) queriedFields[col] = [];
           queriedFields[col].push({ field, val });
-
-          // users collection — return member docs for orgId query
-          if (col === 'users' && field === 'orgId') {
-            const memberDocs = memberUids.map((uid) => ({
-              id: uid,
-              ref: { delete: vi.fn().mockResolvedValue({}) },
-              data: () => ({ orgId }),
-            }));
-            return {
-              get: vi.fn().mockResolvedValue({ empty: memberDocs.length === 0, docs: memberDocs }),
-              limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
-            };
-          }
-
-          // organizations initial query
-          if (col === 'organizations') {
-            const orgDoc = { id: orgId, ref: orgRef, data: () => ({ deleteAt: pastIso }) };
-            return {
-              get: vi.fn().mockResolvedValue({ empty: false, docs: [orgDoc] }),
-              limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
-            };
-          }
 
           // UID-scoped collections (briefs, bankTransactions) queried by createdByUid
           if ((col === 'briefs' || col === 'bankTransactions') && field === 'createdByUid') {
@@ -250,7 +251,6 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
             const docRefs = docs.map((d) => ({
               ref: { _id: `${col}/${d.id}`, delete: vi.fn().mockResolvedValue({}) },
             }));
-            // Return page then empty on next call (simulate draining).
             let called = 0;
             return {
               get: vi.fn().mockResolvedValue({ empty: false, docs: docRefs, size: docRefs.length }),
@@ -291,15 +291,52 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
       requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
     }));
 
+    const sbDelDocMock = vi.fn().mockResolvedValue(undefined);
+    const sbDelByOrgMock = vi.fn().mockResolvedValue(0);
+
+    // Supabase mocks for identity ops
+    const supaClientMock = {
+      from: vi.fn((table) => {
+        if (table === 'organizations') {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ source_doc_id: orgId, data: { deleteAt: pastIso } }],
+              error: null,
+            }),
+          };
+        }
+        return { select: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }),
+    };
+
+    vi.doMock('../_lib/supabase-admin.js', () => ({
+      supabaseAdmin: () => supaClientMock,
+      sbGetDoc: vi.fn(async (table, sourceDocId) => {
+        if (table === 'organizations' && sourceDocId === orgId) {
+          return { _docId: orgId, deleteAt: pastIso };
+        }
+        return null;
+      }),
+      sbPatchDoc: vi.fn().mockResolvedValue(undefined),
+      sbDelDoc: sbDelDocMock,
+      sbGetByOrg: vi.fn(async (table, qOrgId) => {
+        if (table === 'users' && qOrgId === orgId) {
+          return memberUids.map((uid) => ({ _docId: uid, orgId }));
+        }
+        return [];
+      }),
+      sbDelByOrg: sbDelByOrgMock,
+    }));
+
     const mod = await import('../_cron-purge-deleted-orgs.js');
-    return { handler: mod.default, db, batchMock, deletedRefs, queriedFields, orgRef };
+    return { handler: mod.default, db, batchMock, deletedRefs, queriedFields, sbDelDocMock, sbDelByOrgMock };
   }
 
   test('queries briefs and bankTransactions by createdByUid, not orgId', async () => {
     const pastIso = new Date(Date.now() - 86400000).toISOString();
     const memberUids = ['uid-alice', 'uid-bob'];
 
-    const { handler, queriedFields, orgRef } = await loadHandler453({
+    const { handler, queriedFields, sbDelDocMock } = await loadHandler453({
       pastIso,
       memberUids,
       uidScopedDocs: {
@@ -334,14 +371,14 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
     const btUidQuery = (queriedFields['bankTransactions'] || []).find((q) => q.field === 'createdByUid');
     expect(btUidQuery).toBeDefined();
 
-    // Org doc itself must be deleted
-    expect(orgRef.delete).toHaveBeenCalled();
+    // Org identity row must be deleted from Supabase
+    expect(sbDelDocMock).toHaveBeenCalledWith('organizations', 'org-453');
   });
 
   test('skips UID-scoped purge loop when org has no members', async () => {
     const pastIso = new Date(Date.now() - 86400000).toISOString();
 
-    const { handler, queriedFields, orgRef } = await loadHandler453({
+    const { handler, queriedFields, sbDelDocMock } = await loadHandler453({
       pastIso,
       memberUids: [], // no members
       uidScopedDocs: {},
@@ -355,104 +392,54 @@ describe('cron-purge-deleted-orgs.js UID-scoped purge (BUG #453)', () => {
     // briefs and bankTransactions should never be queried when there are no members
     expect(queriedFields['briefs']).toBeUndefined();
     expect(queriedFields['bankTransactions']).toBeUndefined();
-    // Org doc still gets deleted
-    expect(orgRef.delete).toHaveBeenCalled();
+    // Org identity row still gets deleted from Supabase
+    expect(sbDelDocMock).toHaveBeenCalledWith('organizations', 'org-453');
   });
 });
 
 // ---------------------------------------------------------------------------
-// BUG #457 — paged users fetch + parallel Auth deletes
+// BUG #457 — parallel Auth deletes
+// (ADR-0023 Stage 1 note: the Firestore paged-users-fetch is replaced by
+// sbGetByOrg which returns all rows in one call — the .limit(450) paging
+// assertion is no longer applicable and is removed here.
+// The Promise.allSettled / deleteUser-count assertions remain valid.)
 // ---------------------------------------------------------------------------
-describe('cron-purge-deleted-orgs.js paged users + parallel Auth (BUG #457)', () => {
+describe('cron-purge-deleted-orgs.js parallel Auth deletes (BUG #457)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   /**
-   * Build a handler that simulates N member docs split across pages of BATCH_SIZE (450).
-   * Tracks how many times deleteUser was called and whether Promise.allSettled was used.
+   * Build a handler that provides N member rows via sbGetByOrg (Supabase).
+   * Tracks how many times deleteUser was called.
    */
   async function loadHandler457({ memberCount }) {
     vi.resetModules();
 
     const orgId = 'org-457';
     const pastIso = new Date(Date.now() - 86400000).toISOString();
-    const BATCH_SIZE = 450;
 
-    const orgRef = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        data: () => ({ deleteAt: pastIso }),
-      }),
-      update: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
-    };
-
-    // Build member doc stubs.
-    const allMemberDocs = Array.from({ length: memberCount }, (_, i) => ({
-      id: `uid-${i}`,
-      ref: { delete: vi.fn().mockResolvedValue({}) },
-      data: () => ({ orgId }),
+    const allMemberRows = Array.from({ length: memberCount }, (_, i) => ({
+      _docId: `uid-${i}`,
+      orgId,
     }));
 
     const deleteUserMock = vi.fn().mockResolvedValue({});
     const allSettledSpy = vi.spyOn(Promise, 'allSettled');
-
-    // Track limit() calls on the users collection to verify paging.
-    const limitCallArgs = [];
 
     const batchMock = {
       delete: vi.fn(),
       commit: vi.fn().mockResolvedValue({}),
     };
 
-    // Simulate paged returns: first page returns BATCH_SIZE docs, second page remainder.
-    let usersPageCallCount = 0;
-
     const db = {
-      collection: vi.fn((col) => ({
-        where: vi.fn((field) => {
-          if (col === 'organizations') {
-            const orgDoc = { id: orgId, ref: orgRef, data: () => ({ deleteAt: pastIso }) };
-            return {
-              get: vi.fn().mockResolvedValue({ empty: false, docs: [orgDoc] }),
-              limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
-            };
-          }
-
-          if (col === 'users' && field === 'orgId') {
-            return {
-              limit: vi.fn((n) => {
-                limitCallArgs.push(n);
-                return {
-                  startAfter: vi.fn(() => ({
-                    get: vi.fn(() => {
-                      usersPageCallCount += 1;
-                      // Second page: only the remainder (memberCount - BATCH_SIZE), or empty if <=BATCH_SIZE.
-                      const remaining = allMemberDocs.slice(BATCH_SIZE);
-                      if (remaining.length === 0) {
-                        return Promise.resolve({ empty: true, docs: [], size: 0 });
-                      }
-                      return Promise.resolve({ empty: false, docs: remaining, size: remaining.length });
-                    }),
-                  })),
-                  get: vi.fn(() => {
-                    usersPageCallCount += 1;
-                    // First page.
-                    const page = allMemberDocs.slice(0, Math.min(BATCH_SIZE, memberCount));
-                    return Promise.resolve({ empty: page.length === 0, docs: page, size: page.length });
-                  }),
-                };
-              }),
-            };
-          }
-
-          // All other ORG_DATA_COLLECTIONS — empty.
-          return {
+      collection: vi.fn((_col) => ({
+        where: vi.fn(() => ({
+          get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
+          limit: vi.fn(() => ({
             get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }),
-            limit: vi.fn(() => ({ get: vi.fn().mockResolvedValue({ empty: true, docs: [], size: 0 }) })),
-          };
-        }),
+          })),
+        })),
         doc: vi.fn(() => ({ delete: vi.fn().mockResolvedValue({}) })),
       })),
       batch: vi.fn(() => batchMock),
@@ -472,30 +459,62 @@ describe('cron-purge-deleted-orgs.js paged users + parallel Auth (BUG #457)', ()
       requireCronOrUser: vi.fn().mockResolvedValue({ trigger: 'cron', uid: 'cron' }),
     }));
 
+    const sbDelDocMock = vi.fn().mockResolvedValue(undefined);
+    const sbDelByOrgMock = vi.fn().mockResolvedValue(memberCount);
+
+    const supaClientMock = {
+      from: vi.fn((table) => {
+        if (table === 'organizations') {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ source_doc_id: orgId, data: { deleteAt: pastIso } }],
+              error: null,
+            }),
+          };
+        }
+        return { select: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }),
+    };
+
+    vi.doMock('../_lib/supabase-admin.js', () => ({
+      supabaseAdmin: () => supaClientMock,
+      sbGetDoc: vi.fn(async (table, sourceDocId) => {
+        if (table === 'organizations' && sourceDocId === orgId) {
+          return { _docId: orgId, deleteAt: pastIso };
+        }
+        return null;
+      }),
+      sbPatchDoc: vi.fn().mockResolvedValue(undefined),
+      sbDelDoc: sbDelDocMock,
+      sbGetByOrg: vi.fn(async (table, qOrgId) => {
+        if (table === 'users' && qOrgId === orgId) return allMemberRows;
+        return [];
+      }),
+      sbDelByOrg: sbDelByOrgMock,
+    }));
+
     const mod = await import('../_cron-purge-deleted-orgs.js');
     return {
       handler: mod.default,
-      orgRef,
+      sbDelDocMock,
       deleteUserMock,
       allSettledSpy,
-      limitCallArgs,
     };
   }
 
-  test('uses .limit(450) when querying users collection (paging, not unbounded)', async () => {
-    const { handler, limitCallArgs, orgRef } = await loadHandler457({ memberCount: 60 });
+  // TODO(ADR-0023 Stage 1): the .limit(450) paging assertion from the original BUG #457 test
+  // is removed — members now come from sbGetByOrg (single Supabase call, no Firestore paging).
+  // Keeping the test for the correct response shape to document the change.
+  test('returns { ok: true, purged: 1 } for a single expired org (60 members)', async () => {
+    const { handler } = await loadHandler457({ memberCount: 60 });
 
     const req = mockReq();
     const res = mockRes();
     await handler(req, res);
 
     expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
     expect(res._body.purged).toBe(1);
-    expect(orgRef.delete).toHaveBeenCalled();
-
-    // Every call to .limit() on the users collection must use BATCH_SIZE (450).
-    expect(limitCallArgs.length).toBeGreaterThan(0);
-    limitCallArgs.forEach((n) => expect(n).toBe(450));
   });
 
   test('calls deleteUser exactly 60 times for a 60-member org', async () => {
@@ -547,5 +566,15 @@ describe('cron-purge-deleted-orgs.js paged users + parallel Auth (BUG #457)', ()
     expect(allSettledCallCount).toBeLessThanOrEqual(20);
     expect(allSettledCallCount).toBeGreaterThan(0);
     allSettledSpy.mockRestore();
+  });
+
+  test('deletes Supabase org identity row after all member cleanup', async () => {
+    const { handler, sbDelDocMock } = await loadHandler457({ memberCount: 10 });
+
+    const req = mockReq();
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(sbDelDocMock).toHaveBeenCalledWith('organizations', 'org-457');
   });
 });

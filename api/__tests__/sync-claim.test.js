@@ -4,53 +4,53 @@
  * Regression tests for bug #411 — sync-claim.js must not mint a privileged
  * custom claim (owner / admin) without cross-checking against the org doc.
  *
+ * ADR-0023 Stage-1: identity reads now come from Supabase (sbGetDoc), so mocks
+ * target _lib/supabase-admin.js instead of the old Firestore getDb() chain.
+ *
  * Run with:  npx vitest run api/__tests__/sync-claim.test.js
  * (The default vitest.config.js covers src/ only; these tests are designed to
  * be run directly with vitest or via an extended include pattern.)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// --- Mock firebase-admin.js -------------------------------------------
+// --- Mock firebase-admin.js (Auth only — getDb is no longer used) ----------
 const setCustomUserClaimsMock = vi.fn().mockResolvedValue(undefined);
-
-// Build a chainable Firestore mock whose .get() resolves per-collection/doc.
-let firestoreDocMocks = {};
-
-function makeDoc(data) {
-  return { exists: data !== null, data: () => data };
-}
-
-const dbMock = {
-  collection: vi.fn((col) => ({
-    doc: vi.fn((docId) => ({
-      get: vi.fn(() => {
-        const key = `${col}/${docId}`;
-        const data = firestoreDocMocks[key] ?? null;
-        return Promise.resolve(makeDoc(data));
-      }),
-    })),
-  })),
-};
 
 // Default getUser returns no pre-existing custom claims; override per test.
 let getUserMock = vi.fn().mockResolvedValue({ customClaims: {} });
 
 vi.mock('../_lib/firebase-admin.js', () => ({
-  getDb: () => dbMock,
+  // getDb is intentionally NOT exported here — sync-claim no longer calls it.
   getAuth: () => ({
     setCustomUserClaims: setCustomUserClaimsMock,
     getUser: (...args) => getUserMock(...args),
   }),
 }));
 
-// --- Mock require-auth.js — caller is always the targetUid by default ---
+// --- Mock supabase-admin.js (identity reads — ADR-0023 Stage-1) -------------
+// sbGetDoc(table, sourceDocId) returns { _docId: sourceDocId, ...data } or null.
+// We keep a simple lookup map keyed by `${table}/${sourceDocId}`.
+let sbDocMocks = {};
+
+const sbGetDocMock = vi.fn(async (table, sourceDocId) => {
+  const key = `${table}/${sourceDocId}`;
+  const data = sbDocMocks[key] ?? null;
+  if (!data) return null;
+  return { _docId: sourceDocId, ...data };
+});
+
+vi.mock('../_lib/supabase-admin.js', () => ({
+  sbGetDoc: (...args) => sbGetDocMock(...args),
+}));
+
+// --- Mock require-auth.js — caller is always the targetUid by default -------
 let callerUidMock = 'attacker-uid';
 
 vi.mock('../_lib/require-auth.js', () => ({
   requireUser: vi.fn(async (_req, _res) => ({ uid: callerUidMock, email: 'test@test.com', role: null })),
 }));
 
-// --- Import handler AFTER mocks are in place ----------------------------
+// --- Import handler AFTER mocks are in place --------------------------------
 import handler from '../_sync-claim.js';
 
 // Minimal req/res helpers
@@ -70,7 +70,7 @@ function makeRes() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  firestoreDocMocks = {};
+  sbDocMocks = {};
   callerUidMock = 'attacker-uid';
   getUserMock = vi.fn().mockResolvedValue({ customClaims: {} });
 });
@@ -83,11 +83,11 @@ describe('bug-411 — owner role escalation blocked', () => {
     const attackerUid = 'attacker-uid';
     callerUidMock = attackerUid;
 
-    firestoreDocMocks[`users/${attackerUid}`] = {
+    sbDocMocks[`users/${attackerUid}`] = {
       orgId: 'org-123',
-      role: 'owner',        // attacker set their own role to owner in Firestore
+      role: 'owner',        // attacker set their own role to owner in the store
     };
-    firestoreDocMocks['organizations/org-123'] = {
+    sbDocMocks['organizations/org-123'] = {
       ownerUid: 'real-owner-uid', // org says a different uid is owner
       members: ['real-owner-uid', attackerUid],
     };
@@ -110,11 +110,11 @@ describe('bug-411 — legitimate owner claim allowed', () => {
     const ownerUid = 'real-owner-uid';
     callerUidMock = ownerUid;
 
-    firestoreDocMocks[`users/${ownerUid}`] = {
+    sbDocMocks[`users/${ownerUid}`] = {
       orgId: 'org-123',
       role: 'owner',
     };
-    firestoreDocMocks['organizations/org-123'] = {
+    sbDocMocks['organizations/org-123'] = {
       ownerUid: ownerUid,           // matches — this is genuinely the owner
       members: [ownerUid],
     };
@@ -137,11 +137,11 @@ describe('bug-411 — admin role escalation blocked when not in members', () => 
     const attackerUid = 'attacker-uid';
     callerUidMock = attackerUid;
 
-    firestoreDocMocks[`users/${attackerUid}`] = {
+    sbDocMocks[`users/${attackerUid}`] = {
       orgId: 'org-123',
       role: 'admin',
     };
-    firestoreDocMocks['organizations/org-123'] = {
+    sbDocMocks['organizations/org-123'] = {
       ownerUid: 'real-owner-uid',
       members: ['real-owner-uid', 'other-member-uid'], // attacker NOT in members
     };
@@ -164,12 +164,12 @@ describe('bug-411 — non-privileged role bypasses org check', () => {
     const staffUid = 'staff-uid';
     callerUidMock = staffUid;
 
-    firestoreDocMocks[`users/${staffUid}`] = {
+    sbDocMocks[`users/${staffUid}`] = {
       orgId: 'org-123',
       role: 'staff',
     };
     // organizations/org-123 deliberately absent — would 400 if fetched
-    // (no entry in firestoreDocMocks)
+    // (no entry in sbDocMocks)
 
     const req = makeReq({});
     const res = makeRes();
@@ -178,9 +178,9 @@ describe('bug-411 — non-privileged role bypasses org check', () => {
     expect(res._status).toBe(200);
     expect(res._body.ok).toBe(true);
     expect(setCustomUserClaimsMock).toHaveBeenCalledWith(staffUid, { orgId: 'org-123', role: 'authenticated', user_role: 'staff' });
-    // Verify the organizations collection was never queried
-    const colCalls = dbMock.collection.mock.calls.map((c) => c[0]);
-    expect(colCalls).not.toContain('organizations');
+    // Verify the organizations table was never queried
+    const orgCalls = sbGetDocMock.mock.calls.filter(([tbl]) => tbl === 'organizations');
+    expect(orgCalls).toHaveLength(0);
   });
 });
 
@@ -192,11 +192,11 @@ describe('bug-458 — pre-existing custom claims survive sync', () => {
     const ownerUid = 'real-owner-uid';
     callerUidMock = ownerUid;
 
-    firestoreDocMocks[`users/${ownerUid}`] = {
+    sbDocMocks[`users/${ownerUid}`] = {
       orgId: 'org-123',
       role: 'owner',
     };
-    firestoreDocMocks['organizations/org-123'] = {
+    sbDocMocks['organizations/org-123'] = {
       ownerUid: ownerUid,
       members: [ownerUid],
     };
@@ -224,5 +224,61 @@ describe('bug-458 — pre-existing custom claims survive sync', () => {
       role: 'authenticated',
       user_role: 'owner',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Case 6: cross-user sync by a same-org admin — authorized
+// ---------------------------------------------------------------------------
+describe('cross-user sync — same-org admin authorized', () => {
+  it('allows an admin to sync a different user in the same org', async () => {
+    const adminUid = 'admin-uid';
+    const targetUid = 'staff-uid';
+    callerUidMock = adminUid;
+
+    sbDocMocks[`users/${targetUid}`] = {
+      orgId: 'org-123',
+      role: 'staff',
+    };
+    sbDocMocks[`users/${adminUid}`] = {
+      orgId: 'org-123',
+      role: 'admin',
+    };
+
+    const req = makeReq({ uid: targetUid });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
+    expect(setCustomUserClaimsMock).toHaveBeenCalledWith(targetUid, { orgId: 'org-123', role: 'authenticated', user_role: 'staff' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Case 7: cross-user sync by a different-org admin — 403
+// ---------------------------------------------------------------------------
+describe('cross-user sync — different-org admin blocked', () => {
+  it('returns 403 when caller admin is in a different org than the target', async () => {
+    const adminUid = 'admin-other-org';
+    const targetUid = 'staff-uid';
+    callerUidMock = adminUid;
+
+    sbDocMocks[`users/${targetUid}`] = {
+      orgId: 'org-123',
+      role: 'staff',
+    };
+    sbDocMocks[`users/${adminUid}`] = {
+      orgId: 'org-999',  // different org
+      role: 'admin',
+    };
+
+    const req = makeReq({ uid: targetUid });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(403);
+    expect(res._body.error).toMatch(/You can only sync your own claims/);
+    expect(setCustomUserClaimsMock).not.toHaveBeenCalled();
   });
 });

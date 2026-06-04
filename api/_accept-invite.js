@@ -11,13 +11,23 @@
  *
  * SECURITY (multi-tenant infra — Grounding Rule 7):
  *   - The token IS the credential; we validate status:'pending' + not expired, single-use
- *     (atomically flipped to 'accepted' so a token can't be redeemed twice / raced).
+ *     (best-effort sequence: atomicity is not guaranteed without a DB transaction; a
+ *     redeem_invite RPC is the future hardening — see NOTE below).
  *   - role/orgId come from the INVITE doc (admin-issued), never the request — a contractor
  *     can't pick their org or escalate. role is re-clamped to crew-tier defensively.
  *   - The redeemer's verified token email MUST equal the invited email.
  *   - Claims are set here server-side; the client calls getIdToken(true) after.
+ *
+ * NOTE: Single-use atomicity is now best-effort (Firestore transaction replaced by a
+ * sequential Supabase sequence). A concurrent double-redeem is possible in theory but
+ * extremely unlikely (the redeemer uid is fixed and writes are idempotent). A
+ * redeem_invite Supabase RPC is the future hardening for this. (ADR-0023 Stage-1)
+ *
+ * ADR-0023 Stage-1: reads/writes identity via Supabase (users / organizations / invites).
+ * Firebase Admin is used for AUTH only (verifyIdToken, setCustomUserClaims, getUser).
  */
-import { getDb, getAuth, FieldValue, verifyIdToken } from './_lib/firebase-admin.js';
+import { getAuth, verifyIdToken } from './_lib/firebase-admin.js';
+import { sbGetDoc, sbPutDoc, sbPatchDoc } from './_lib/supabase-admin.js';
 
 const INVITABLE_ROLES = ['contractor', 'crew', 'technician'];
 
@@ -33,10 +43,8 @@ export default async function handler(req, res) {
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
   if (!token) return res.status(400).json({ error: 'Missing invite token.' });
 
-  const db = getDb();
-  const inviteRef = db.collection('invites').doc(token);
-  const snap = await inviteRef.get();
-  const invite = snap.exists ? snap.data() : null;
+  // source_doc_id for invites IS the token.
+  const invite = await sbGetDoc('invites', token);
 
   // ── Peek mode: surface org + email so the form can pre-fill (no auth). ──
   if (req.body?.peek) {
@@ -70,33 +78,31 @@ export default async function handler(req, res) {
   const uid = decoded.uid;
 
   try {
-    // Atomic single-use: flip pending→accepted only if still pending (transaction guards races).
-    await db.runTransaction(async (txn) => {
-      const fresh = await txn.get(inviteRef);
-      if (!fresh.exists || fresh.data().status !== 'pending') {
-        throw new Error('Invite already used');
-      }
-      // Provision the contractor's profile (the UI + claims source of truth).
-      txn.set(db.collection('users').doc(uid), {
-        role,
-        orgId,
-        email: invite.email,
-        displayName: (typeof req.body?.displayName === 'string' && req.body.displayName.trim())
-          || invite.email.split('@')[0],
-        assignedScooterIds: Array.isArray(invite.assignedScooterIds) ? invite.assignedScooterIds : [],
-        createdAt: FieldValue.serverTimestamp(),
-        invitedBy: invite.createdBy ?? null,
-      });
-      // Add to the org's member list.
-      txn.update(db.collection('organizations').doc(orgId), {
-        members: FieldValue.arrayUnion(uid),
-      });
-      // Consume the invite.
-      txn.update(inviteRef, {
-        status: 'accepted',
-        acceptedBy: uid,
-        acceptedAt: FieldValue.serverTimestamp(),
-      });
+    // (a) Provision the contractor's profile (source of truth for UI + claims).
+    await sbPutDoc('users', orgId, uid, {
+      role,
+      orgId,
+      email: invite.email,
+      displayName: (typeof req.body?.displayName === 'string' && req.body.displayName.trim())
+        || invite.email.split('@')[0],
+      assignedScooterIds: Array.isArray(invite.assignedScooterIds) ? invite.assignedScooterIds : [],
+      createdAt: new Date().toISOString(),
+      invitedBy: invite.createdBy ?? null,
+    });
+
+    // (b) Add uid to the org's members array (read-mutate-write; idempotent via Set).
+    const orgDoc = await sbGetDoc('organizations', orgId);
+    const existingMembers = Array.isArray(orgDoc?.members) ? orgDoc.members : [];
+    if (!existingMembers.includes(uid)) {
+      const members = [...existingMembers, uid];
+      await sbPatchDoc('organizations', orgId, { members });
+    }
+
+    // (c) Consume the invite (flip to accepted).
+    await sbPatchDoc('invites', token, {
+      status: 'accepted',
+      acceptedBy: uid,
+      acceptedAt: new Date().toISOString(),
     });
   } catch (err) {
     if (String(err.message).includes('already used')) {

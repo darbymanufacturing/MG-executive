@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase.js';
-import { useOrg } from '../../context/OrgContext.jsx';
+import { useOrgCollection } from '../../hooks/useOrgCollection.js';
 import Modal from '../Shared/Modal.jsx';
 import Button from '../Shared/Button.jsx';
 import { validate } from '../../utils/validateForm.js';
@@ -44,23 +42,13 @@ const EMPTY = {
 };
 
 export default function ProjectForm({ open, onClose, onSave, initial }) {
-  const { orgId } = useOrg();
-  const [orgUsers, setOrgUsers] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
-  // Subscribe to the org's users collection (Firestore-only; not in Supabase table map).
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const q = query(collection(db, 'users'), where('orgId', '==', orgId));
-    const unsub = onSnapshot(
-      q,
-      (snap) => setOrgUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))),
-      (err) => console.error('[ProjectForm] users listener error:', err),
-    );
-    return unsub;
-  }, [orgId]);
+  // ADR-0023: useOrgCollection auto-scopes by orgId; returns items with _docId === uid.
+  // No role filter here — owner dropdown shows all org members' display names.
+  const { items: orgUsers } = useOrgCollection('users', {});
 
   // Derive owner list: display names of org members, falling back to the hardcoded list.
   const ownerList = useMemo(() => {

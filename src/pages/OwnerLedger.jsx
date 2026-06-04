@@ -1,26 +1,23 @@
-import { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { useState, useMemo } from 'react';
 import { Plus, X, Trash2, UserCheck, Building2, Scale, ChevronDown, ChevronUp } from 'lucide-react';
-import { db } from '../lib/firebase.js';
 import Header from '../components/Layout/Header.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
-import { orgWrite, orgDelete } from '../hooks/orgWrite.js';
+import { orgWrite, orgDelete, orgUpdate } from '../hooks/orgWrite.js';
 import { useToast } from '../context/ToastContext.jsx';
-import { safeWrite } from '../utils/firestoreWrite.js';
 import { formatEUR, todayISO } from '../utils/formatters.js';
 import { LEDGER_ENTRY_TYPES, LEDGER_TYPE_KEYS, signedAmount, ownerBalance } from '../utils/ownerLedger.js';
 import styles from './OwnerLedger.module.css';
 
 function nameOf(users, uid, fallback) {
-  const u = users.find((x) => x.uid === uid);
+  const u = users.find((x) => x._docId === uid);
   return u?.displayName || u?.email?.split('@')[0] || fallback || 'Owner';
 }
 
 /* ── add-entry modal ── */
 function EntryModal({ owners, onClose, onSave }) {
   const [form, setForm] = useState({
-    ownerUid: owners[0]?.uid ?? '',
+    ownerUid: owners[0]?._docId ?? '',
     type: 'salary_accrual',
     amount: '',
     direction: 1,
@@ -36,7 +33,7 @@ function EntryModal({ owners, onClose, onSave }) {
     setBusy(true);
     await onSave({
       ownerUid: form.ownerUid,
-      ownerName: owners.find((o) => o.uid === form.ownerUid)?.displayName ?? null,
+      ownerName: owners.find((o) => o._docId === form.ownerUid)?.displayName ?? null,
       type: form.type,
       amount: Number(form.amount),
       direction: def?.directional ? Number(form.direction) : null,
@@ -58,7 +55,7 @@ function EntryModal({ owners, onClose, onSave }) {
           <span className={styles.label}>Owner</span>
           <select className={styles.input} value={form.ownerUid} onChange={(e) => setForm((f) => ({ ...f, ownerUid: e.target.value }))}>
             {owners.map((o) => (
-              <option key={o.uid} value={o.uid}>{o.displayName || o.email}</option>
+              <option key={o._docId} value={o._docId}>{o.displayName || o.email}</option>
             ))}
           </select>
         </label>
@@ -110,25 +107,13 @@ function EntryModal({ owners, onClose, onSave }) {
 
 export default function OwnerLedger() {
   const { userProfile } = useAuth();
-  const orgId = userProfile?.orgId ?? null;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'owner';
   const { items: entries, loading } = useOrgCollection('ownerLedger', { limit: 1000 });
+  const { items: users } = useOrgCollection('users', {});
   const { success: toastSuccess, error: toastError } = useToast();
 
-  const [users, setUsers] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
-
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const q = query(collection(db, 'users'), where('orgId', '==', orgId));
-    const unsub = onSnapshot(
-      q,
-      (snap) => setUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))),
-      (err) => console.error('Owner-ledger users listener error:', err),
-    );
-    return unsub;
-  }, [orgId]);
 
   const owners = useMemo(() => users.filter((u) => u.isOwner || u.role === 'owner'), [users]);
 
@@ -157,11 +142,9 @@ export default function OwnerLedger() {
   }
 
   async function toggleOwner(u) {
-    const res = await safeWrite(
-      () => updateDoc(doc(db, 'users', u.uid), { isOwner: !(u.isOwner || u.role === 'owner') }),
-      { errorMessage: 'Failed to update owner flag.' },
-    );
-    if (res?.ok !== false) toastSuccess(u.isOwner ? `${nameOf(users, u.uid)} is no longer an owner.` : `${nameOf(users, u.uid)} marked as owner.`);
+    const newIsOwner = !(u.isOwner || u.role === 'owner');
+    const res = await orgUpdate('users', u._docId, { isOwner: newIsOwner });
+    if (res?.ok !== false) toastSuccess(u.isOwner ? `${nameOf(users, u._docId)} is no longer an owner.` : `${nameOf(users, u._docId)} marked as owner.`);
   }
 
   return (
@@ -198,10 +181,10 @@ export default function OwnerLedger() {
             {/* Per-owner balance cards */}
             <div className={styles.balanceGrid}>
               {owners.map((o) => {
-                const bal = ownerBalance(entries, o.uid);
+                const bal = ownerBalance(entries, o._docId);
                 const owedToYou = bal >= 0;
                 return (
-                  <div key={o.uid} className={styles.balanceCard}>
+                  <div key={o._docId} className={styles.balanceCard}>
                     <span className={styles.ownerName}>{o.displayName || o.email}</span>
                     <span
                       className={styles.balanceVal}
@@ -270,7 +253,7 @@ export default function OwnerLedger() {
                   users.map((u) => {
                     const isOwn = u.isOwner || u.role === 'owner';
                     return (
-                      <label key={u.uid} className={styles.ownerToggleRow}>
+                      <label key={u._docId} className={styles.ownerToggleRow}>
                         <input type="checkbox" checked={isOwn} onChange={() => toggleOwner(u)} />
                         <span className={styles.toggleName}>{u.displayName || u.email}</span>
                         <span className={styles.toggleRole}>{u.role ?? '—'}</span>

@@ -12,7 +12,7 @@
  *     { action: 'delete-org', confirm: '<name>' } → owner schedules org deletion (30-day grace)
  *
  * Auth: a signed-in Firebase user (requireUser). All decisions are made server-side from
- * the user's OWN users/{uid} doc + the organizations/{orgId} doc — never from the request
+ * the user's OWN users/{uid} row + the organizations/{orgId} row — never from the request
  * body — so a caller can't escalate. The actual hard delete of org data happens later in
  * api/cron-purge-deleted-orgs.js after the grace window (irreversible work is never done
  * inline here). See docs/SECURITY.md.
@@ -20,9 +20,28 @@
  * SAFETY: this endpoint NEVER hard-deletes another user's data inline. 'delete-org' only
  * STAMPS organizations/{orgId}.deleteAt; the cron does the cascade after the grace period,
  * giving the owner a window to cancel.
+ *
+ * ADR-0023 Stage-1: identity reads/writes use Supabase (sbGetDoc/sbGetByOrg/sbPatchDoc/
+ * sbPutDoc/sbDelDoc). Firebase Admin is kept for Auth only (verifyIdToken + deleteUser).
+ * Supabase has no multi-table transactions; atomicity for leave/transfer is achieved via
+ * a guarded sequence with TOCTOU re-reads before each destructive write. The sequence is:
+ *   1. Re-read relevant rows to confirm invariants still hold (TOCTOU guard).
+ *   2. Write non-destructive mutations first (role change, org update).
+ *   3. Delete the user row last (the actual access-control cut).
+ * Partial-failure risk is minimal because: (a) the deleted user row is the auth gate,
+ * so if step 3 fails the user still can't log in after their token expires; (b) the
+ * orphaned members[] entry is cleaned on next org read by the cron/UI. The previous
+ * Firestore transaction guarantee is documented in CHANGELOG.md for ADR-0023.
  */
-import { getDb, getAuth, FieldValue } from './_lib/firebase-admin.js';
+import { getAuth } from './_lib/firebase-admin.js';
 import { requireUser } from './_lib/require-auth.js';
+import {
+  sbGetDoc,
+  sbGetByOrg,
+  sbPatchDoc,
+  sbPutDoc,
+  sbDelDoc,
+} from './_lib/supabase-admin.js';
 
 const GRACE_DAYS = 30;
 
@@ -34,29 +53,25 @@ export default async function handler(req, res) {
   const authUser = await requireUser(req, res);
   if (!authUser) return;
 
-  const db = getDb();
   const { action } = req.body || {};
   if (!action) return res.status(400).json({ error: 'action is required' });
 
   // Source of truth: the caller's own profile.
-  const meSnap = await db.collection('users').doc(authUser.uid).get();
-  if (!meSnap.exists) return res.status(404).json({ error: 'Your user profile was not found.' });
-  const me = meSnap.data();
+  const me = await sbGetDoc('users', authUser.uid);
+  if (!me) return res.status(404).json({ error: 'Your user profile was not found.' });
   const orgId = me.orgId ?? null;
   if (!orgId) return res.status(400).json({ error: 'Your account is not linked to an organization.' });
 
-  const orgRef = db.collection('organizations').doc(orgId);
-  const orgSnap = await orgRef.get();
-  const org = orgSnap.exists ? orgSnap.data() : null;
+  const org = await sbGetDoc('organizations', orgId);
   // SECURITY: ownerUid is the sole authoritative ownership field (server-maintained).
-  // myRole is a denormalized UX hint that can be stale (e.g. after a transfer) — never
+  // me.role is a denormalized UX hint that can be stale (e.g. after a transfer) — never
   // use it alone as an ownership gate, or a former owner can still delete/transfer the org.
   const isOwner = org?.ownerUid === authUser.uid;
 
   // Count org members + admins (for the owner-must-nominate / sole-owner logic).
-  const membersSnap = await db.collection('users').where('orgId', '==', orgId).get();
-  const members = membersSnap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-  const otherMembers = members.filter((m) => m.uid !== authUser.uid);
+  // sbGetByOrg returns [{ _docId, ...data }]; _docId === uid for the users table.
+  const members = await sbGetByOrg('users', orgId);
+  const otherMembers = members.filter((m) => m._docId !== authUser.uid);
   const otherAdmins = otherMembers.filter((m) => m.role === 'owner' || m.role === 'admin');
 
   try {
@@ -78,7 +93,7 @@ export default async function handler(req, res) {
           orgId,
           orgName: org?.name ?? null,
           memberCount: members.length,
-          otherAdmins: otherAdmins.map((a) => ({ uid: a.uid, email: a.email ?? null, displayName: a.displayName ?? null })),
+          otherAdmins: otherAdmins.map((a) => ({ uid: a._docId, email: a.email ?? null, displayName: a.displayName ?? null })),
           graceDays: GRACE_DAYS,
           deleteAt: org?.deleteAt ?? null,
           outcome,
@@ -89,27 +104,28 @@ export default async function handler(req, res) {
         if (isOwner) {
           return res.status(400).json({ error: 'The owner cannot leave the org. Transfer ownership or delete the organization instead.' });
         }
-        // Wrap both Firestore writes in a single transaction so they are atomic.
-        // If either write fails the transaction rolls back — we never end up with the
-        // user profile deleted but still listed in org.members (dangling member entry).
-        // Mirroring the same pattern used by the 'transfer' action (lines 117-134).
-        const meRef = db.collection('users').doc(authUser.uid);
-        await db.runTransaction(async (tx) => {
-          const [txOrgSnap, txMeSnap] = await Promise.all([
-            tx.get(orgRef),
-            tx.get(meRef),
-          ]);
-          if (!txMeSnap.exists) {
-            throw Object.assign(new Error('Your user profile was not found.'), { status: 404 });
-          }
-          // Drop from the org members array if present (re-read inside transaction for safety).
-          if (txOrgSnap.exists && Array.isArray(txOrgSnap.data().members)) {
-            tx.update(orgRef, { members: FieldValue.arrayRemove(authUser.uid) });
-          }
-          tx.delete(meRef);
-        });
-        // Auth deletion is a non-Firestore side effect — keep outside the transaction.
-        // The profile doc deletion (inside the transaction) is the actual access-control cut;
+
+        // TOCTOU re-read: confirm the caller's profile and org still exist before writing.
+        // This closes the window between the outer read and the destructive writes.
+        const txMe = await sbGetDoc('users', authUser.uid);
+        if (!txMe) {
+          throw Object.assign(new Error('Your user profile was not found.'), { status: 404 });
+        }
+        const txOrg = await sbGetDoc('organizations', orgId);
+
+        // Remove caller from org.members array, then delete the user row.
+        // We mutate the members array in JS (Supabase has no FieldValue.arrayRemove).
+        if (txOrg && Array.isArray(txOrg.members)) {
+          const updatedMembers = txOrg.members.filter((uid) => uid !== authUser.uid);
+          // Build updated org data without the deleted member; preserve all other fields.
+          const { _docId: _orgDocId, ...orgData } = txOrg;
+          await sbPutDoc('organizations', orgId, orgId, { ...orgData, members: updatedMembers });
+        }
+        // Delete user row — this is the actual access-control cut.
+        await sbDelDoc('users', authUser.uid);
+
+        // Auth deletion is a non-identity side effect — keep outside the data writes.
+        // The user row deletion above is the actual access-control cut;
         // Auth deletion is best-effort (orphaned Auth accounts without a profile are harmless).
         await getAuth().deleteUser(authUser.uid).catch(() => {});
         return res.status(200).json({ ok: true, action: 'leave', message: 'You have been removed from the organization.' });
@@ -118,39 +134,44 @@ export default async function handler(req, res) {
       case 'transfer': {
         if (!isOwner) return res.status(403).json({ error: 'Only the owner can transfer ownership.' });
         const successorUid = typeof req.body.successorUid === 'string' ? req.body.successorUid.trim() : '';
-        const successor = otherMembers.find((m) => m.uid === successorUid);
+        const successor = otherMembers.find((m) => m._docId === successorUid);
         if (!successor) return res.status(400).json({ error: 'Choose a valid member of your organization as the successor.' });
         if (successor.role !== 'admin' && successor.role !== 'owner') {
           return res.status(400).json({ error: 'Ownership can only be transferred to an admin.' });
         }
-        // TOCTOU fix: wrap all Firestore writes in a single transaction so they are atomic.
-        // If any write fails (contention, network) the entire set rolls back — we never end
-        // up with two effective owners (successor's role='owner' but org.ownerUid unchanged).
-        // The re-reads inside the transaction re-validate ownership and successor eligibility
-        // against the live state, closing the window between the outer read and the writes.
-        const successorRef = db.collection('users').doc(successorUid);
-        const meRef = db.collection('users').doc(authUser.uid);
-        await db.runTransaction(async (tx) => {
-          const [txOrgSnap, txSuccessorSnap] = await Promise.all([
-            tx.get(orgRef),
-            tx.get(successorRef),
-          ]);
-          // Re-validate ownership inside the transaction (TOCTOU guard).
-          if (!txOrgSnap.exists || txOrgSnap.data().ownerUid !== authUser.uid) {
-            throw Object.assign(new Error('You are no longer the owner of this organization.'), { status: 403 });
-          }
-          // Re-validate successor eligibility inside the transaction.
-          const txSuccessorRole = txSuccessorSnap.exists ? txSuccessorSnap.data().role : null;
-          if (txSuccessorRole !== 'admin' && txSuccessorRole !== 'owner') {
-            throw Object.assign(new Error('Ownership can only be transferred to an admin.'), { status: 400 });
-          }
-          tx.update(successorRef, { role: 'owner' });
-          tx.update(orgRef, { ownerUid: successorUid, members: FieldValue.arrayRemove(authUser.uid) });
-          tx.delete(meRef);
+
+        // TOCTOU re-reads: re-validate ownership and successor eligibility against the
+        // live state, closing the window between the outer read and the writes.
+        const txOrg = await sbGetDoc('organizations', orgId);
+        if (!txOrg || txOrg.ownerUid !== authUser.uid) {
+          throw Object.assign(new Error('You are no longer the owner of this organization.'), { status: 403 });
+        }
+        const txSuccessor = await sbGetDoc('users', successorUid);
+        const txSuccessorRole = txSuccessor?.role ?? null;
+        if (txSuccessorRole !== 'admin' && txSuccessorRole !== 'owner') {
+          throw Object.assign(new Error('Ownership can only be transferred to an admin.'), { status: 400 });
+        }
+
+        // Write sequence (non-destructive first, then delete caller):
+        // 1. Promote successor to owner role.
+        const { _docId: _succDocId, ...successorData } = txSuccessor;
+        await sbPutDoc('users', orgId, successorUid, { ...successorData, role: 'owner' });
+
+        // 2. Update org.ownerUid and remove caller from org.members.
+        const updatedMembers = Array.isArray(txOrg.members)
+          ? txOrg.members.filter((uid) => uid !== authUser.uid)
+          : txOrg.members;
+        const { _docId: _orgDocId, ...orgData } = txOrg;
+        await sbPutDoc('organizations', orgId, orgId, {
+          ...orgData,
+          ownerUid: successorUid,
+          members: updatedMembers,
         });
-        // Auth deletion is a non-Firestore side effect — keep outside the transaction.
-        // The profile doc deletion (inside the transaction) is the actual access-control cut;
-        // Auth deletion is best-effort (orphaned Auth accounts are harmless without a profile).
+
+        // 3. Delete caller's user row — actual access-control cut.
+        await sbDelDoc('users', authUser.uid);
+
+        // Auth deletion is best-effort (orphaned Auth accounts without a profile are harmless).
         await getAuth().deleteUser(authUser.uid).catch(() => {});
         // NOTE: the successor must call /api/sync-claim (or re-login) to refresh their owner claim.
         return res.status(200).json({
@@ -171,10 +192,10 @@ export default async function handler(req, res) {
         }
         const deleteAt = new Date(Date.now() + GRACE_DAYS * 86400000).toISOString();
         // STAMP ONLY — the cron does the cascade after the grace window. Reversible until then.
-        await orgRef.update({
+        await sbPatchDoc('organizations', orgId, {
           deleteAt,
           deleteRequestedBy: authUser.uid,
-          deleteRequestedAt: FieldValue.serverTimestamp(),
+          deleteRequestedAt: new Date().toISOString(),
         });
         return res.status(200).json({
           ok: true,
@@ -191,10 +212,13 @@ export default async function handler(req, res) {
         if (org?.purgeStartedAt) {
           return res.status(409).json({ error: 'Purge already in flight — cannot cancel. Contact support if data has not yet been deleted.' });
         }
-        await orgRef.update({
-          deleteAt: FieldValue.delete(),
-          deleteRequestedBy: FieldValue.delete(),
-          deleteRequestedAt: FieldValue.delete(),
+        // Remove the deleteAt/deleteRequestedBy/deleteRequestedAt fields by patching them
+        // to null. sbPatchDoc shallow-merges — setting keys to null clears them in the
+        // data jsonb (the cron checks for the presence of deleteAt, not its truthiness).
+        await sbPatchDoc('organizations', orgId, {
+          deleteAt: null,
+          deleteRequestedBy: null,
+          deleteRequestedAt: null,
         });
         return res.status(200).json({ ok: true, action: 'cancel-delete', message: 'Organization deletion cancelled.' });
       }
@@ -204,8 +228,8 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('delete-account error:', err);
-    // Transaction aborts throw errors with a .status field (403/400) when the business
-    // invariant check fails inside the transaction — propagate those as-is.
+    // Business-invariant checks throw errors with a .status field (403/400) —
+    // propagate those as-is.
     const httpStatus = typeof err.status === 'number' ? err.status : 500;
     return res.status(httpStatus).json({ error: 'Account deletion failed' });
   }

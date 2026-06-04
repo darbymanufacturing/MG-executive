@@ -5,6 +5,9 @@
  *
  * Key invariant: a user whose role is 'owner' but whose org.ownerUid points to a
  * different UID must be denied (403), not granted access to delete/transfer the org.
+ *
+ * ADR-0023 Stage-1: mocks api/_lib/supabase-admin.js (sbGetDoc/sbGetByOrg/sbPatchDoc)
+ * instead of firebase-admin getDb. getAuth is still mocked from firebase-admin.
  */
 import { describe, test, expect, vi } from 'vitest';
 
@@ -26,65 +29,39 @@ function mockReq(body) {
 }
 
 // ---------------------------------------------------------------------------
-// Firestore / Auth mocks — build per-test so we control the data
-// ---------------------------------------------------------------------------
-function buildFirebaseMock({ callerUid, callerRole, orgOwnerUid, orgId = 'org1', orgName = 'TestOrg' }) {
-  const usersStore = {
-    [callerUid]: { orgId, role: callerRole },
-    // minimal successor admin (needed by some branches)
-    'successor-uid': { orgId, role: 'admin' },
-  };
-  const orgsStore = {
-    [orgId]: { ownerUid: orgOwnerUid, name: orgName, members: [callerUid] },
-  };
-
-  const makeDoc = (data) => ({
-    exists: data !== undefined,
-    data: () => data,
-    id: 'stub',
-  });
-
-  const makeCollectionQuery = (store, orgIdFilter) => {
-    const docs = Object.entries(store)
-      .filter(([, d]) => d.orgId === orgIdFilter)
-      .map(([uid, d]) => ({ id: uid, data: () => d }));
-    return { docs };
-  };
-
-  const db = {
-    collection: (col) => ({
-      doc: (id) => ({
-        get: async () => makeDoc(col === 'users' ? usersStore[id] : orgsStore[id]),
-        update: vi.fn().mockResolvedValue({}),
-        delete: vi.fn().mockResolvedValue({}),
-      }),
-      where: () => ({
-        get: async () => makeCollectionQuery(usersStore, orgId),
-      }),
-    }),
-    runTransaction: vi.fn(),
-  };
-
-  return db;
-}
-
-// ---------------------------------------------------------------------------
 // Module factory — returns the handler with injected mocks
 // ---------------------------------------------------------------------------
 async function loadHandler({ callerUid, callerRole, orgOwnerUid, orgId = 'org1', orgName = 'TestOrg' }) {
-  const db = buildFirebaseMock({ callerUid, callerRole, orgOwnerUid, orgId, orgName });
+  // In-memory stores
+  const usersStore = {
+    [callerUid]: { _docId: callerUid, orgId, role: callerRole },
+    'successor-uid': { _docId: 'successor-uid', orgId, role: 'admin' },
+  };
+  const orgsStore = {
+    [orgId]: { _docId: orgId, ownerUid: orgOwnerUid, name: orgName, members: [callerUid] },
+  };
 
-  // Reset module registry so we can re-mock per test
   vi.resetModules();
 
+  vi.doMock('../_lib/supabase-admin.js', () => ({
+    sbGetDoc: vi.fn(async (table, id) => {
+      if (table === 'users') return usersStore[id] ?? null;
+      if (table === 'organizations') return orgsStore[id] ?? null;
+      return null;
+    }),
+    sbGetByOrg: vi.fn(async (table, oid) => {
+      if (table === 'users') {
+        return Object.values(usersStore).filter((u) => u.orgId === oid);
+      }
+      return [];
+    }),
+    sbPatchDoc: vi.fn().mockResolvedValue(undefined),
+    sbPutDoc: vi.fn().mockResolvedValue(undefined),
+    sbDelDoc: vi.fn().mockResolvedValue(undefined),
+  }));
+
   vi.doMock('../_lib/firebase-admin.js', () => ({
-    getDb: () => db,
     getAuth: () => ({ deleteUser: vi.fn().mockResolvedValue({}) }),
-    FieldValue: {
-      serverTimestamp: () => 'SERVER_TS',
-      arrayRemove: (v) => ({ _arrayRemove: v }),
-      delete: () => ({ _delete: true }),
-    },
   }));
 
   vi.doMock('../_lib/require-auth.js', () => ({
@@ -92,7 +69,7 @@ async function loadHandler({ callerUid, callerRole, orgOwnerUid, orgId = 'org1',
   }));
 
   const mod = await import('../_delete-account.js');
-  return { handler: mod.default, db };
+  return { handler: mod.default };
 }
 
 // ---------------------------------------------------------------------------

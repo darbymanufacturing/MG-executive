@@ -1,13 +1,14 @@
 /**
  * Signup.jsx — rollback regression tests (bug-427).
  *
- * Verifies that on any failure after Auth user creation, both the org doc
- * (if written) and the Auth user are deleted so the same email can retry.
+ * Verifies that on any failure after Auth user creation the Auth user is
+ * deleted so the same email can retry. ADR-0023: org + profile writes are
+ * server-side (POST /api/signup); client-side Firestore writes no longer occur.
  *
  * Note on vi.mock hoisting: factory functions passed to vi.mock() are hoisted
  * to the top of the file before any variable declarations, so they cannot
  * reference variables declared with let/const. All mocks below use vi.fn()
- * inline. We grab references to the mocked functions via importd modules after
+ * inline. We grab references to the mocked functions via imported modules after
  * the mock registrations complete.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -20,36 +21,17 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }));
 
-vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(),
-  setDoc: vi.fn(),
-  deleteDoc: vi.fn(),
-  collection: vi.fn(),
-  serverTimestamp: vi.fn(() => '__SERVER_TS__'),
-}));
-
 vi.mock('../lib/firebase.js', () => ({
   db: { __db: true },
   // auth.currentUser is read at call time in the catch block, so we expose
-  // a static object whose .delete is a vi.fn we can spy on.
+  // a static object whose methods are vi.fn()s we can spy on.
   auth: {
     currentUser: {
       uid: 'test-uid-123',
+      getIdToken: vi.fn(() => Promise.resolve('test-id-token')),
       delete: vi.fn(() => Promise.resolve()),
     },
   },
-}));
-
-vi.mock('../utils/firestoreWrite.js', () => ({
-  safeWrite: vi.fn(async (writer, opts) => {
-    try {
-      const data = await writer();
-      return { ok: true, data };
-    } catch (err) {
-      if (opts?.rethrow) throw err;
-      return { ok: false, error: err };
-    }
-  }),
 }));
 
 vi.mock('../components/Shared/AsterismMark.jsx', () => ({
@@ -66,7 +48,6 @@ vi.mock('./Login.module.css', () => ({
 
 // ── Import mocked modules to spy on their exports ───────────────────────────
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, deleteDoc, collection } from 'firebase/firestore';
 import { auth } from '../lib/firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Signup from './Signup.jsx';
@@ -105,22 +86,17 @@ beforeEach(() => {
   useNavigate.mockReturnValue(mockNavigate);
   useAuth.mockReturnValue({ signUp: mockSignUp, syncClaims: mockSyncClaims });
 
-  // doc(collection(db, 'organizations')) → object with .id for org auto-id path.
-  // doc(db, 'organizations', id) → object for named-id path (rollback deleteDoc).
-  collection.mockReturnValue({ __ref: 'collection' });
-  doc.mockImplementation((_db, colOrRef, id) => ({
-    __ref: 'doc',
-    col: typeof colOrRef === 'string' ? colOrRef : 'organizations',
-    id: id ?? 'auto-org-id-999',
-  }));
+  // Default: fetch succeeds (POST /api/signup returns 200).
+  global.fetch = vi.fn(() =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+  );
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('Signup — (1) happy path', () => {
-  it('navigates to /onboarding and never calls deleteDoc or currentUser.delete', async () => {
+  it('navigates to /onboarding and never calls currentUser.delete', async () => {
     mockSignUp.mockResolvedValue();
-    setDoc.mockResolvedValue();
     mockSyncClaims.mockResolvedValue();
 
     renderSignup();
@@ -129,16 +105,20 @@ describe('Signup — (1) happy path', () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith('/onboarding', { replace: true })
     );
-    expect(deleteDoc).not.toHaveBeenCalled();
     expect(auth.currentUser.delete).not.toHaveBeenCalled();
   });
 });
 
-describe('Signup — (2) org-write failure', () => {
-  it('calls currentUser.delete (not deleteDoc) when org setDoc fails', async () => {
+describe('Signup — (2) server signup failure (org/profile not created)', () => {
+  it('calls currentUser.delete when POST /api/signup returns an error', async () => {
     mockSignUp.mockResolvedValue();
-    // Org write fails; profile write never happens.
-    setDoc.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    // Server rejects the signup request (org + profile not written).
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Firestore unavailable' }),
+      })
+    );
 
     renderSignup();
     await fillAndSubmit();
@@ -147,21 +127,17 @@ describe('Signup — (2) org-write failure', () => {
       expect(screen.getByText(/firestore unavailable/i)).toBeInTheDocument()
     );
 
-    // Org doc never committed → no deleteDoc
-    expect(deleteDoc).not.toHaveBeenCalled();
-    // Auth user was created → must be deleted
+    // Auth user was created → must be deleted so email isn't locked
     expect(auth.currentUser.delete).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 
-describe('Signup — (3) profile-write failure', () => {
-  it('calls deleteDoc for org AND currentUser.delete when profile setDoc fails', async () => {
+describe('Signup — (3) server signup network error', () => {
+  it('calls currentUser.delete when fetch rejects (network error)', async () => {
     mockSignUp.mockResolvedValue();
-    // First setDoc = org (succeeds), second = profile (fails).
-    setDoc
-      .mockResolvedValueOnce()
-      .mockRejectedValueOnce(new Error('Profile write failed'));
+    // Network-level failure — org + profile not written server-side.
+    global.fetch = vi.fn(() => Promise.reject(new Error('Profile write failed')));
 
     renderSignup();
     await fillAndSubmit();
@@ -170,21 +146,16 @@ describe('Signup — (3) profile-write failure', () => {
       expect(screen.getByText(/profile write failed/i)).toBeInTheDocument()
     );
 
-    // Org doc was committed → must be rolled back
-    expect(deleteDoc).toHaveBeenCalledTimes(1);
-    const deletedRef = deleteDoc.mock.calls[0][0];
-    expect(deletedRef.col).toBe('organizations');
-
-    // Auth user must also be rolled back
+    // Auth user must be rolled back
     expect(auth.currentUser.delete).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 
 describe('Signup — (4) syncClaims failure', () => {
-  it('rolls back org doc, user profile doc, AND auth user when syncClaims rejects', async () => {
+  it('rolls back auth user when syncClaims rejects', async () => {
     mockSignUp.mockResolvedValue();
-    setDoc.mockResolvedValue(); // both org + profile writes succeed
+    // Server writes succeeded; claim refresh fails.
     mockSyncClaims.mockRejectedValue(new Error('Claims sync failed'));
 
     renderSignup();
@@ -194,13 +165,7 @@ describe('Signup — (4) syncClaims failure', () => {
       expect(screen.getByText(/claims sync failed/i)).toBeInTheDocument()
     );
 
-    // #526: both the org doc AND the orphan-prone user profile doc must be rolled back
-    expect(deleteDoc).toHaveBeenCalledTimes(2);
-    const deletedCols = deleteDoc.mock.calls.map((c) => c[0].col);
-    expect(deletedCols).toContain('organizations');
-    expect(deletedCols).toContain('users');
-
-    // Auth user must also be rolled back
+    // Auth user must be rolled back (server-side data is cleaned up by the server)
     expect(auth.currentUser.delete).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
   });

@@ -5,8 +5,7 @@ import {
   Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal, RefreshCw,
 } from 'lucide-react';
 import useHoppSync from '../hooks/useHoppSync.js';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
 import { authedFetch } from '../utils/apiClient.js';
 import { CATEGORIES } from '../utils/constants.js';
@@ -140,25 +139,18 @@ export default function Settings() {
 
   // Load crew accounts in real time (crew + technician roles)
   // #401: scope to caller's org to prevent cross-tenant user list leaks
+  // ADR-0023: useOrgCollection auto-scopes by orgId; role lives in data jsonb,
+  // NOT a column → fetch all org users and filter in JS.
+  const TEAM_ROLES = new Set(['technician', 'crew', 'staff', 'contractor']);
+  const { items: orgUsers } = useOrgCollection('users', {});
   useEffect(() => {
-    if (!userProfile?.orgId) return;
-    const q = query(
-      collection(db, 'users'),
-      where('role', 'in', ['technician', 'crew', 'staff', 'contractor']),
-      where('orgId', '==', userProfile.orgId),
+    setTechnicians(
+      orgUsers
+        .filter((u) => TEAM_ROLES.has(u.role))
+        .map((u) => ({ uid: u._docId, ...u })),
     );
-    // #210: add onError callback so listener failures surface rather than silently dying
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setTechnicians(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
-      },
-      (err) => {
-        console.error('Team listener error:', err);
-      },
-    );
-    return unsub;
-  }, [userProfile?.orgId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgUsers]);
 
   const handleSaveAccountant = () => {
     localStorage.setItem('omni_accountant_email', accountantEmail.trim());

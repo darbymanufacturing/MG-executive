@@ -8,13 +8,17 @@
  *   1. Caller role is 'admin' or 'owner'.
  *   2. Target user belongs to the same org as the caller (cross-org guard).
  *
- * On success: deletes the target's Firestore users/{uid} doc, then deletes their
+ * On success: deletes the target's Supabase users row, then deletes their
  * Firebase Auth account via the Admin SDK. Returns { ok: true }.
  *
  * See api/delete-account.js for the self-service account deletion flow.
+ *
+ * ADR-0023 Stage-1: identity reads/writes use Supabase (sbGetDoc/sbDelDoc).
+ * Firebase Admin is kept for Auth only (verifyIdToken via requireUser + deleteUser).
  */
-import { getDb, getAuth } from './_lib/firebase-admin.js';
+import { getAuth } from './_lib/firebase-admin.js';
 import { requireUser } from './_lib/require-auth.js';
+import { sbGetDoc, sbDelDoc } from './_lib/supabase-admin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -29,14 +33,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'uid is required' });
   }
 
-  const db = getDb();
-
   // Load the caller's profile to verify role + orgId.
-  const callerSnap = await db.collection('users').doc(authUser.uid).get();
-  if (!callerSnap.exists) {
+  const caller = await sbGetDoc('users', authUser.uid);
+  if (!caller) {
     return res.status(404).json({ error: 'Your user profile was not found.' });
   }
-  const caller = callerSnap.data();
 
   // Server-side role guard: only admins and owners may remove team members.
   if (!['admin', 'owner'].includes(caller.role)) {
@@ -49,11 +50,10 @@ export default async function handler(req, res) {
   }
 
   // Load the target's profile for the cross-org guard.
-  const targetSnap = await db.collection('users').doc(uid).get();
-  if (!targetSnap.exists) {
+  const target = await sbGetDoc('users', uid);
+  if (!target) {
     return res.status(404).json({ error: 'Target user not found.' });
   }
-  const target = targetSnap.data();
 
   // Cross-org guard: can only remove members within the same org.
   // Fail-closed: if target has no orgId (malformed profile), deny rather than allow.
@@ -62,8 +62,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Delete Firestore doc first, then Auth account (matching the pattern in delete-account.js:91-92).
-    await db.collection('users').doc(uid).delete();
+    // Delete Supabase row first, then Auth account.
+    // Profile deletion is the actual access-control cut; Auth deletion is best-effort.
+    await sbDelDoc('users', uid);
     await getAuth().deleteUser(uid).catch(() => {}); // best-effort; profile gone is the access cut
 
     return res.status(200).json({ ok: true });

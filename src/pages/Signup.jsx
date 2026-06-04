@@ -1,23 +1,21 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, Building2, Loader2, AlertCircle } from 'lucide-react';
-import { doc, setDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext.jsx';
-import { auth, db } from '../lib/firebase.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { auth } from '../lib/firebase.js';
 import AsterismMark from '../components/Shared/AsterismMark.jsx';
 import styles from './Login.module.css';
 
 const THEME_KEY = 'omni_theme';
-const TRIAL_DAYS = 14;
 
 /**
  * Signup — public "create your own org" funnel (Phase 2 / ROADMAP 2.5, ADR-0002/0004).
  * Milestone A disabled the old public signup (it auto-granted admin on THIS org). This
  * is the safe replacement: a new user creates a brand-new org and owns it.
  *
- * Flow: create auth user → create organizations/{id} → create users/{uid} (role:owner,
- * orgId) → syncClaims() (mirror role+org into custom claims + refresh token) → /onboarding.
+ * Flow: create auth user → POST /api/signup (org + profile + claims, all server-side,
+ * ADR-0023) → syncClaims() (refresh the local token) → /onboarding.
+ * On any server error: delete the auth user and surface the error.
  */
 export default function Signup() {
   const { signUp, syncClaims } = useAuth();
@@ -37,67 +35,42 @@ export default function Signup() {
     if (!orgName.trim()) { setError('Please enter your company or organization name.'); return; }
     setLoading(true);
 
-    // Rollback trackers — set after each step succeeds so the catch block
-    // knows exactly what to undo if a later step fails.
     let authCreated = false;
-    let orgDocId = null;
-    let userDocCreated = false;
 
     try {
-      // 1. Create the auth user (this also signs them in).
+      // 1. Create the Firebase auth user (this also signs them in).
       await signUp(email, password);
       authCreated = true;
-      const uid = auth.currentUser?.uid;
-      if (!uid) throw new Error('Sign-up succeeded but no session was created. Please try signing in.');
+      if (!auth.currentUser) throw new Error('Sign-up succeeded but no session was created. Please try signing in.');
 
-      // 2. Create the org — flat collection with an auto-id (ADR-0002).
-      const orgRef = doc(collection(db, 'organizations'));
-      const orgId = orgRef.id;
-      const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString();
-      await safeWrite(
-        () => setDoc(orgRef, {
-          name: orgName.trim(),
-          ownerUid: uid,
-          members: [uid],
-          plan: 'trial',
-          trialEndsAt,
-          settings: {},
-          createdAt: serverTimestamp(),
-        }),
-        { rethrow: true, errorMessage: 'Could not create your organization. Please try again.' },
-      );
-      orgDocId = orgId;
-
-      // 3. Create the owner profile — the UI + claims source of truth (ADR-0004).
-      await safeWrite(
-        () => setDoc(doc(db, 'users', uid), {
-          role: 'owner',
-          orgId,
+      // 2. POST to the server to provision the org + owner profile + custom claims
+      //    (ADR-0023: all identity writes are server-side, service-role Supabase).
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orgName: orgName.trim(),
           displayName: name.trim() || email.split('@')[0],
-          email,
-          createdAt: serverTimestamp(),
         }),
-        { rethrow: true, errorMessage: 'Account created, but saving your profile failed. Contact support.' },
-      );
-      userDocCreated = true;
-      // 4. Mirror {orgId, role:'owner'} into custom claims so the B4 Firestore rules
-      //    admit this user, then refresh the local token (ADR-0004).
-      await syncClaims(uid);
+      });
 
-      // 5. Into the onboarding wizard.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not create your organization. Please try again.');
+      }
+
+      // 3. Refresh the local token to pick up the new custom claims.
+      await syncClaims();
+
+      // 4. Into the onboarding wizard.
       navigate('/onboarding', { replace: true });
     } catch (err) {
-      // Rollback (order matters — Firestore deletes need a live auth session, and
-      // auth.delete() invalidates it): org doc, then the user profile doc, then the
-      // Auth user. #526 — the users/{uid} doc is NOT auto-removed when the auth user
-      // is deleted, so without this it orphans (role:'owner' pointing at a deleted org).
-      // Errors are swallowed so the original error message reaches the user.
-      if (orgDocId) {
-        try { await deleteDoc(doc(db, 'organizations', orgDocId)); } catch (_) { /* rollback best-effort */ }
-      }
-      if (userDocCreated && auth.currentUser) {
-        try { await deleteDoc(doc(db, 'users', auth.currentUser.uid)); } catch (_) { /* rollback best-effort */ }
-      }
+      // If the server call failed (or anything after auth creation), roll back the
+      // auth user so the email isn't permanently locked to a broken account.
       if (authCreated && auth.currentUser) {
         try { await auth.currentUser.delete(); } catch (_) { /* rollback best-effort */ }
       }

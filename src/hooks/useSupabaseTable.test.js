@@ -211,8 +211,12 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.bankRules).toBe('bank_rules');
     // FF-2 multi-loan module
     expect(SUPABASE_TABLE.loans).toBe('loans');
-    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans = 25 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(25);
+    // identity (ADR-0023)
+    expect(SUPABASE_TABLE.users).toBe('users');
+    expect(SUPABASE_TABLE.organizations).toBe('organizations');
+    expect(SUPABASE_TABLE.invites).toBe('invites');
+    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans + users + organizations + invites = 28 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(28);
   });
 
   // BUG #496 — schema-drift lock: pin the EXACT typed-column SET per time-series
@@ -240,6 +244,10 @@ describe('toSupabaseRow', () => {
     // them from `data`, ADR-0015) — lock a representative sample at empty.
     expect(Object.keys(TYPED_COLUMNS.maintenanceTickets({}))).toEqual([]);
     expect(Object.keys(TYPED_COLUMNS.costs({}))).toEqual([]);
+    // ADR-0023 identity collections — no typed columns; everything lives in data.
+    expect(Object.keys(TYPED_COLUMNS.users({}))).toEqual([]);
+    expect(Object.keys(TYPED_COLUMNS.organizations({}))).toEqual([]);
+    expect(Object.keys(TYPED_COLUMNS.invites({}))).toEqual([]);
   });
 
   // BUG #465 — scooterTrips / bool() contract tests

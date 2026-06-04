@@ -62,6 +62,10 @@ export const SUPABASE_TABLE = Object.freeze({
   // (source_doc_id keeps the existing composite ids, which are globally unique).
   config: 'app_config',
   pow: 'app_config',
+  // ADR-0023 identity layer — full doc in `data`; self-read by source_doc_id / org_id.
+  users: 'users',
+  organizations: 'organizations',
+  invites: 'invites',
 });
 
 /**
@@ -165,6 +169,11 @@ export const TYPED_COLUMNS = Object.freeze({
   loans: () => ({}),
   config: () => ({}),
   pow: () => ({}),
+  // ADR-0023 identity layer — no typed columns; everything lives in data.
+  // Self-reads use source_doc_id; org-scoped reads use org_id (both are plain columns).
+  users: () => ({}),
+  organizations: () => ({}),
+  invites: () => ({}),
 });
 
 /** Drop undefined + Firestore sentinels (e.g. serverTimestamp) so `data` is valid jsonb. */

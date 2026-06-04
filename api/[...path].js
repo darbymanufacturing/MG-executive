@@ -15,12 +15,14 @@
 import acceptInvite from './_accept-invite.js';
 import accountantForward from './_accountant-forward.js';
 import bankConnections from './_bank-connections.js';
+import createUser from './_create-user.js';
 import bankRefresh from './_bank-refresh.js';
 import bankSession from './_bank-session.js';
 import bankTransactions from './_bank-transactions.js';
 import cloudinaryDelete from './_cloudinary-delete.js';
 import cloudinarySign from './_cloudinary-sign.js';
 import createInvite from './_create-invite.js';
+import signup from './_signup.js';
 import cronDailyBrief from './_cron-daily-brief.js';
 import cronHoppSync from './_cron-hopp-sync.js';
 import cronPurgeDeletedOrgs from './_cron-purge-deleted-orgs.js';
@@ -44,6 +46,7 @@ const ROUTES = {
   'cloudinary-delete': cloudinaryDelete,
   'cloudinary-sign': cloudinarySign,
   'create-invite': createInvite,
+  'create-user': createUser,
   'cron-daily-brief': cronDailyBrief,
   'cron-hopp-sync': cronHoppSync,
   'cron-purge-deleted-orgs': cronPurgeDeletedOrgs,
@@ -53,6 +56,7 @@ const ROUTES = {
   'delete-user': deleteUser,
   'diary-parse': diaryParse,
   'invoice-parse': invoiceParse,
+  'signup': signup,
   'sync-claim': syncClaim,
 };
 

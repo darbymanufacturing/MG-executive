@@ -9,9 +9,9 @@
  * endpoint keeps the two in sync: it copies the values FROM the users doc INTO the claims.
  *
  * SECURITY (this is multi-tenant infra — see CLAUDE.md Grounding Rule 7):
- *   - Claims are DERIVED from the `users/{uid}` doc, never from the request body, so a
- *     caller can never grant themselves a role/org they don't already have in Firestore.
- *     (The doc itself is write-protected by the B4 rules — only an org owner/admin may set
+ *   - Claims are DERIVED from the `users/{uid}` Supabase doc, never from the request body,
+ *     so a caller can never grant themselves a role/org they don't already have in the store.
+ *     (The doc itself is write-protected by RLS rules — only an org owner/admin may set
  *     another user's role; a user may not flip their own existing role.)
  *   - Authorization: a caller may sync their OWN claims, or — if they are an owner/admin —
  *     the claims of another user IN THE SAME ORG. Any other cross-user attempt is 403.
@@ -19,8 +19,12 @@
  * After this succeeds the client MUST call `getIdToken(true)` to pull the refreshed claims
  * into its token (AuthContext.syncClaims does this) or the rules will keep seeing the old
  * (or absent) claims.
+ *
+ * ADR-0023 Stage-1: identity reads now go through Supabase (sbGetDoc) instead of Firestore.
+ * Firebase Auth is still the auth layer: verifyIdToken + setCustomUserClaims are unchanged.
  */
-import { getDb, getAuth } from './_lib/firebase-admin.js';
+import { getAuth } from './_lib/firebase-admin.js';
+import { sbGetDoc } from './_lib/supabase-admin.js';
 import { requireUser } from './_lib/require-auth.js';
 
 export default async function handler(req, res) {
@@ -35,14 +39,12 @@ export default async function handler(req, res) {
   const rawUid = typeof req.body?.uid === 'string' ? req.body.uid.trim() : '';
   const targetUid = rawUid || caller.uid;
 
-  const db = getDb();
-
-  // Source of truth: the target user's Firestore profile.
-  const targetSnap = await db.collection('users').doc(targetUid).get();
-  if (!targetSnap.exists) {
+  // Source of truth: the target user's Supabase profile (source_doc_id = Firebase uid).
+  // sbGetDoc returns { _docId, ...data } or null.
+  const target = await sbGetDoc('users', targetUid);
+  if (!target) {
     return res.status(404).json({ error: 'User profile not found.' });
   }
-  const target = targetSnap.data();
   const orgId = target.orgId ?? null;
   const role = target.role ?? null;
   if (!orgId || !role) {
@@ -50,9 +52,9 @@ export default async function handler(req, res) {
   }
 
   // Cross-check: never mint a privileged claim without verifying against the org doc.
+  // source_doc_id for organizations = orgId (ADR-0023 Stage-1 row shape).
   if (role === 'owner' || role === 'admin') {
-    const orgSnap = await db.collection('organizations').doc(orgId).get();
-    const org = orgSnap.exists ? orgSnap.data() : null;
+    const org = await sbGetDoc('organizations', orgId);
     if (!org) {
       return res.status(400).json({ error: 'Organization not found — cannot verify role.' });
     }
@@ -66,9 +68,9 @@ export default async function handler(req, res) {
 
   // Authorization: self, OR an owner/admin of the SAME org as the target.
   if (targetUid !== caller.uid) {
-    const callerSnap = await db.collection('users').doc(caller.uid).get();
-    const callerData = callerSnap.exists ? callerSnap.data() : {};
+    const callerData = await sbGetDoc('users', caller.uid);
     const callerIsOrgAdmin =
+      !!callerData &&
       (callerData.role === 'owner' || callerData.role === 'admin') &&
       !!callerData.orgId &&
       callerData.orgId === orgId;

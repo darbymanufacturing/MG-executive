@@ -1,14 +1,13 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Users, UserPlus, Mail, Send, Copy, Check, Clock, Bike, X, Search,
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { authedFetch } from '../utils/apiClient.js';
-import { safeWrite } from '../utils/firestoreWrite.js';
+import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { orgUpdate } from '../hooks/orgWrite.js';
 import styles from './Contractors.module.css';
 
 /* ─── small helpers ─── */
@@ -159,9 +158,22 @@ export default function Contractors() {
   const tickets = maintenanceCtx?.tickets ?? [];
   const { success: toastSuccess, error: toastError } = useToast();
 
-  const [contractors, setContractors] = useState([]);
-  const [invites, setInvites] = useState([]);
-  const [loading, setLoading] = useState(true);
+  /* Roster — org-scoped users; filter to role==='contractor' in JS (ADR-0023: data
+     lives in jsonb, not a column — no server-side where on role) */
+  const { items: allUsers, loading: usersLoading } = useOrgCollection('users', {});
+  const contractors = useMemo(
+    () => allUsers.filter((u) => u.role === 'contractor'),
+    [allUsers],
+  );
+
+  /* Pending invites — org-scoped; filter status==='pending' + role==='contractor' in JS */
+  const { items: allInvites, loading: invitesLoading } = useOrgCollection('invites', {});
+  const invites = useMemo(
+    () => allInvites.filter((i) => i.status === 'pending' && i.role === 'contractor'),
+    [allInvites],
+  );
+
+  const loading = usersLoading || invitesLoading;
 
   const emailRef = useRef(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -170,39 +182,6 @@ export default function Contractors() {
   const [copied, setCopied] = useState(false);
 
   const [assignFor, setAssignFor] = useState(null);
-
-  /* Roster — org-scoped contractors (users live in Firestore; #401: scope by orgId) */
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const q = query(collection(db, 'users'), where('orgId', '==', orgId), where('role', '==', 'contractor'));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setContractors(snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Contractors listener error:', err);
-        setLoading(false);
-      },
-    );
-    return unsub;
-  }, [orgId]);
-
-  /* Pending invites (Firestore `invites`) — shown as "Invited" rows */
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const q = query(collection(db, 'invites'), where('orgId', '==', orgId), where('status', '==', 'pending'));
-    const unsub = onSnapshot(
-      q,
-      (snap) =>
-        setInvites(
-          snap.docs.map((d) => ({ token: d.id, ...d.data() })).filter((i) => i.role === 'contractor'),
-        ),
-      (err) => console.error('Invites listener error:', err),
-    );
-    return unsub;
-  }, [orgId]);
 
   const scooterById = useMemo(() => {
     const m = new Map();
@@ -264,7 +243,7 @@ export default function Contractors() {
   }
 
   async function saveAssignment(uid, ids) {
-    const res = await safeWrite(() => updateDoc(doc(db, 'users', uid), { assignedScooterIds: ids }), {
+    const res = await orgUpdate('users', uid, { assignedScooterIds: ids }, {
       errorMessage: 'Failed to save scooter assignment.',
     });
     if (res?.ok !== false) {
@@ -317,7 +296,7 @@ export default function Contractors() {
           ) : (
             <>
               {contractors.map((c) => (
-                <div key={c.uid} className={styles.row}>
+                <div key={c._docId} className={styles.row}>
                   <div className={styles.cellContractor}>
                     <Avatar name={c.displayName} email={c.email} />
                     <div className={styles.cMeta}>
@@ -339,12 +318,12 @@ export default function Contractors() {
                       </button>
                     )}
                   </div>
-                  <div className={`${styles.right} ${styles.jobs}`}>{jobsFor(c.uid) || '—'}</div>
+                  <div className={`${styles.right} ${styles.jobs}`}>{jobsFor(c._docId) || '—'}</div>
                 </div>
               ))}
 
               {invites.map((inv) => (
-                <div key={inv.token} className={styles.row}>
+                <div key={inv._docId} className={styles.row}>
                   <div className={styles.cellContractor}>
                     <Avatar email={inv.email} />
                     <div className={styles.cMeta}>
@@ -437,7 +416,7 @@ export default function Contractors() {
           contractor={assignFor}
           scooters={scooters}
           onClose={() => setAssignFor(null)}
-          onSave={(ids) => saveAssignment(assignFor.uid, ids)}
+          onSave={(ids) => saveAssignment(assignFor._docId, ids)}
         />
       )}
     </div>

@@ -1,9 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowUpRight } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase.js';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { useOrgCollection } from '../../hooks/useOrgCollection.js';
 import { ownerBalance } from '../../utils/ownerLedger.js';
 import { formatEUR } from '../../utils/formatters.js';
@@ -23,25 +20,11 @@ function initialsOf(name = '') {
 
 export default function OwnerBalancesWidget() {
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
-  const orgId = userProfile?.orgId ?? null;
   const { items: entries } = useOrgCollection('ownerLedger', { limit: 1000 });
-  const [owners, setOwners] = useState([]);
+  const { items: allUsers } = useOrgCollection('users', {});
+  const owners = useMemo(() => allUsers.filter((u) => u.isOwner || u.role === 'owner'), [allUsers]);
 
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const q = query(collection(db, 'users'), where('orgId', '==', orgId));
-    const unsub = onSnapshot(
-      q,
-      (snap) => setOwners(
-        snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter((u) => u.isOwner || u.role === 'owner'),
-      ),
-      (err) => console.error('Owner-balances widget users listener error:', err),
-    );
-    return unsub;
-  }, [orgId]);
-
-  const rows = useMemo(() => owners.map((o) => ({ o, bal: ownerBalance(entries, o.uid) })), [owners, entries]);
+  const rows = useMemo(() => owners.map((o) => ({ o, bal: ownerBalance(entries, o._docId) })), [owners, entries]);
   const net = useMemo(() => rows.reduce((s, r) => s + r.bal, 0), [rows]);
 
   if (owners.length === 0) return null;
@@ -59,7 +42,7 @@ export default function OwnerBalancesWidget() {
           const pos = bal >= 0;
           const name = o.displayName || o.email?.split('@')[0] || 'Owner';
           return (
-            <div key={o.uid} className={styles.row}>
+            <div key={o._docId} className={styles.row}>
               <div className={styles.avatar} style={{ background: colorFor(name) }}>{initialsOf(name)}</div>
               <div className={styles.meta}>
                 <span className={styles.name}>{name}</span>
