@@ -20,8 +20,8 @@ import { useRevenue } from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useFleet } from '../context/FleetContext.jsx';
 import {
-  totalMonthlyCost, totalAnnualCost,
-  costPerScooterMonthly, costPerScooterDaily, costPerScooterAnnual,
+  totalMonthlyCost,
+  costPerScooterMonthly, costPerScooterDaily,
   breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
   allTimeMonthlyTrendData, normalizeToMonthly,
 } from '../utils/calculations.js';
@@ -212,10 +212,14 @@ export default function Dashboard() {
       .reduce((s, c) => s + (c.amount || 0), 0);
   }, [viewMode, periodCosts, filteredCosts, rangeFrom, rangeTo]);
   const displayTotal      = monthlyCostRate * periodMonths + oneTimeInPeriod;
-  const annualTotal       = totalAnnualCost(filteredCosts);
+  // #601 — annualize the recurring monthly run-rate, NOT totalAnnualCost(): the latter
+  // sums every one-time cost in the dataset (e.g. the ~400 imported credit-card rows)
+  // into a single "year", inflating the estimate ~5×. Run-rate × 12 keeps the /year
+  // figure consistent with the monthly/daily cards beside it.
+  const annualTotal       = monthlyCostRate * 12;
   const perScooterMonthly = costPerScooterMonthly(filteredCosts, effectiveFleetSize);
   const perScooterDaily   = costPerScooterDaily(filteredCosts, effectiveFleetSize);
-  const perScooterAnnual  = costPerScooterAnnual(filteredCosts, effectiveFleetSize);
+  const perScooterAnnual  = perScooterMonthly * 12; // #601 — consistent run-rate (was totalAnnualCost-based)
   const breakdown         = breakdownByCategory(viewMode === 'month' ? periodCosts : filteredCosts);
   const trendData         = viewMode === 'all'
     ? allTimeMonthlyTrendData(filteredCosts)
@@ -684,7 +688,11 @@ export default function Dashboard() {
                 icon={AlertTriangle}
                 label="Active Repair Tickets"
                 value={`${activeCount} / ${maxActiveTickets}`}
-                sub={activeCount >= maxActiveTickets ? '⚠ At maximum active limit' : `${maxActiveTickets - activeCount} slot${maxActiveTickets - activeCount !== 1 ? 's' : ''} remaining`}
+                sub={activeCount > maxActiveTickets
+                  ? `⚠ ${activeCount - maxActiveTickets} over active limit`
+                  : activeCount === maxActiveTickets
+                  ? '⚠ At maximum active limit'
+                  : `${maxActiveTickets - activeCount} slot${maxActiveTickets - activeCount !== 1 ? 's' : ''} remaining`}
                 healthColor={activeCount >= maxActiveTickets ? 'warning' : activeCount > 0 ? 'muted' : 'good'}
               />
               <KpiCard
