@@ -3,6 +3,7 @@ import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useFleet } from '../../context/FleetContext.jsx';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { normalizeToMonthly } from '../../utils/calculations.js';
 import styles from './PulseStrip.module.css';
 
 function MiniSparkline({ data = [], color = 'var(--accent)' }) {
@@ -96,10 +97,27 @@ export default function PulseStrip() {
     .filter(r => r.date?.startsWith(monthKey))
     .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
 
-  /* Costs MTD: sum amounts where startDate is in current month */
-  const costsMTD = (costs || [])
-    .filter(c => c.startDate?.startsWith(monthKey))
-    .reduce((s, c) => s + (c.amount || 0), 0);
+  /* Costs MTD (#603): match the Pulse page's monthly Total Cost basis —
+   * recurring costs ACTIVE this month at their monthly-normalized rate +
+   * one-time costs DATED this month. The old `startDate in month` filter
+   * dropped every recurring cost that started earlier (rent/loans/fixed),
+   * undercounting vs Pulse (€2.3K here vs €4.0K there) and understating the
+   * loss in the net-margin tile below. Filter mirrors Dashboard `periodCosts`. */
+  const mtdY = now.getFullYear();
+  const mtdMonthIdx = now.getMonth();
+  const mtdMonthStart = new Date(mtdY, mtdMonthIdx, 1);
+  const mtdMonthEnd   = new Date(mtdY, mtdMonthIdx + 1, 0);
+  const costsMTD = (costs || []).reduce((s, c) => {
+    const start = c.startDate ? new Date(c.startDate) : null;
+    const end   = c.endDate   ? new Date(c.endDate)   : null;
+    if (c.frequency === 'one-time') {
+      return (start && start.getFullYear() === mtdY && start.getMonth() === mtdMonthIdx)
+        ? s + (c.amount || 0)
+        : s;
+    }
+    const activeThisMonth = (start ? start <= mtdMonthEnd : true) && (end ? end >= mtdMonthStart : true);
+    return activeThisMonth ? s + normalizeToMonthly(c) : s;
+  }, 0);
 
   /* Active fleet: live count of scooters with status === 'Active' from MaintenanceContext.
    * For the denominator, prefer the fleet-scoped total scooter count when FleetContext
