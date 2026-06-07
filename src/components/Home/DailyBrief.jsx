@@ -101,6 +101,23 @@ export function buildBriefPayload(contexts, now = new Date()) {
   };
 }
 
+/**
+ * BUG #604 — Opus 4.8 sometimes leaks its tool-use XML format into the narrative
+ * string (e.g. "…high-season readiness.</parameter> <parameter name=\"sections\">[…]").
+ * The server now sanitizes this for fresh briefs, but cached Firestore briefs from
+ * before the fix still contain the leak; sanitize here too as a render-time guard.
+ * Mirrors `sanitizeNarrative` in `api/_daily-brief.js` — keep them in sync.
+ */
+const TOOL_USE_LEAK_PATTERN = /<\/?(parameter|invoke|antml:parameter|antml:invoke|antml:function_calls|function_calls)\b[\s\S]*$/i;
+export function sanitizeNarrative(narrative) {
+  if (typeof narrative !== 'string') return '';
+  return narrative.replace(TOOL_USE_LEAK_PATTERN, '').trim();
+}
+export function isNarrativePolluted(narrative) {
+  if (typeof narrative !== 'string') return false;
+  return TOOL_USE_LEAK_PATTERN.test(narrative);
+}
+
 function parseBriefData(data) {
   const sections = data.sections || [];
   // BUG #161: filter(Boolean) guards against undefined keywords
@@ -109,7 +126,8 @@ function parseBriefData(data) {
   );
   return {
     date: todayLabel(),
-    narrative: data.narrative || '',
+    // #604 — defense-in-depth: strip any tool-use XML leak before display.
+    narrative: sanitizeNarrative(data.narrative || ''),
     yesterday: find(['yesterday', 'overnight'])?.items || [],
     today:     find(['today', 'attention', 'needs'])?.items || [],
     extra:     find(['positive', 'signal', 'good'])?.items || [],
@@ -209,9 +227,18 @@ export default function DailyBrief() {
         const snap = await getDoc(doc(db, 'briefs', briefKey));
 
         if (snap.exists()) {
-          setBrief(parseBriefData(snap.data()));
-          setStatus('ready');
-          return;
+          const cached = snap.data();
+          // #604 — if the cached narrative carries the tool-use XML leak, discard
+          // and regenerate so the user sees a clean brief immediately instead of
+          // waiting for tomorrow's natural cache rollover.
+          if (isNarrativePolluted(cached.narrative)) {
+            console.warn('[DailyBrief] cached brief has #604 XML leak — regenerating');
+            // fall through to the generation path below
+          } else {
+            setBrief(parseBriefData(cached));
+            setStatus('ready');
+            return;
+          }
         }
 
         /* 2. Data-void guard: if all key metrics are zero the pipeline is stalled —

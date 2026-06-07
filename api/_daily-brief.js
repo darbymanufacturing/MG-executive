@@ -30,6 +30,20 @@ import { requireUser } from './_lib/require-auth.js';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 
+/**
+ * BUG #604 — Opus 4.8 occasionally streams its own tool-use XML format
+ * (`</parameter> <parameter name="sections">...`) INTO the narrative string
+ * parameter, polluting the user-facing brief. The SDK parses the JSON cleanly,
+ * but the narrative field arrives containing those literal tags. Strip anything
+ * from the first tool-use control token onward; the sections array comes through
+ * the structured `parsed.sections` path and is unaffected.
+ */
+const TOOL_USE_LEAK_PATTERN = /<\/?(parameter|invoke|antml:parameter|antml:invoke|antml:function_calls|function_calls)\b[\s\S]*$/i;
+export function sanitizeNarrative(narrative) {
+  if (typeof narrative !== 'string') return '';
+  return narrative.replace(TOOL_USE_LEAK_PATTERN, '').trim();
+}
+
 function buildPrompt(date, data) {
   const {
     openIssues = [], overdueTickets = [], activeTickets = 0, completedToday = 0,
@@ -61,7 +75,12 @@ ${criticalIssuesList.length ? `- Critical/high issues:\n${criticalIssuesList.sli
 ${blockedProjects.length ? `- Blocked projects:\n${blockedProjects.slice(0, 2).map(p => `  • ${p.name}${p.blockers?.[0]?.text ? `: ${p.blockers[0].text.slice(0, 60)}` : ''}`).join('\n')}` : ''}
 ${overdueTickets.length ? `- Most overdue tickets:\n${overdueTickets.slice(0, 2).map(t => `  • ${t.issueDescription?.slice(0, 60)} (${t.daysOpen}d)`).join('\n')}` : ''}
 
-Use the daily_brief tool to return the structured brief. For the narrative: write 2-3 sentences summarising the key operational state and the biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery. Keep each items entry concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
+Use the daily_brief tool to return the structured brief.
+
+IMPORTANT FORMATTING RULES (#604):
+- The "narrative" field must contain ONLY plain English prose. Do NOT include any XML tags, <parameter> declarations, JSON, brackets, or tool-call formatting inside the narrative string. The narrative ends at the final full stop of your 2-3 sentence summary — anything after that belongs in the "sections" field.
+- For the narrative: write 2-3 sentences summarising the key operational state and the biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery.
+- For sections: keep each items entry concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
 }
 
 export default async function handler(req, res) {
@@ -131,7 +150,8 @@ export default async function handler(req, res) {
     const parsed = toolUse.input;
 
     return res.status(200).json({
-      narrative: parsed.narrative || '',
+      // #604 — strip Opus 4.8's tool-use XML leakage from the narrative string.
+      narrative: sanitizeNarrative(parsed.narrative),
       sections: parsed.sections || [],
       generatedAt: new Date().toISOString(),
     });
