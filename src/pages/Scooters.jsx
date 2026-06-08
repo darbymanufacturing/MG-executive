@@ -20,6 +20,7 @@ import styles from './Scooters.module.css';
 const STATUS_COLOR = {
   Active:      'var(--color-success)',
   'In Repair': 'var(--color-warning)',
+  'To be Repainted': 'var(--accent)',
   Retired:     'var(--color-text-muted)',
   Donor:       'var(--color-danger)',
 };
@@ -79,6 +80,7 @@ export default function Scooters() {
     inRepair: scoped.filter((s) => s.status === 'In Repair').length,
     retired:  scoped.filter((s) => s.status === 'Retired').length,
     donor:    scoped.filter((s) => s.status === 'Donor').length,
+    repaint:  scoped.filter((s) => s.status === 'To be Repainted').length,
   }), [scoped]);
 
   async function handleSave(form) {
@@ -120,6 +122,10 @@ export default function Scooters() {
           <span className={styles.summaryVal} style={{ color: 'var(--color-danger)' }}>{summary.donor}</span>
           <span className={styles.summaryKey}>Donor</span>
         </div>
+        <div className={styles.summaryItem}>
+          <span className={styles.summaryVal} style={{ color: 'var(--accent)' }}>{summary.repaint}</span>
+          <span className={styles.summaryKey}>To Repaint</span>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -147,7 +153,7 @@ export default function Scooters() {
         </div>
 
         <div className={styles.chips}>
-          {['All', 'Active', 'In Repair', 'Retired', 'Donor'].map((s) => (
+          {['All', 'Active', 'In Repair', 'To be Repainted', 'Retired', 'Donor'].map((s) => (
             <button
               key={s}
               className={`${styles.chip} ${statusF === s ? styles.chipActive : ''}`}

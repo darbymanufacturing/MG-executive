@@ -8,7 +8,7 @@ import styles from './ScooterForm.module.css';
 // TODO: source from config (currently hardcoded)
 const SCOOTER_MODELS = ['ES400B 2022', 'ES400B 2023'];
 const MODELS = SCOOTER_MODELS;
-const STATUSES = ['Active', 'In Repair', 'Retired', 'Donor'];
+const STATUSES = ['Active', 'In Repair', 'To be Repainted', 'Retired', 'Donor'];
 
 const errorStyle = {
   display: 'block',

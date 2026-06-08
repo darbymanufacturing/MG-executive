@@ -12,6 +12,7 @@ import styles from './FleetTab.module.css';
 const STATUS_COLOR = {
   Active:     '#22c55e',
   'In Repair':'#f59e0b',
+  'To be Repainted': '#A0521D',
   Retired:    '#6b7280',
   Donor:      '#ef4444',
 };
@@ -70,6 +71,7 @@ export default function FleetTab() {
     inRepair: scooters.filter((s) => s.status === 'In Repair').length,
     retired:  scooters.filter((s) => s.status === 'Retired').length,
     donor:    scooters.filter((s) => s.status === 'Donor').length,
+    repaint:  scooters.filter((s) => s.status === 'To be Repainted').length,
     noCsv:    scooters.filter((s) => !scootersWithData.has(String(s.scooterId))).length,
   }), [scooters, scootersWithData]);
 
@@ -105,6 +107,10 @@ export default function FleetTab() {
         <div className={styles.summaryItem}>
           <span className={styles.summaryVal} style={{ color: '#ef4444' }}>{summary.donor}</span>
           <span className={styles.summaryKey}>Donor</span>
+        </div>
+        <div className={styles.summaryItem}>
+          <span className={styles.summaryVal} style={{ color: '#A0521D' }}>{summary.repaint}</span>
+          <span className={styles.summaryKey}>To Repaint</span>
         </div>
         <div className={styles.summaryDivider} />
         <div
@@ -145,7 +151,7 @@ export default function FleetTab() {
         </div>
 
         <div className={styles.chips}>
-          {['All', 'Active', 'In Repair', 'Retired', 'Donor'].map((s) => (
+          {['All', 'Active', 'In Repair', 'To be Repainted', 'Retired', 'Donor'].map((s) => (
             <button
               key={s}
               className={`${styles.chip} ${statusF === s ? styles.chipActive : ''}`}

@@ -12,6 +12,7 @@ import styles from './Tab.module.css';
 const STATUS_COLOR = {
   Active:      'var(--color-success)',
   'In Repair': 'var(--color-warning)',
+  'To be Repainted': 'var(--accent)',
   Retired:     'var(--color-text-muted)',
   Donor:       'var(--color-danger)',
 };
