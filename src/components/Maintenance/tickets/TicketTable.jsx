@@ -9,6 +9,7 @@ const STATUS_COLORS = {
   Backlog:       '#888',
   Investigation: '#FF9800',
   Blocked:       '#F44336',
+  'To be Repainted': '#A0521D',
   Donor:         '#8E24AA',
   Completed:     '#4CAF50',
 };

@@ -17,7 +17,7 @@ const SECONDARY_TAGS = [
 ];
 
 const CATEGORIES = { Q: 'Quick (<2hr)', M: 'Medium/Estimated', C: 'Complex', B: 'Blocked', F: 'Finished' };
-const STATUSES   = ['Active', 'Backlog', 'Investigation', 'Blocked', 'Donor', 'Completed'];
+const STATUSES   = ['Active', 'Backlog', 'Investigation', 'Blocked', 'To be Repainted', 'Donor', 'Completed'];
 
 function blank() {
   return {

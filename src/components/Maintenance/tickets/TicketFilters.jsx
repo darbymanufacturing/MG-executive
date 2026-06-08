@@ -8,7 +8,7 @@ const PRIMARY_TAGS = [
 ];
 
 // Active-only statuses (Completed/Donor live in Archived)
-const STATUSES = ['Active', 'Backlog', 'Investigation', 'Blocked'];
+const STATUSES = ['Active', 'Backlog', 'Investigation', 'Blocked', 'To be Repainted'];
 
 const CATEGORIES = [
   { code: 'Q', label: 'Q — Quick (<2hr)' },
@@ -47,6 +47,7 @@ function ChipRow({ label, options, selected, onToggle, colorFn }) {
 
 const STATUS_COLOR = {
   Active: '#0ea5e9', Backlog: '#888', Investigation: '#FF9800', Blocked: '#F44336',
+  'To be Repainted': '#A0521D',
 };
 
 export default function TicketFilters({ filters, onSearch, onToggle, onClear }) {
