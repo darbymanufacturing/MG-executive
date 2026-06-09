@@ -6,7 +6,7 @@
  * stage. Fix: each real handler now lives in an underscore-prefixed module
  * (`api/_<name>.js`) which Vercel does NOT deploy as its own function, and THIS one
  * catch-all dispatches to them by URL path. Public URLs are unchanged
- * (e.g. /api/bank-connections, /api/cron-hopp-sync still resolve here), so there are
+ * (e.g. /api/sync-claim, /api/cron-hopp-sync still resolve here), so there are
  * NO client- or cron-caller changes. `config.maxDuration` covers the longest handler.
  *
  * Adding a new endpoint = add a module `api/_foo.js` + one line to ROUTES. The
@@ -14,11 +14,7 @@
  */
 import acceptInvite from './_accept-invite.js';
 import accountantForward from './_accountant-forward.js';
-import bankConnections from './_bank-connections.js';
 import createUser from './_create-user.js';
-import bankRefresh from './_bank-refresh.js';
-import bankSession from './_bank-session.js';
-import bankTransactions from './_bank-transactions.js';
 import cloudinaryDelete from './_cloudinary-delete.js';
 import cloudinarySign from './_cloudinary-sign.js';
 import createInvite from './_create-invite.js';
@@ -39,10 +35,6 @@ import syncClaim from './_sync-claim.js';
 const ROUTES = {
   'accept-invite': acceptInvite,
   'accountant-forward': accountantForward,
-  'bank-connections': bankConnections,
-  'bank-refresh': bankRefresh,
-  'bank-session': bankSession,
-  'bank-transactions': bankTransactions,
   'cloudinary-delete': cloudinaryDelete,
   'cloudinary-sign': cloudinarySign,
   'create-invite': createInvite,

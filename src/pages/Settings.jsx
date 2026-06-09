@@ -13,8 +13,6 @@ import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import Modal from '../components/Shared/Modal.jsx';
-import BankConnect from '../components/Bank/BankConnect.jsx';
-import BankTransactionReview from '../components/Bank/BankTransactionReview.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
@@ -556,22 +554,6 @@ export default function Settings() {
               <Plus size={14} /> Add
             </Button>
           </div>
-        </section>
-
-        {/* Bank Integration */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <Link2 size={18} className={styles.sectionIcon} />
-            <h2 className={styles.sectionTitle}>Bank Integration</h2>
-          </div>
-          <p className={styles.sectionDesc}>
-            Connect your Greek bank account (Alpha Bank, Eurobank, NBG) to automatically import
-            outgoing transactions as draft cost entries. Powered by Salt Edge (PSD2 compliant).
-            Set <code>SALTEDGE_APP_ID</code> and <code>SALTEDGE_SECRET</code> in Vercel environment
-            variables to activate.
-          </p>
-          <BankConnect />
-          <BankTransactionReview />
         </section>
 
         {/* Team Management */}
