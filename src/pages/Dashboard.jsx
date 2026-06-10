@@ -18,18 +18,16 @@ import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
-import { useFleet } from '../context/FleetContext.jsx';
+import { useMetrics } from '../context/MetricsContext.jsx';
 import {
-  totalMonthlyCost,
-  costPerScooterMonthly, costPerScooterDaily,
-  breakdownByCategory, monthlyTrendData, budgetVariance, filterCostsByLocation,
+  monthlyTrendData, budgetVariance, filterCostsByLocation,
   allTimeMonthlyTrendData, normalizeToMonthly,
 } from '../utils/calculations.js';
 import {
   totalRevenue, avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
-  revenuePerCityBreakdown, revenueBreakdown,
+  revenuePerCityBreakdown,
   applyFinancialAdjustments,
 } from '../utils/revenueCalculations.js';
 import { forecastTrend } from '../utils/forecasting.js';
@@ -97,19 +95,8 @@ export default function Dashboard() {
     config: maintConfig,
   } = useMaintenance();
   const { activeProjects, archivedProjects } = useProjects();
-  const { scopeByFleet, isAllFleets } = useFleet();
+  const { getSummary } = useMetrics();
   const navigate = useNavigate();
-
-  // ── Fleet-aware fleet size ────────────────────────────────────────────────
-  // When a specific fleet is active, count only scooters belonging to that fleet;
-  // when All-Fleets, count every scooter we know about.
-  // Falls back to config.fleetSize (manual scalar) when no live scooters are loaded.
-  const liveFleetSize = useMemo(() => {
-    if (!scooters || scooters.length === 0) return null;
-    if (isAllFleets) return scooters.length;
-    return scopeByFleet(scooters).length || null;
-  }, [scooters, isAllFleets, scopeByFleet]);
-  const effectiveFleetSize = liveFleetSize ?? config.fleetSize;
 
   // ── Financial config (Hopp fee, VAT, SIM) ────────────────────────────────
   const financial = config.financial || {
@@ -193,46 +180,42 @@ export default function Dashboard() {
   const hasRevenue     = filteredRevenue.length > 0;      // any revenue for chart
   const hasPeriodData  = periodRevenue.length > 0;         // revenue in selected period
 
-  // ── Cost metrics ─────────────────────────────────────────────────────────
-  const monthlyCostRate   = totalMonthlyCost(viewMode === 'month' ? periodCosts : filteredCosts);
-  // Include one-time costs for the selected period (excluded from normalizeToMonthly)
-  const oneTimeInPeriod   = useMemo(() => {
-    if (viewMode === 'month') {
-      return periodCosts
-        .filter((c) => c.frequency === 'one-time')
-        .reduce((s, c) => s + (c.amount || 0), 0);
-    }
-    if (viewMode === 'range' && rangeFrom && rangeTo) {
-      return filteredCosts
-        .filter((c) => c.frequency === 'one-time' && c.startDate >= rangeFrom + '-01' && c.startDate <= rangeTo + '-99')
-        .reduce((s, c) => s + (c.amount || 0), 0);
-    }
-    return filteredCosts
-      .filter((c) => c.frequency === 'one-time')
-      .reduce((s, c) => s + (c.amount || 0), 0);
-  }, [viewMode, periodCosts, filteredCosts, rangeFrom, rangeTo]);
-  const displayTotal      = monthlyCostRate * periodMonths + oneTimeInPeriod;
-  // #601 — annualize the recurring monthly run-rate, NOT totalAnnualCost(): the latter
-  // sums every one-time cost in the dataset (e.g. the ~400 imported credit-card rows)
-  // into a single "year", inflating the estimate ~5×. Run-rate × 12 keeps the /year
-  // figure consistent with the monthly/daily cards beside it.
-  const annualTotal       = monthlyCostRate * 12;
-  const perScooterMonthly = costPerScooterMonthly(filteredCosts, effectiveFleetSize);
-  const perScooterDaily   = costPerScooterDaily(filteredCosts, effectiveFleetSize);
-  const perScooterAnnual  = perScooterMonthly * 12; // #601 — consistent run-rate (was totalAnnualCost-based)
-  const breakdown         = breakdownByCategory(viewMode === 'month' ? periodCosts : filteredCosts);
+  // ── The numbers hub (W5/ADR-0024) ─────────────────────────────────────────
+  // Every displayed financial total now comes from one fleet-scoped, location-filtered
+  // summary. The inline period-cost/run-rate/per-scooter/revenue-breakdown math that used
+  // to live here moved verbatim into financialSummary.js; pages READ, never recompute.
+  const hubPeriod = useMemo(() => ({
+    mode: viewMode,
+    monthKey: selectedMonth,
+    from: rangeFrom,
+    to: rangeTo,
+    months: periodMonths,
+  }), [viewMode, selectedMonth, rangeFrom, rangeTo, periodMonths]);
+  const summary = useMemo(
+    () => getSummary(hubPeriod, { location: locationFilter }),
+    [getSummary, hubPeriod, locationFilter],
+  );
+
+  // ── Cost metrics (from the hub) ───────────────────────────────────────────
+  const displayTotal      = summary.displayTotal;
+  const annualTotal       = summary.annualTotal;       // #601 — run-rate × 12
+  const perScooterMonthly = summary.perScooterMonthly;
+  const perScooterDaily   = summary.perScooterDaily;
+  const perScooterAnnual  = summary.perScooterAnnual;  // #601-consistent run-rate × 12
+  const breakdown         = summary.costByCategory;
+  // Live/effective fleet size (drives the Fleet Size card + per-scooter + util labels).
+  const liveFleetSize     = summary.liveFleetSize;
+  const effectiveFleetSize= summary.fleetSizeEffective;
   const trendData         = viewMode === 'all'
     ? allTimeMonthlyTrendData(filteredCosts)
     : monthlyTrendData(filteredCosts, chartYear);
   const budgetVar         = budgetVariance(perScooterMonthly, config.targetCostPerScooter);
 
   // ── Revenue metrics ───────────────────────────────────────────────────────
-  const revBreakdown       = useMemo(
-    () => revenueBreakdown(periodRevenue, financial, periodMonths),
-    [periodRevenue, financial, periodMonths],
-  );
+  // revBreakdown drives the gross/Hopp/VAT/SIM sub-labels; it's the hub's period revenue.
+  const revBreakdown       = summary.revenue;
   const displayRevenue     = revBreakdown.operatingRevenue;
-  const displayPnL         = displayRevenue - displayTotal;
+  const displayPnL         = summary.displayPnL;
   const tripsPerDay        = avgTripsPerDay(periodRevenue);
   const revPerTrip         = revenuePerTrip(periodRevenue);
   const utilization        = vehicleUtilization(periodRevenue, effectiveFleetSize);
