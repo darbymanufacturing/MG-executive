@@ -8,17 +8,6 @@ import { useCosts } from '../../context/CostContext.jsx';
 import { authedFetch } from '../../utils/apiClient.js';
 import styles from './CaptureModal.module.css';
 
-/** Maps diary-parse module kinds to Issue types */
-const ACTION_TO_ISSUE_TYPE = {
-  municipality: 'municipality',
-  partnership:  'partnership',
-  facility:     'facility',
-  regulatory:   'regulatory',
-  admin:        'admin',
-  finance:      'finance',
-  issue:        'other',
-};
-
 function Spinner({ size = 14 }) {
   return (
     <span className={styles.spinner} style={{ width: size, height: size }} aria-label="Loading" />
@@ -282,66 +271,22 @@ export default function CaptureModal({ open, onClose }) {
     setStage('parsing');
 
     try {
-      const res = await authedFetch('/api/diary-parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-
-      let parsed = null;
-      if (res.ok) parsed = await res.json();
-
-      /* Extract the first issue-like action */
-      let issueAction = null;
-      if (parsed?.actions?.length) {
-        issueAction = parsed.actions.find(a => a.module === 'issue' || ACTION_TO_ISSUE_TYPE[a.module]);
-      }
-
-      const moduleKey = issueAction?.module;
-      const type = moduleKey ? (ACTION_TO_ISSUE_TYPE[moduleKey] || 'other') : 'other';
-      const data = issueAction?.data || {};
-      const title = data.title || parsed?.summary || text.slice(0, 80).trim();
-      const nextAction = data.nextAction || data.suggestedAction || '';
-      const urgency = data.urgency || 'medium';
-
+      const title = text.slice(0, 80).trim();
       const ref = await createIssue({
         title,
         description: text,
-        type,
-        urgency,
-        nextAction,
+        type: 'other',
+        urgency: 'medium',
+        nextAction: '',
       });
-
       setCreatedId(ref.id);
-      setResult({
-        title,
-        type: type.charAt(0).toUpperCase() + type.slice(1),
-        urgency: urgency.charAt(0).toUpperCase() + urgency.slice(1),
-        nextAction,
-        contact: data.contact || data.counterparty || '',
-      });
+      setResult({ title, type: 'Other', urgency: 'Medium', nextAction: '', contact: '' });
       setStage('confirmed');
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       closeTimerRef.current = setTimeout(() => onClose(), 2500);
-
     } catch (err) {
       console.error('Capture failed:', err);
-      try {
-        const ref = await createIssue({
-          title: text.slice(0, 80).trim(),
-          description: text,
-          type: 'other',
-          urgency: 'medium',
-          nextAction: '',
-        });
-        setCreatedId(ref.id);
-        setResult({ title: text.slice(0, 80).trim(), type: 'Other', urgency: 'Medium', nextAction: '', contact: '' });
-        setStage('confirmed');
-        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = setTimeout(() => onClose(), 2500);
-      } catch {
-        setStage('error');
-      }
+      setStage('error');
     }
   }, [text, createIssue, onClose]);
 
@@ -393,7 +338,7 @@ export default function CaptureModal({ open, onClose }) {
             {stage === 'parsing' && (
               <div className={styles.parsingBand}>
                 <Spinner />
-                <span>Reading your capture… extracting type, contact, urgency.</span>
+                <span>Saving your capture…</span>
               </div>
             )}
 
@@ -436,7 +381,7 @@ export default function CaptureModal({ open, onClose }) {
                 </>
               ) : (
                 <>
-                  <span className={styles.footerHint}>Claude parses on submit</span>
+                  <span className={styles.footerHint}>Saved as an Issue</span>
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={handleSubmit}

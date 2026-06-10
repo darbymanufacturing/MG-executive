@@ -49,7 +49,7 @@ const MAX_DELETES_PER_RUN = 5000;
 // TODO(ADR-0023 Stage 3): migrate these cascade deletes to Supabase operational tables.
 const ORG_DATA_COLLECTIONS = [
   'costs', 'revenue', 'maintenanceTickets', 'maintenanceParts', 'scooters',
-  'projects', 'decisionGates', 'brainstormIdeas', 'diary', 'telemetryEvents',
+  'projects', 'decisionGates', 'brainstormIdeas', 'telemetryEvents',
   'scooterTrips', 'sprEvents', 'sprWeather', 'issues', 'repairProcedures',
   'repairSessions', 'pow_tasks', 'notifications', 'syncLogs',
 ];

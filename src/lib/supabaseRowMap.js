@@ -51,7 +51,6 @@ export const SUPABASE_TABLE = Object.freeze({
   brainstormIdeas: 'brainstorm_ideas',
   issues: 'issues',
   notifications: 'notifications',
-  diary: 'diary',
   costs: 'costs',
   maintenanceSchedules: 'maintenance_schedules',
   fleets: 'fleets', // FF-3 multi-fleet
@@ -78,7 +77,6 @@ export const SUPABASE_TABLE = Object.freeze({
 export const SUPABASE_QUERY_MAP = Object.freeze({
   repairSessions: { completedAt: 'completed_at', scooterId: 'scooter_id' },
   issues: { createdAt: 'created_at_ts' },
-  diary: { createdAt: 'created_at_ts' },
   notifications: { createdAt: 'created_at_ts' },
   repairProcedures: { createdAt: 'created_at_ts' },
 });
@@ -160,7 +158,6 @@ export const TYPED_COLUMNS = Object.freeze({
   brainstormIdeas: () => ({}),
   issues: () => ({}),
   notifications: () => ({}),
-  diary: () => ({}),
   costs: () => ({}),
   maintenanceSchedules: () => ({}),
   fleets: () => ({}),

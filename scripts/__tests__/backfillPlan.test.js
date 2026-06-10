@@ -7,12 +7,12 @@
 import { describe, it, expect } from 'vitest';
 import { MIGRATE, STAMP, CONFIG_SINGLETONS, SPECIAL, classifyCollection, effectiveTreatment } from '../backfillPlan.js';
 
-// The 20 org-scoped data collections per docs/SCHEMA.md (the universe the backfill must
+// The 19 org-scoped data collections per docs/SCHEMA.md (the universe the backfill must
 // cover). users/organizations are handled specially; the config/pow PARENTS hold the
 // migrated singletons. If SCHEMA gains a collection, this list + the plan must grow.
 const SCHEMA_DATA_COLLECTIONS = [
   'costs', 'revenue', 'maintenanceTickets', 'maintenanceParts', 'scooters',
-  'projects', 'decisionGates', 'brainstormIdeas', 'diary', 'telemetryEvents',
+  'projects', 'decisionGates', 'brainstormIdeas', 'telemetryEvents',
   'scooterTrips', 'sprEvents', 'sprWeather', 'issues', 'repairProcedures',
   'repairSessions', 'pow_tasks', 'notifications', 'briefs', 'syncLogs',
 ];

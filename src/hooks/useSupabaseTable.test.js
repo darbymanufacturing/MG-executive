@@ -215,8 +215,8 @@ describe('toSupabaseRow', () => {
     expect(SUPABASE_TABLE.users).toBe('users');
     expect(SUPABASE_TABLE.organizations).toBe('organizations');
     expect(SUPABASE_TABLE.invites).toBe('invites');
-    // 5 time-series + 13 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans + users + organizations + invites = 28 keys
-    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(28);
+    // 5 time-series + 12 operational + config + pow + maintenanceSchedules + fleets + ownerLedger + bankRules + loans + users + organizations + invites = 27 keys
+    expect(Object.keys(SUPABASE_TABLE)).toHaveLength(27);
   });
 
   // BUG #496 — schema-drift lock: pin the EXACT typed-column SET per time-series

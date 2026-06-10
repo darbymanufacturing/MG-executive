@@ -42,7 +42,7 @@ const PRESETS = {
   operational: [
     'pow_tasks', 'maintenanceTickets', 'maintenanceParts', 'scooters', 'repairSessions',
     'repairProcedures', 'projects', 'decisionGates', 'brainstormIdeas', 'issues',
-    'notifications', 'diary', 'costs', 'config', 'pow',
+    'notifications', 'costs', 'config', 'pow',
   ],
   timeseries: ['scooterTrips', 'sprEvents', 'sprWeather', 'revenue'], // telemetry excluded (10K)
 };
@@ -86,7 +86,7 @@ const OPERATIONAL_COLS = [['org_id', 'text'], ['source_doc_id', 'text'], ['data'
 for (const t of [
   'pow_tasks', 'maintenance_tickets', 'maintenance_parts', 'scooters', 'repair_sessions',
   'repair_procedures', 'projects', 'decision_gates', 'brainstorm_ideas', 'issues',
-  'notifications', 'diary', 'costs', 'app_config',
+  'notifications', 'costs', 'app_config',
 ]) {
   COLS[t] = OPERATIONAL_COLS;
 }

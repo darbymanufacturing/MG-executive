@@ -7,7 +7,7 @@
  * the cutover. Two treatments per collection:
  *
  *   STAMP   (auto/unique-id collections): add `orgId` field, KEEP the doc id.
- *           costs, projects, decisionGates, brainstormIdeas, diary, issues,
+ *           costs, projects, decisionGates, brainstormIdeas, issues,
  *           repairProcedures, repairSessions, notifications, syncLogs, briefs, pow_tasks
  *
  *   MIGRATE (deterministic-id collections): COPY each doc to `${orgId}_${oldId}`

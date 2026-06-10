@@ -166,11 +166,6 @@ service cloud.firestore {
       allow create: if orgManagerCreate();
       allow update, delete: if orgManagerWrite();
     }
-    match /diary/{id} {
-      allow read:   if orgRead();
-      allow create: if orgManagerCreate();
-      allow update, delete: if orgManagerWrite();
-    }
     match /telemetryEvents/{id} {
       allow read:   if orgRead();
       allow create: if orgManagerCreate();

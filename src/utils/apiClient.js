@@ -6,9 +6,9 @@ import { auth } from '../lib/firebase.js';
  * #16) accept the call. Use for EVERY same-origin `/api/*` call made on behalf of
  * a signed-in user. (Pattern lifted from src/hooks/useHoppSync.js.)
  *
- *   const res = await authedFetch('/api/diary-parse', {
+ *   const res = await authedFetch('/api/invoice-parse', {
  *     method: 'POST',
- *     body: JSON.stringify({ text }),
+ *     body: JSON.stringify({ imageBase64, mediaType }),
  *   });
  *
  * Sets Content-Type: application/json by default (override via options.headers).

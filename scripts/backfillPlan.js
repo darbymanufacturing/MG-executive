@@ -25,7 +25,7 @@ export const MIGRATE = Object.freeze([
 // Auto/unique-id collections → add `orgId` field, KEEP the doc id.
 // (Firestore auto-ids, uuids, or per-user keys like briefs `${date}_${uid}` — globally unique.)
 export const STAMP = Object.freeze([
-  'costs', 'projects', 'decisionGates', 'brainstormIdeas', 'diary', 'issues',
+  'costs', 'projects', 'decisionGates', 'brainstormIdeas', 'issues',
   'repairProcedures', 'repairSessions', 'notifications', 'syncLogs', 'briefs', 'pow_tasks',
 ]);
 

@@ -11,7 +11,6 @@ import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
 import { MaintenanceProvider } from './context/MaintenanceContext.jsx';
 import { ProjectProvider } from './context/ProjectContext.jsx';
-import { DiaryProvider } from './context/DiaryContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
 import { TelemetryProvider } from './context/TelemetryContext.jsx';
 import { ScooterConfigProvider } from './context/ScooterConfigContext.jsx';
@@ -20,7 +19,6 @@ import { IssueProvider } from './context/IssueContext.jsx';
 import { InboxProvider } from './context/InboxContext.jsx';
 import { RepairProcedureProvider } from './context/RepairProcedureContext.jsx';
 import { RepairSessionProvider } from './context/RepairSessionContext.jsx';
-import DiaryBubble from './components/Diary/DiaryBubble.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import TopBar from './components/Layout/TopBar.jsx';
 import CaptureModal from './components/Capture/CaptureModal.jsx';
@@ -131,7 +129,7 @@ function RouteErrorBoundary({ children, ...props }) {
  * Heavy collections (telemetry, trips, SPR) are unmounted on every other route,
  * cutting initial Firestore reads roughly in half. Providers that are needed
  * across most routes (Cost, Revenue, Maintenance, Project, Notification, Inbox,
- * Diary, Issue) stay at the admin root.
+ * Issue) stay at the admin root.
  *
  * Routes inside a wrapper share the providers — navigating between siblings
  * (e.g. /pme → /scooters) does NOT remount them; only leaving the group does.
@@ -327,7 +325,6 @@ function AppShell() {
       {/* Global overlays — each wrapped in their own ErrorBoundary so a crash in
           an always-on overlay cannot reach the AppShell-level boundary and unmount
           the whole shell (Bug #291). */}
-      <ErrorBoundary><DiaryBubble /></ErrorBoundary>
       <ErrorBoundary><CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} /></ErrorBoundary>
     </div>
   );
@@ -417,17 +414,15 @@ export default function App() {
                                   <IssueProvider>
                                     <InboxProvider>
                                       <NotificationProvider>
-                                        <DiaryProvider>
-                                          {/* ScooterConfigProvider hoisted here (Bug #356/#291):
-                                              single config-doc listener shared by /scooters* AND
-                                              /settings, eliminates the duplicate local wrapper in
-                                              Settings.jsx. */}
-                                          <ScooterConfigProvider>
-                                            <ErrorBoundary>
-                                              <AppShell />
-                                            </ErrorBoundary>
-                                          </ScooterConfigProvider>
-                                        </DiaryProvider>
+                                        {/* ScooterConfigProvider hoisted here (Bug #356/#291):
+                                            single config-doc listener shared by /scooters* AND
+                                            /settings, eliminates the duplicate local wrapper in
+                                            Settings.jsx. */}
+                                        <ScooterConfigProvider>
+                                          <ErrorBoundary>
+                                            <AppShell />
+                                          </ErrorBoundary>
+                                        </ScooterConfigProvider>
                                       </NotificationProvider>
                                     </InboxProvider>
                                   </IssueProvider>

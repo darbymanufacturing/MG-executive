@@ -25,7 +25,6 @@ import cronSupabaseParityCheck from './_cron-supabase-parity-check.js';
 import dailyBrief from './_daily-brief.js';
 import deleteAccount from './_delete-account.js';
 import deleteUser from './_delete-user.js';
-import diaryParse from './_diary-parse.js';
 import hoppRefresh from './_hopp-refresh.js';
 import invoiceParse from './_invoice-parse.js';
 import syncClaim from './_sync-claim.js';
@@ -45,7 +44,6 @@ const ROUTES = {
   'daily-brief': dailyBrief,
   'delete-account': deleteAccount,
   'delete-user': deleteUser,
-  'diary-parse': diaryParse,
   'hopp-refresh': hoppRefresh,
   'invoice-parse': invoiceParse,
   'signup': signup,
