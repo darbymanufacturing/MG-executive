@@ -5,15 +5,14 @@ import {
 import { TrendingUp, Target, Clock, BarChart2, Info } from 'lucide-react';
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
+import { useMetrics } from '../../context/MetricsContext.jsx';
 import {
   annualInvestmentCost,
-  annualizedRevenue,
   calcROI,
   calcPaybackPeriod,
   calcEBITDA,
   getHealthColor,
 } from '../../utils/financialHealth.js';
-import { totalMonthlyCost } from '../../utils/calculations.js';
 import {
   projectCumulativePnL,
   findBreakEvenMonth,
@@ -27,18 +26,17 @@ const HORIZON_OPTIONS = [24, 36, 48, 60, 84];
 export default function FleetRoiTab() {
   const { costs, config } = useCosts();
   const { revenueData } = useRevenue();
+  const { allTime } = useMetrics();
   const financial = config?.financial ?? null;
 
   // ── Derived actuals (base values before overrides) ──────────────────────
-  const baseMonthlyRevenue = useMemo(() => {
-    const annual = annualizedRevenue(revenueData, financial);
-    return annual / 12;
-  }, [revenueData, financial]);
-
-  // #278 — skip costs with null/undefined category to avoid NaN in chart
-  const baseMonthlyOpex = useMemo(() => totalMonthlyCost(
-    costs.filter((c) => c.category && c.category !== 'investment'),
-  ), [costs]);
+  // W5/ADR-0024 — pull the two base figures from the numbers hub for EXACT-BASIS parity:
+  //  - annualizedRevenue: the SAME trailing-12-month basis financialHealth uses (NOT the
+  //    period operatingRevenue — the bases differ and must never be swapped silently).
+  //  - monthlyOpexExInvestment: the SAME totalMonthlyCost(non-investment) basis (#278
+  //    null-category guard included in the selector). baseInvestment stays page-local.
+  const baseMonthlyRevenue = allTime.annualizedRevenue / 12;
+  const baseMonthlyOpex = allTime.monthlyOpexExInvestment;
 
   const baseInvestment = useMemo(() => annualInvestmentCost(costs), [costs]);
 

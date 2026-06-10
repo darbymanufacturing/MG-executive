@@ -4,6 +4,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import { useMetrics } from '../../context/MetricsContext.jsx';
 import { scooterLedgerRow } from '../../utils/investmentCalculations.js';
 import { formatEUR, formatPercent } from '../../utils/formatters.js';
 import styles from './ScooterLedgerTab.module.css';
@@ -31,11 +32,15 @@ export default function ScooterLedgerTab() {
   const { scooters, tickets, parts, config: maintConfig } = useMaintenance();
   const { revenueData } = useRevenue();
   const { config: costConfig } = useCosts();
+  const { allTime } = useMetrics();
   const financial = costConfig?.financial ?? null;
   const labourRate = maintConfig?.labourRatePerHour ?? 0;
-  // #558 — prefer the live scooter count over the stale config scalar; the trailing
-  // || 1 preserves the #175 guard against a 0 divisor when nothing is loaded.
-  const defaultFleetSize = scooters.length || costConfig?.fleetSize || 1;
+  // #558 / W5-ADR-0024 — fleet-count basis unified on the hub's live scooter total
+  // (scooterCountTotal). The trailing || 1 preserves the #175 guard against a 0 divisor
+  // when nothing is loaded. Deliberate change: this drops the old config.fleetSize middle
+  // fallback so the ledger's per-scooter-share denominator matches the live count used
+  // everywhere else — they're identical whenever scooters are loaded (the normal case).
+  const defaultFleetSize = allTime.scooterCountTotal || 1;
 
   const [sortKey, setSortKey] = useState('netPosition');
   const [sortDir, setSortDir] = useState('asc'); // ascending = worst first (most negative)
