@@ -218,25 +218,36 @@ export function SprProvider({ children }) {
     }, 'Nafplio seed: config write failed');
 
     // 2. Weather
+    const sbWeatherEntries = [];
     for (let i = 0; i < NAFPLIO_WEATHER.length; i += BATCH_SIZE) {
       const chunk = NAFPLIO_WEATHER.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((day) => {
-        batch.set(doc(db, WEATHER_COL, orgDocId(orgId, day.date, 'Nafplio')), { ...day, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch });
+        const docId = orgDocId(orgId, day.date, 'Nafplio');
+        const rowData = { ...day, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch };
+        batch.set(doc(db, WEATHER_COL, docId), rowData);
+        sbWeatherEntries.push({ id: docId, data: rowData });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Nafplio seed: weather batch failed' });
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(WEATHER_COL, orgId, sbWeatherEntries);
 
     // 3. Events
+    const sbEventEntries = [];
     for (let i = 0; i < NAFPLIO_EVENTS.length; i += BATCH_SIZE) {
       const chunk = NAFPLIO_EVENTS.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((row) => {
         const docId = orgDocId(orgId, row.scooterId, row.datetime.replace(/[^0-9]/g, ''));
-        batch.set(doc(db, EVENTS_COL, docId), { ...row, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch });
+        const rowData = { ...row, city: 'Nafplio', orgId, createdByUid: uid, ...fleetPatch };
+        batch.set(doc(db, EVENTS_COL, docId), rowData);
+        sbEventEntries.push({ id: docId, data: rowData });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
     }
+    // ADR-0013: mirror to Supabase (best-effort; never blocks the Firestore write).
+    await dualWriteSupabase(EVENTS_COL, orgId, sbEventEntries);
   }, [orgId, fleetForCity, writeFullConfig]);
 
   const value = useMemo(() => ({

@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react';
 import { Camera, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { auth } from '../../lib/firebase.js';
+import { useOrg } from '../../context/OrgContext.jsx';
 import styles from './PhotoUpload.module.css';
 
 export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onChange }) {
+  const { orgId } = useOrg();
   const [uploading, setUploading] = useState(false);
   const [error, setError]         = useState(null);
   const [inputKey, setInputKey]   = useState(0);
@@ -31,7 +33,7 @@ export default function PhotoUpload({ sessionId, stepNumber, photoUrls = [], onC
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error('Session expired - please sign in again');
 
-      const folder    = `repair-photos/${sessionId}`;
+      const folder    = `repair-photos/${orgId}/${sessionId}`;
       const public_id = `${stepNumber}-${Date.now()}`;
       const context   = `sessionId=${sessionId}|stepNumber=${stepNumber}`;
 

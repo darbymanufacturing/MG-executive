@@ -1,6 +1,8 @@
 /**
  * Regression tests for the constant-time CRON_SECRET comparison in requireCronOrUser.
  * Bug #407: timing side channel via V8 short-circuit string equality.
+ * Bug #606: GitHub Actions external cron path (no x-vercel-cron header).
+ * Bug #612: roleOf() now reads user_role from the decoded JWT claim, not Firestore.
  *
  * firebase-admin.js is mocked so no real Firebase credentials are needed.
  * verifyIdToken is set to reject by default — tests that reach it will get a 401.
@@ -8,14 +10,9 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock firebase-admin.js before importing require-auth so the module picks up fakes.
+// NOTE: getDb is no longer imported by require-auth.js (#612 fix) but the mock is
+// kept here to prevent accidental breakage if the import is ever re-added.
 vi.mock('../firebase-admin.js', () => ({
-  getDb: vi.fn(() => ({
-    collection: vi.fn(() => ({
-      doc: vi.fn(() => ({
-        get: vi.fn(async () => ({ exists: false, data: () => ({}) })),
-      })),
-    })),
-  })),
   verifyIdToken: vi.fn(async () => {
     throw new Error('Invalid token');
   }),
@@ -124,6 +121,37 @@ describe('requireCronOrUser — constant-time CRON_SECRET comparison (bug #407)'
     const result = await requireCronOrUser(req, res);
 
     // Firebase token verification fails → 401. Non-cron paths are unaffected.
+    expect(result).toBeNull();
+    expect(res._status).toBe(401);
+  });
+
+  // --- Bug #606: external cron path (GitHub Actions / no x-vercel-cron header) ---
+
+  test('#606 correct secret WITHOUT x-vercel-cron header grants cron access', async () => {
+    // GitHub Actions sends Bearer <CRON_SECRET> but cannot set x-vercel-cron: 1.
+    const req = makeReq(CORRECT_SECRET); // no extraHeaders
+    const res = makeRes();
+    const result = await requireCronOrUser(req, res);
+    expect(result).toEqual({ trigger: 'cron', uid: null, role: null });
+    expect(res._status).toBeNull();
+  });
+
+  test('#606 wrong secret WITHOUT x-vercel-cron header does NOT grant cron access', async () => {
+    const lastChar = CORRECT_SECRET.at(-1);
+    const flipped = CORRECT_SECRET.slice(0, -1) + (lastChar === 'X' ? 'Y' : 'X');
+    const req = makeReq(flipped);
+    const res = makeRes();
+    const result = await requireCronOrUser(req, res);
+    // Falls through to requireUser → verifyIdToken rejects → 401.
+    expect(result).toBeNull();
+    expect(res._status).toBe(401);
+  });
+
+  test('#606 different-length secret WITHOUT x-vercel-cron header does NOT grant cron access', async () => {
+    const shortSecret = CORRECT_SECRET.slice(0, -3);
+    const req = makeReq(shortSecret);
+    const res = makeRes();
+    const result = await requireCronOrUser(req, res);
     expect(result).toBeNull();
     expect(res._status).toBe(401);
   });

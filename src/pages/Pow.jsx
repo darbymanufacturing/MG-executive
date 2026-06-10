@@ -81,14 +81,14 @@ function PowInner() {
 
         <div className={styles.topBarRight}>
           <div className={styles.weekPill}>
-            <button className={styles.weekBtn} onClick={() => setCurrentWeek(w => Math.max(1, w - 1))}>
+            <button className={styles.weekBtn} onClick={() => setCurrentWeek(Math.max(1, currentWeek - 1))}>
               <ChevronDown size={13}/>
             </button>
             <div className={styles.weekInfo}>
               <span className={styles.weekLabel}>Week {currentWeek}</span>
               <span className={styles.weekDates}>{getWeekRange(currentWeek)}</span>
             </div>
-            <button className={styles.weekBtn} onClick={() => setCurrentWeek(w => w + 1)}>
+            <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek + 1)}>
               <ChevronUp size={13}/>
             </button>
           </div>

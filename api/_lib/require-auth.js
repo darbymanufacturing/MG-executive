@@ -10,25 +10,27 @@
  *   const user = await requireUser(req, res, { roles: ['admin', 'staff'] });
  *   if (!user) return;            // guard already sent the response
  *
- * Roles live in users/{uid}.role today (Phase 2 / ADR-0004 moves them to custom
- * claims so rules can authorize without a doc read).
+ * Roles are read from the `user_role` custom claim stamped by sync-claim/signup/
+ * create-user/accept-invite (ADR-0004 / ADR-0023). This avoids any Firestore or
+ * Supabase round-trip and works for every user provisioned post-ADR-0023 cutover.
  */
 import { timingSafeEqual } from 'node:crypto';
-import { getDb, verifyIdToken } from './firebase-admin.js';
+import { verifyIdToken } from './firebase-admin.js';
 
 function readBearer(req) {
   const h = req.headers.authorization || '';
   return h.startsWith('Bearer ') ? h.slice(7).trim() : null;
 }
 
-async function roleOf(uid) {
-  const snap = await getDb().collection('users').doc(uid).get();
-  return snap.exists ? (snap.data().role ?? null) : null;
+/** Read the RBAC role from the decoded JWT custom claim (no DB round-trip). */
+function roleOf(decoded) {
+  return decoded.user_role ?? null;
 }
 
 /**
- * Require a signed-in Firebase user. If `roles` is given, users/{uid}.role must be
- * in it. Returns { uid, email, role } or null (after sending 401/403).
+ * Require a signed-in Firebase user. If `roles` is given, the `user_role` custom
+ * claim on the JWT must be in it. Returns { uid, email, role } or null (after
+ * sending 401/403).
  */
 export async function requireUser(req, res, { roles } = {}) {
   const token = readBearer(req);
@@ -45,7 +47,7 @@ export async function requireUser(req, res, { roles } = {}) {
   }
   let role = null;
   if (roles && roles.length) {
-    role = await roleOf(decoded.uid);
+    role = roleOf(decoded);
     if (!roles.includes(role)) {
       res.status(403).json({ error: 'You do not have permission to perform this action.' });
       return null;
@@ -65,7 +67,11 @@ export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', '
     return null;
   }
   // Vercel sets x-vercel-cron: 1 on every scheduled invocation. External callers
-  // cannot spoof this header — Vercel infrastructure strips it from inbound requests.
+  // (e.g. GitHub Actions) cannot set this header — Vercel infrastructure strips it
+  // from inbound requests. We therefore support two CRON_SECRET paths:
+  //   1. x-vercel-cron: 1 present → Vercel-native cron (CRON_SECRET must be configured).
+  //   2. x-vercel-cron absent but a valid Bearer CRON_SECRET token present → external
+  //      caller such as GitHub Actions (fixes #606 — GH Actions was always 401ing).
   const isCronCall = req.headers['x-vercel-cron'] === '1';
   if (isCronCall) {
     if (!process.env.CRON_SECRET) {
@@ -79,6 +85,15 @@ export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', '
       return { trigger: 'cron', uid: null, role: null };
     }
     // Secret present but token mismatch — fall through to user auth.
+  }
+  // External cron path (#606): no x-vercel-cron header but a valid CRON_SECRET Bearer
+  // token means this is an authorised external scheduler (e.g. GitHub Actions).
+  if (!isCronCall && process.env.CRON_SECRET) {
+    const a = Buffer.from(token);
+    const b = Buffer.from(process.env.CRON_SECRET);
+    if (a.length === b.length && timingSafeEqual(a, b)) {
+      return { trigger: 'cron', uid: null, role: null };
+    }
   }
   const user = await requireUser(req, res, { roles });
   if (!user) return null; // requireUser already responded

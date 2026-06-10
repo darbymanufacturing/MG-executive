@@ -5,11 +5,16 @@
  * Requires a valid Firebase auth token so only authenticated users can trigger
  * deletions. Uses CLOUDINARY_API_SECRET (never exposed to the client bundle).
  *
+ * Security: the publicId MUST begin with `repair-photos/<orgId>/` where orgId
+ * is taken from the caller's JWT custom claims (set by sync-claim.js). Any
+ * attempt to delete an asset from another org's path is rejected with 403.
+ *
  * POST body: { publicId: string }
  * Returns:   { result: string }   ("ok" on success, Cloudinary's response otherwise)
  */
 import crypto from 'node:crypto';
 import { requireUser } from './_lib/require-auth.js';
+import { verifyIdToken } from './_lib/firebase-admin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -19,9 +24,25 @@ export default async function handler(req, res) {
   const authUser = await requireUser(req, res);
   if (!authUser) return;
 
+  // Read the full decoded token to get the orgId custom claim (set by sync-claim.js).
+  // requireUser already validated the token so verifyIdToken will not throw here.
+  const rawToken = (req.headers.authorization || '').replace(/^Bearer /, '').trim();
+  const decoded = await verifyIdToken(rawToken);
+  const callerOrgId = decoded.orgId ?? null;
+
+  if (!callerOrgId) {
+    return res.status(403).json({ error: 'No org claim found — re-authenticate and try again.' });
+  }
+
   const { publicId } = req.body || {};
   if (!publicId || typeof publicId !== 'string' || publicId.trim().length === 0) {
     return res.status(400).json({ error: 'publicId is required' });
+  }
+
+  // Org-scope assertion: only allow deletion of assets under this org's path prefix.
+  const expectedPrefix = `repair-photos/${callerOrgId}/`;
+  if (!publicId.startsWith(expectedPrefix)) {
+    return res.status(403).json({ error: 'Forbidden: publicId does not belong to your organisation.' });
   }
 
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;

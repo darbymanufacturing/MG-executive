@@ -24,7 +24,7 @@ import {
   allTimeMonthlyTrendData, normalizeToMonthly,
 } from '../utils/calculations.js';
 import {
-  totalRevenue, avgTripsPerDay, revenuePerTrip,
+  avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
   revenuePerCityBreakdown,
@@ -245,9 +245,11 @@ export default function Dashboard() {
     [viewMode, periodRevenue, filteredCosts, selectedMonth],
   );
 
-  // Monthly revenue rate for break-even comparison
+  // Monthly revenue rate for break-even comparison — use NET operating revenue
+  // (after 19% Hopp franchise fee + €150/mo SIM) so the pill reflects real
+  // coverage, consistent with displayRevenue / ADR-0024.
   const periodMonthlyRevenue = hasPeriodData
-    ? totalRevenue(periodRevenue) / periodMonths
+    ? revBreakdown.operatingRevenue / periodMonths
     : 0;
 
   // MoM growth only meaningful with multiple months

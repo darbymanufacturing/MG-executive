@@ -3,6 +3,9 @@ import {
   annualizedRevenue,
   annualInvestmentCost,
   calcEBITDA,
+  calcDSCR,
+  calcROI,
+  calcCostRecoveryRate,
   calcBreakEvenRevenue,
   getHealthColor,
 } from '../financialHealth.js';
@@ -86,6 +89,53 @@ describe('calcEBITDA', () => {
     expect(result.ebitda).toBeGreaterThan(0);
     expect(result.ebitdaMargin).toBeGreaterThan(0);
     expect(result.ebitdaMargin).toBeLessThan(100);
+  });
+});
+
+// Regression: #607 — one-time costs must NOT inflate EBITDA / ROI / DSCR / CostRecovery
+describe('one-time cost exclusion (#607)', () => {
+  // 6 months at €1 000/mo → annualized €12 000
+  const rows = Array.from({ length: 6 }, (_, i) => ({
+    date: `2026-0${i + 1}-15`,
+    totalPaidRevenue: 1000,
+  }));
+
+  // €100/mo recurring + one very large one-time charge
+  const costs = [
+    { name: 'Monthly ops', amount: 100, category: 'fixed', frequency: 'monthly', startDate: '2026-01-01' },
+    { name: 'Big one-time', amount: 999999, category: 'fixed', frequency: 'one-time', startDate: '2026-01-01' },
+  ];
+
+  test('calcEBITDA excludes one-time costs from annual ops', () => {
+    const { ebitda } = calcEBITDA(costs, rows);
+    // annual ops cost should be 100*12 = 1200, not 1200 + 999999
+    // ebitda = 12000 - 1200 = 10800 (positive)
+    expect(ebitda).toBeCloseTo(10800, 0);
+  });
+
+  test('calcROI excludes one-time costs from net profit', () => {
+    const investmentCosts = [
+      { name: 'Fleet purchase', amount: 5000, category: 'investment', frequency: 'one-time', startDate: '2026-01-01' },
+      ...costs,
+    ];
+    const roi = calcROI(investmentCosts, rows);
+    // net profit = 12000 - (100*12) = 10800; investmentCost = 5000 → roi = 216%
+    expect(roi).toBeGreaterThan(0);
+    // The one-time 999999 row must NOT reduce net profit to negative
+    expect(roi).toBeGreaterThan(100);
+  });
+
+  test('calcDSCR excludes one-time costs', () => {
+    const config = { monthlyDebtService: 100 };
+    const dscr = calcDSCR(costs, rows, config);
+    // ops cost = 1200/yr; cash flow = 12000 - 1200 = 10800; debt service = 1200
+    expect(dscr).toBeCloseTo(9, 0);
+  });
+
+  test('calcCostRecoveryRate excludes one-time costs', () => {
+    const rate = calcCostRecoveryRate(costs, rows);
+    // annualCost = 100*12 = 1200; rate = 12000/1200 = 10
+    expect(rate).toBeCloseTo(10, 0);
   });
 });
 

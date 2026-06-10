@@ -6,7 +6,7 @@
  * When provided, annualizedRevenue applies franchise fee and SIM deductions so that
  * P&L metrics reflect operating revenue, not gross paid revenue.
  */
-import { normalizeToAnnual, totalMonthlyCost, totalAnnualCost } from './calculations.js';
+import { normalizeToAnnual, totalMonthlyCost } from './calculations.js';
 import { monthlyRevenueSummary } from './revenueCalculations.js';
 
 /**
@@ -78,9 +78,11 @@ export function calcEBITDA(costs, revenueData, financial) {
   const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return { ebitda: null, ebitdaMargin: null };
 
-  const annualOpsCost = costs
-    .filter((c) => c.category !== 'investment')
-    .reduce((s, c) => s + normalizeToAnnual(c), 0);
+  // Use run-rate monthly * 12 so one-time rows (monthlyMultiplier: 0) are excluded,
+  // matching the numbers hub's annualTotal = monthlyCostRate * 12 rule (ADR-0024 / #607).
+  const annualOpsCost = totalMonthlyCost(
+    costs.filter((c) => c.category !== 'investment'),
+  ) * 12;
 
   const ebitda = annualRev - annualOpsCost;
   const ebitdaMargin = (ebitda / annualRev) * 100;
@@ -96,7 +98,8 @@ export function calcROI(costs, revenueData, financial) {
   if (!investmentCost) return null;
   const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
-  const netProfit = annualRev - totalAnnualCost(costs);
+  // Run-rate annual: monthly * 12 excludes one-time rows (ADR-0024 / #607).
+  const netProfit = annualRev - totalMonthlyCost(costs) * 12;
   return (netProfit / investmentCost) * 100;
 }
 
@@ -110,9 +113,10 @@ export function calcDSCR(costs, revenueData, config, financial) {
   const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
 
-  const annualOpsCost = costs
-    .filter((c) => c.category !== 'investment')
-    .reduce((s, c) => s + normalizeToAnnual(c), 0);
+  // Run-rate monthly * 12 excludes one-time rows (ADR-0024 / #607).
+  const annualOpsCost = totalMonthlyCost(
+    costs.filter((c) => c.category !== 'investment'),
+  ) * 12;
 
   const operatingCashFlow = annualRev - annualOpsCost;
   return operatingCashFlow / (debt * 12);
@@ -145,7 +149,8 @@ export function calcPaybackPeriod(costs, revenueData, financial) {
 export function calcCostRecoveryRate(costs, revenueData, financial) {
   const annualRev = annualizedRevenue(revenueData, financial);
   if (!annualRev) return null;
-  const annualCost = totalAnnualCost(costs);
+  // Run-rate annual: monthly * 12 excludes one-time rows (ADR-0024 / #607).
+  const annualCost = totalMonthlyCost(costs) * 12;
   if (!annualCost) return null;
   return annualRev / annualCost;
 }
