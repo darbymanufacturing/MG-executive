@@ -91,8 +91,9 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
 
       {/* Actions */}
       <div className={styles.actions}>
-        {/* Refresh — manual Hopp sync trigger; mirrors the hourly cron, useful when
-            you want fresh data without waiting. See docs/runbooks/hopp-sync-troubleshooting.md. */}
+        {/* Refresh — manual Hopp sync trigger; kicks the always-on hopp-sync worker
+            (twice-daily schedule), useful when you want fresh data without waiting.
+            See docs/runbooks/hopp-sync-troubleshooting.md. */}
         <button
           className={`btn btn-ghost btn-sm ${styles.refreshBtn} ${syncing ? styles.refreshing : ''}`}
           onClick={refresh}

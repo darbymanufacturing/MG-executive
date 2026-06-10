@@ -6,7 +6,7 @@
  * stage. Fix: each real handler now lives in an underscore-prefixed module
  * (`api/_<name>.js`) which Vercel does NOT deploy as its own function, and THIS one
  * catch-all dispatches to them by URL path. Public URLs are unchanged
- * (e.g. /api/sync-claim, /api/cron-hopp-sync still resolve here), so there are
+ * (e.g. /api/sync-claim, /api/hopp-refresh still resolve here), so there are
  * NO client- or cron-caller changes. `config.maxDuration` covers the longest handler.
  *
  * Adding a new endpoint = add a module `api/_foo.js` + one line to ROUTES. The
@@ -20,13 +20,13 @@ import cloudinarySign from './_cloudinary-sign.js';
 import createInvite from './_create-invite.js';
 import signup from './_signup.js';
 import cronDailyBrief from './_cron-daily-brief.js';
-import cronHoppSync from './_cron-hopp-sync.js';
 import cronPurgeDeletedOrgs from './_cron-purge-deleted-orgs.js';
 import cronSupabaseParityCheck from './_cron-supabase-parity-check.js';
 import dailyBrief from './_daily-brief.js';
 import deleteAccount from './_delete-account.js';
 import deleteUser from './_delete-user.js';
 import diaryParse from './_diary-parse.js';
+import hoppRefresh from './_hopp-refresh.js';
 import invoiceParse from './_invoice-parse.js';
 import syncClaim from './_sync-claim.js';
 
@@ -40,19 +40,19 @@ const ROUTES = {
   'create-invite': createInvite,
   'create-user': createUser,
   'cron-daily-brief': cronDailyBrief,
-  'cron-hopp-sync': cronHoppSync,
   'cron-purge-deleted-orgs': cronPurgeDeletedOrgs,
   'cron-supabase-parity-check': cronSupabaseParityCheck,
   'daily-brief': dailyBrief,
   'delete-account': deleteAccount,
   'delete-user': deleteUser,
   'diary-parse': diaryParse,
+  'hopp-refresh': hoppRefresh,
   'invoice-parse': invoiceParse,
   'signup': signup,
   'sync-claim': syncClaim,
 };
 
-// Hobby max is 60s; covers the longest handler (cron-hopp-sync, daily-brief AI calls).
+// Hobby max is 60s; covers the longest handler (hopp-refresh upstream wait, daily-brief AI calls).
 export const config = { maxDuration: 60 };
 
 export default function handler(req, res) {

@@ -1,8 +1,9 @@
 name: External Crons
 
-# Triggers the two scheduled API endpoints that cannot fit in vercel.json because
-# the Vercel Hobby plan allows a maximum of 2 cron entries (both slots are already
-# used by cron-daily-brief and cron-hopp-sync).
+# Triggers the two scheduled API endpoints that don't live in vercel.json (the
+# Vercel Hobby plan allows a maximum of 2 cron entries; cron-daily-brief uses one,
+# and the second is free since the Phase-4 cutover retired cron-hopp-sync — the
+# hopp-sync v2 worker on the Oracle VM owns the Hopp schedule now).
 #
 # Handlers that run here:
 #   - /api/cron-purge-deleted-orgs   (Phase 2.6 — purges orgs past 30-day grace)
@@ -16,7 +17,7 @@ name: External Crons
 on:
   schedule:
     # Daily at 06:00 UTC (09:00 Athens summer / 08:00 Athens winter).
-    # Offset from the Vercel crons (05:00 and 05:30) so they don't compete.
+    # Offset from the Vercel cron (daily-brief 05:00) so they don't compete.
     - cron: '0 6 * * *'
   # Allow manual runs from the Actions tab for testing / on-demand backfills.
   workflow_dispatch:

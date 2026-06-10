@@ -972,7 +972,11 @@ git checkout main`}
 function HoppSyncSection() {
   const { refresh, syncing, lastSync, recentSyncs } = useHoppSync();
 
-  const lastTs = lastSync?.finishedAt?.toDate?.() ?? null;
+  const lastTs = (() => {
+    if (!lastSync?.finishedAt) return null;
+    const d = new Date(lastSync.finishedAt);
+    return Number.isNaN(d.getTime()) ? null : d;
+  })();
   // ageMin is intentionally derived from Date.now() at render time so the
   // "Last synced N min ago" label updates when the user navigates back to this
   // page. The react-hooks/purity rule flags this as impure but it's the desired
@@ -997,7 +1001,7 @@ function HoppSyncSection() {
         <h2 className={styles.sectionTitle}>Hopp Sync</h2>
       </div>
       <p className={styles.sectionDesc}>
-        Trips, status events, and repair tickets auto-sync from Hopp every hour. The Refresh button in the top bar (or below) triggers an on-demand sync. Manual CSV imports remain available at <code>PME → Ingest</code>, <code>Maintenance → Repair Log</code>, and <code>Scooter Detail → Trips</code> as a fallback for backfill.
+        Trips, status events, and repair tickets auto-sync from Hopp via the always-on hopp-sync worker (twice daily). The Refresh button in the top bar (or below) triggers an on-demand sync. Manual CSV imports remain available at <code>PME → Ingest</code>, <code>Maintenance → Repair Log</code>, and <code>Scooter Detail → Trips</code> as a fallback for backfill.
       </p>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
@@ -1035,7 +1039,7 @@ function HoppSyncSection() {
             </thead>
             <tbody>
               {recentSyncs.map((s) => {
-                const when = s.finishedAt?.toDate ? s.finishedAt.toDate() : null;
+                const when = s.finishedAt && !Number.isNaN(new Date(s.finishedAt).getTime()) ? new Date(s.finishedAt) : null;
                 const w = s.written || {};
                 const errs = s.errors?.length || 0;
                 return (
