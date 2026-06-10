@@ -14,6 +14,14 @@ import styles from './FleetPnl.module.css';
  * is Nafplio carrying it?" Revenue/maintenance attribute by city (transition model);
  * costs attribute only when tagged to a fleet (per-cost scope toggle) — untagged costs
  * are company-wide overhead shown on their own line so the company total still balances.
+ *
+ * W5/ADR-0024 — this page DELIBERATELY does NOT route through the numbers hub
+ * (useMetrics/financialSummary). It is the one sanctioned exception: it sums RAW
+ * per-fleet `c.amount` on an all-time basis (not the hub's monthly run-rate
+ * normalization) and attributes by `c.fleetId`, because the FF-3 scoreboard answers
+ * "all-time euros in vs out, per fleet" — a different question than the hub's
+ * period/run-rate model. Do not "fix" this into useMetrics: that would silently change
+ * every figure on this page. See ADR-0024.
  */
 export default function FleetPnl() {
   const { fleets } = useFleet();
