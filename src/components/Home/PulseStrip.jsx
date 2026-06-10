@@ -2,6 +2,7 @@ import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useFleet } from '../../context/FleetContext.jsx';
+import { useMetrics } from '../../context/MetricsContext.jsx';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { normalizeToMonthly } from '../../utils/calculations.js';
 import styles from './PulseStrip.module.css';
@@ -85,50 +86,67 @@ export default function PulseStrip() {
   const revenueCtx = useRevenueSafe();
   const maintenanceCtx = useMaintenanceSafe();
   const fleetCtx = useFleetSafe();
+  const metricsCtx = useMetricsSafe();
 
   const revenueData = revenueCtx?.revenueData || [];
-
-  /* Current month key e.g. "2026-05" */
   const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  /* W5/ADR-0024 — the numbers hub owns Revenue MTD, Costs MTD (#603 basis), and the
+   * live active/total fleet counts. PulseStrip READS them from useMetrics().mtd. The
+   * inline fallbacks below run ONLY when the hub is unavailable (e.g. unit tests that
+   * render PulseStrip without a MetricsProvider) so the component degrades gracefully. */
+  const mtd = metricsCtx?.mtd ?? null;
 
   /* Revenue MTD: sum totalPaidRevenue for rows in current month */
-  const revenueMTD = revenueData
-    .filter(r => r.date?.startsWith(monthKey))
-    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  const revenueMTD = mtd
+    ? mtd.revenueMTD
+    : (() => {
+        const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        return revenueData
+          .filter(r => r.date?.startsWith(monthKey))
+          .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+      })();
 
-  /* Costs MTD (#603): match the Pulse page's monthly Total Cost basis —
-   * recurring costs ACTIVE this month at their monthly-normalized rate +
-   * one-time costs DATED this month. The old `startDate in month` filter
-   * dropped every recurring cost that started earlier (rent/loans/fixed),
-   * undercounting vs Pulse (€2.3K here vs €4.0K there) and understating the
-   * loss in the net-margin tile below. Filter mirrors Dashboard `periodCosts`. */
-  const mtdY = now.getFullYear();
-  const mtdMonthIdx = now.getMonth();
-  const mtdMonthStart = new Date(mtdY, mtdMonthIdx, 1);
-  const mtdMonthEnd   = new Date(mtdY, mtdMonthIdx + 1, 0);
-  const costsMTD = (costs || []).reduce((s, c) => {
-    const start = c.startDate ? new Date(c.startDate) : null;
-    const end   = c.endDate   ? new Date(c.endDate)   : null;
-    if (c.frequency === 'one-time') {
-      return (start && start.getFullYear() === mtdY && start.getMonth() === mtdMonthIdx)
-        ? s + (c.amount || 0)
-        : s;
-    }
-    const activeThisMonth = (start ? start <= mtdMonthEnd : true) && (end ? end >= mtdMonthStart : true);
-    return activeThisMonth ? s + normalizeToMonthly(c) : s;
-  }, 0);
+  /* Costs MTD (#603): recurring costs ACTIVE this month at their monthly-normalized rate
+   * + one-time costs DATED this month — the same basis as the Pulse page's monthly Total
+   * Cost. (The pre-hub inline filter dropped recurring costs that started earlier, showing
+   * €2.3K here vs €4.0K there.) Fallback mirrors the hub's costsMTD when no provider. */
+  const costsMTD = mtd
+    ? mtd.costsMTD
+    : (() => {
+        const mtdY = now.getFullYear();
+        const mtdMonthIdx = now.getMonth();
+        const mtdMonthStart = new Date(mtdY, mtdMonthIdx, 1);
+        const mtdMonthEnd = new Date(mtdY, mtdMonthIdx + 1, 0);
+        return (costs || []).reduce((s, c) => {
+          const start = c.startDate ? new Date(c.startDate) : null;
+          const end = c.endDate ? new Date(c.endDate) : null;
+          if (c.frequency === 'one-time') {
+            return (start && start.getFullYear() === mtdY && start.getMonth() === mtdMonthIdx)
+              ? s + (c.amount || 0)
+              : s;
+          }
+          const activeThisMonth = (start ? start <= mtdMonthEnd : true) && (end ? end >= mtdMonthStart : true);
+          return activeThisMonth ? s + normalizeToMonthly(c) : s;
+        }, 0);
+      })();
 
-  /* Active fleet: live count of scooters with status === 'Active' from MaintenanceContext.
-   * For the denominator, prefer the fleet-scoped total scooter count when FleetContext
-   * is available; fall back to config.fleetSize (manual scalar) when it is not. */
-  const activeScooterCount = maintenanceCtx?.scooters?.filter(s => s.status === 'Active').length;
-  const liveTotalFleet = (() => {
-    if (!fleetCtx || !maintenanceCtx?.scooters || !maintenanceCtx.scooters.length) return null;
-    if (fleetCtx.isAllFleets) return maintenanceCtx.scooters.length;
-    return fleetCtx.scopeByFleet(maintenanceCtx.scooters).length || null;
-  })();
-  const totalFleet = liveTotalFleet ?? config?.fleetSize;
+  /* Active fleet: live count of scooters with status === 'Active'. The denominator is the
+   * fleet-scoped total scooter count (from the hub when available; otherwise the legacy
+   * FleetContext-or-config fallback). */
+  const activeScooterCount = mtd
+    ? mtd.scooterCountActive
+    : maintenanceCtx?.scooters?.filter(s => s.status === 'Active').length;
+  const totalFleet = mtd
+    ? mtd.fleetSizeEffective
+    : (() => {
+        const liveTotalFleet = (() => {
+          if (!fleetCtx || !maintenanceCtx?.scooters || !maintenanceCtx.scooters.length) return null;
+          if (fleetCtx.isAllFleets) return maintenanceCtx.scooters.length;
+          return fleetCtx.scopeByFleet(maintenanceCtx.scooters).length || null;
+        })();
+        return liveTotalFleet ?? config?.fleetSize;
+      })();
   const activeFleet = activeScooterCount != null
     ? (totalFleet != null ? `${activeScooterCount} / ${totalFleet}` : String(activeScooterCount))
     : '—';
@@ -195,4 +213,7 @@ function useMaintenanceSafe() {
 }
 function useFleetSafe() {
   try { return useFleet(); } catch { return null; }
+}
+function useMetricsSafe() {
+  try { return useMetrics(); } catch { return null; }
 }
