@@ -131,12 +131,18 @@ const SKU_MODEL_MAP = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const MONTH_KEYS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
+// Statuses that are terminal: days-open and revenue-lost should not continue
+// accruing once a ticket reaches one of these states. (#626)
+const TERMINAL_STATUSES = new Set(['Completed', 'Donor']);
+
 export function computeDaysOpen(ticket) {
   if (!ticket.dateEntered) return 0;
   const start = new Date(ticket.dateEntered);
-  const end = ticket.status === 'Completed' && ticket.dateCompleted
+  const end = TERMINAL_STATUSES.has(ticket.status) && ticket.dateCompleted
     ? new Date(ticket.dateCompleted)
-    : new Date();
+    : TERMINAL_STATUSES.has(ticket.status)
+      ? new Date(ticket.dateEntered) // no dateCompleted: treat as 0-day span
+      : new Date();
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
@@ -203,14 +209,18 @@ export function MaintenanceProvider({ children }) {
 
   const activeTickets   = useMemo(() => ticketsWithCalc.filter((t) => t.status === 'Active'), [ticketsWithCalc]);
   const activeCount     = activeTickets.length;
-  // #585 — totalOpenCount matches the Maintenance KPI "Total Open" definition (non-Completed),
-  // which includes Backlog, Investigation, Active, Blocked, Donor statuses.
-  const totalOpenCount  = useMemo(() => ticketsWithCalc.filter((t) => t.status !== 'Completed').length, [ticketsWithCalc]);
+  // #585 — totalOpenCount matches the Maintenance KPI "Total Open" definition (non-terminal),
+  // which includes Backlog, Investigation, Active, Blocked statuses.
+  // #626 — Donor (and other terminal statuses) are excluded so they don't inflate
+  // open counts or revenue-lost KPIs indefinitely.
+  const totalOpenCount  = useMemo(() => ticketsWithCalc.filter((t) => !TERMINAL_STATUSES.has(t.status)).length, [ticketsWithCalc]);
   const isAtMaxActive   = activeCount >= (config.maxActiveTickets ?? 3);
   const totalRevenueLost = useMemo(() =>
-    ticketsWithCalc.filter((t) => t.status !== 'Completed').reduce((s, t) => s + t.revenueLost, 0),
+    ticketsWithCalc.filter((t) => !TERMINAL_STATUSES.has(t.status)).reduce((s, t) => s + t.revenueLost, 0),
   [ticketsWithCalc]);
-  const lowStockParts   = useMemo(() => parts.filter((p) => p.stockOnHand <= p.reorderPoint && p.reorderPoint > 0), [parts]);
+  // #625 — exclude Discontinued parts so the low-stock KPI/alert count matches the
+  // Parts table, which already filters them out in its local isLow check.
+  const lowStockParts   = useMemo(() => parts.filter((p) => p.status !== 'Discontinued' && p.stockOnHand <= p.reorderPoint && p.reorderPoint > 0), [parts]);
 
   // ── Ticket CRUD ───────────────────────────────────────────────────────────
   const addTicket = useCallback(async (data) => {
@@ -347,8 +357,11 @@ export function MaintenanceProvider({ children }) {
     if (!s) throw new Error('Schedule not found');
     const today = new Date().toISOString().slice(0, 10);
     const recurs = s.recurrence && s.recurrence !== 'none' && Number(s.interval) > 0;
+    // #623 — anchor the advance to max(s.nextDue, today) so a late completion always
+    // produces a future nextDue rather than remaining in the past.
+    const anchor = s.nextDue < today ? today : s.nextDue;
     const patch = recurs
-      ? { nextDue: advanceDueDate(s.nextDue, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
+      ? { nextDue: advanceDueDate(anchor, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
       : { status: 'done', lastCompleted: today };
     await orgUpdate(SCHEDULES_COL, docId, patch, { rethrow: true, errorMessage: 'Failed to update schedule' });
   }, [schedules]);

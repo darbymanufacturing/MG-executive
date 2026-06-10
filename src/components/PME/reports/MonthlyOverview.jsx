@@ -4,17 +4,29 @@ import { useTelemetry } from '../../../context/TelemetryContext.jsx';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { isTrueOverturn } from '../../../utils/classifyEventType.js';
 import { validTickets } from '../../../utils/repairJunkFilter.js';
+import { countRealTrips } from '../../../utils/pmeAnalyses.js';
 import styles from './Reports.module.css';
 
 function bucketByMonth(events, tickets) {
   const months = {};
+  // Accumulate per-month event arrays so countRealTrips() can pair
+  // trip_start → trip_end per scooter (eliminates pause/resume double-starts
+  // and sub-30s cancelled-reservation artefacts).
+  const monthEvents = {};
 
   for (const ev of events) {
     const m = ev.timestamp?.slice(0, 7);
     if (!m) continue;
-    if (!months[m]) months[m] = { month: m, trips: 0, overturns: 0, repairs: 0 };
-    if (ev.eventType === 'trip_start') months[m].trips++;
-    if (isTrueOverturn(ev))            months[m].overturns++;
+    if (!months[m])      months[m]      = { month: m, trips: 0, overturns: 0, repairs: 0 };
+    if (!monthEvents[m]) monthEvents[m] = [];
+    monthEvents[m].push(ev);
+    if (isTrueOverturn(ev)) months[m].overturns++;
+  }
+
+  // Use countRealTrips (same function as FleetKpiStrip / WeeklyDigest / ScooterLifetimeStats)
+  // so the bar chart aligns with every other trip surface.
+  for (const m of Object.keys(months)) {
+    months[m].trips = countRealTrips(monthEvents[m]);
   }
 
   for (const t of validTickets(tickets)) {

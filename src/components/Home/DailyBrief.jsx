@@ -9,6 +9,7 @@ import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
+import { useMetrics } from '../../context/MetricsContext.jsx';
 import { orgDocId } from '../../utils/orgDocId.js';
 import { authedFetch } from '../../utils/apiClient.js';
 import styles from './DailyBrief.module.css';
@@ -27,23 +28,39 @@ function todayLabel() {
  * Extracted so it can be unit-tested without rendering the component.
  * @param {{ issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx }} contexts
  * @param {Date} now  — injectable for testing
+ * @param {Object|null} metricsOverride  — pre-baked `mtd` from MetricsContext (optional).
+ *   When supplied: costsThisMonth = metricsOverride.costsMTD (includes recurring active this
+ *   month, not just costs dated this month — fixes #616) and revenueThisMonth =
+ *   metricsOverride.revenue.operatingRevenue (NET after 19% Hopp fee + €150/mo SIM —
+ *   fixes #616). Falls back to the inline raw calculation when absent (test/no-context path).
  * @returns {{ openIssuesCount, activeTicketsCount, revenueThisMonth, costsThisMonth,
  *             activeProjectsCount, fleetSize, inRepair, overdueTickets,
  *             completedToday, revenueThisWeek, revenuePrevWeek, dataIsVoid, payload }}
  */
-export function buildBriefPayload(contexts, now = new Date()) {
+export function buildBriefPayload(contexts, now = new Date(), metricsOverride = null) {
   const { issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx } = contexts;
 
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const openIssuesCount = issueCtx?.activeIssues?.filter(i => i.status !== 'done').length ?? 0;
   const activeTicketsCount = maintenanceCtx?.tickets?.filter(t => t.status === 'Active').length ?? 0;
-  const revenueThisMonth = (revenueCtx?.revenueData || [])
-    .filter(r => r.date?.startsWith(monthKey))
-    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
-  const costsThisMonth = (costsCtx?.costs || [])
-    .filter(c => c.startDate?.startsWith(monthKey))
-    .reduce((s, c) => s + (c.amount || 0), 0);
+
+  // #616 — use MetricsContext.mtd when available:
+  //   revenueThisMonth: NET operating revenue (after 19% Hopp franchise + €150/mo SIM).
+  //     Gross inline fallback is the raw totalPaidRevenue sum.
+  //   costsThisMonth: includes ALL active recurring costs this month, not just costs whose
+  //     startDate falls in the current month (the old inline logic missed recurring costs
+  //     started in prior months).
+  const revenueThisMonth = metricsOverride != null
+    ? (metricsOverride.revenue?.operatingRevenue ?? 0)
+    : (revenueCtx?.revenueData || [])
+        .filter(r => r.date?.startsWith(monthKey))
+        .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  const costsThisMonth = metricsOverride != null
+    ? (metricsOverride.costsMTD ?? 0)
+    : (costsCtx?.costs || [])
+        .filter(c => c.startDate?.startsWith(monthKey))
+        .reduce((s, c) => s + (c.amount || 0), 0);
   const activeProjectsCount = (projectCtx?.projects || [])
     .filter(p => p.effectiveStatus !== 'archived' && !p.archived).length;
   // #558: prefer the live scooter count for the brief; fall back to the config scalar.
@@ -174,6 +191,10 @@ export default function DailyBrief() {
   const projectCtx     = useProjectsSafe();
   const revenueCtx     = useRevenueSafe();
   const costsCtx       = useCostsSafe();
+  // #616 — MetricsContext supplies correct costsMTD (all active recurring costs) and
+  // NET operating revenue (after Hopp + SIM). Safe-hook: MetricsProvider may not be
+  // mounted in every test harness or narrow render path.
+  const metricsCtx     = useMetricsSafe();
 
   // #497 — the payload is built from these contexts, which load their data
   // ASYNCHRONOUSLY (Supabase fetch + realtime subscribe). The one-shot effect below
@@ -214,11 +235,12 @@ export default function DailyBrief() {
     // #400: use org-scoped doc ID so cron-purge can query by orgId on org deletion
     const briefKey = orgId ? orgDocId(orgId, rawBriefKey) : rawBriefKey;
 
-    /* ── Build real payload from contexts (BUG #159, #bug-375) ── */
+    /* ── Build real payload from contexts (BUG #159, #bug-375, #616) ── */
     const now = new Date();
     const { dataIsVoid, payload } = buildBriefPayload(
       { issueCtx, maintenanceCtx, projectCtx, revenueCtx, costsCtx },
       now,
+      metricsCtx?.mtd ?? null,   // #616: pass pre-baked MTD for correct costs + net revenue
     );
 
     async function fetchOrGenerate() {
@@ -381,4 +403,7 @@ function useRevenueSafe() {
 }
 function useCostsSafe() {
   try { return useCosts(); } catch { return null; }
+}
+function useMetricsSafe() {
+  try { return useMetrics(); } catch { return null; }
 }

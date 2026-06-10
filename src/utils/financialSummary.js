@@ -163,7 +163,7 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
   // Two DIFFERENT revenue bases, both exposed (never swap silently — see ADR-0024 / §7):
   //  - operatingRevenue (above): the period's net operating revenue (P&L basis).
   //  - annualizedRevenue: trailing-12-month basis from financialHealth (Investment parity).
-  const annualizedRevenue = annualizedRevenueFn(safeRevenue, financial);
+  const annualizedRevenue = annualizedRevenueFn(safeRevenue, financial, { now });
 
   // monthlyOpexExInvestment: monthly run-rate of every non-investment cost (FleetRoiTab
   // parity — its baseMonthlyOpex). #278 — skip null/undefined categories to avoid NaN.

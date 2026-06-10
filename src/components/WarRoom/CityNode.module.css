@@ -1,14 +1,21 @@
 /* ── Wrapper — sized exactly to the dot so Marker anchor="center"
        places the dot pixel-perfectly on the geographic coordinate.
-       Label and card are absolutely positioned outside this box. ── */
+       Label and card are absolutely positioned outside this box.
+       At rest only the dot is rendered; hover/click expands the card
+       (fix for #588: overlapping cards at default zoom). ── */
 .wrapper {
   position: relative;
   width: 12px;
   height: 12px;
   /* overflow visible so label/card show outside the 12×12 box */
   overflow: visible;
-  cursor: default;
+  cursor: pointer;
   z-index: 10;
+}
+
+/* Raise z-index when expanded so the open card sits above neighbour dots */
+.wrapperExpanded {
+  z-index: 20;
 }
 
 /* ── Pulse animation ── */
@@ -31,6 +38,16 @@
   position: absolute;
   inset: 0;
   z-index: 2;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Dot grows slightly when the card is expanded */
+.dotExpanded {
+  transform: scale(1.35);
+  box-shadow:
+    0 0 8px  #C97D49,
+    0 0 20px rgba(201, 125, 73, 0.7),
+    0 0 40px rgba(160, 82,  29, 0.45);
 }
 
 /* Expanding pulse ring — centred on the dot */

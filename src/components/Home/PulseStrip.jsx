@@ -97,7 +97,7 @@ export default function PulseStrip() {
    * render PulseStrip without a MetricsProvider) so the component degrades gracefully. */
   const mtd = metricsCtx?.mtd ?? null;
 
-  /* Revenue MTD: sum totalPaidRevenue for rows in current month */
+  /* Revenue MTD: sum totalPaidRevenue for rows in current month (gross) */
   const revenueMTD = mtd
     ? mtd.revenueMTD
     : (() => {
@@ -106,6 +106,15 @@ export default function PulseStrip() {
           .filter(r => r.date?.startsWith(monthKey))
           .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
       })();
+
+  /* #617 — operatingRevenueMTD: net MTD revenue after Hopp franchise fee (19%) and SIM
+   * deduction (€150/mo). This is the correct denominator for the Net Margin tile.
+   * When the hub is available, mtd.revenue.operatingRevenue is already computed by
+   * revenueBreakdown(mtdPeriodRevenue, financial, 1) in financialSummary.js:161.
+   * Fallback applies the same formula inline using FIN_DEFAULTS. */
+  const operatingRevenueMTD = mtd
+    ? mtd.revenue.operatingRevenue
+    : revenueMTD * (1 - 0.19) - 150;
 
   /* Costs MTD (#603): recurring costs ACTIVE this month at their monthly-normalized rate
    * + one-time costs DATED this month — the same basis as the Pulse page's monthly Total
@@ -175,10 +184,11 @@ export default function PulseStrip() {
     },
     {
       label: 'Net margin',
-      value: revenueMTD > 0
-        ? `${Math.round(((revenueMTD - costsMTD) / revenueMTD) * 100)}%`
+      // #617 — divide by operatingRevenueMTD (net after Hopp fee + SIM), not gross revenueMTD.
+      value: operatingRevenueMTD > 0
+        ? `${Math.round(((operatingRevenueMTD - costsMTD) / operatingRevenueMTD) * 100)}%`
         : '—',
-      trend: revenueMTD > costsMTD ? 'up' : revenueMTD > 0 ? 'down' : 'flat',
+      trend: operatingRevenueMTD > costsMTD ? 'up' : operatingRevenueMTD > 0 ? 'down' : 'flat',
       sparkline: null,
     },
     {

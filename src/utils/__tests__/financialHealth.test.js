@@ -49,6 +49,20 @@ describe('annualizedRevenue', () => {
     expect(annualizedRevenue(rows, { ...FIN_DEFAULTS, applyFranchiseFee: false }))
       .toBeCloseTo(10200);
   });
+
+  // Regression: #619 — options.now must be respected in the ≥12-month branch.
+  test('uses options.now when ≥12 months of data exist (injectable clock)', () => {
+    // 13 months of data: 2025-01 through 2026-01
+    // Pin `now` to 2026-01-15 so the last-12 window is 2025-02 through 2026-01.
+    // Month 2025-01 should NOT be included; months 2025-02..2026-01 should be (1000 each → 12000).
+    const rows = Array.from({ length: 13 }, (_, i) => {
+      const d = new Date(2025, i, 15); // Jan 2025 … Jan 2026
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { date: `${key}-15`, totalPaidRevenue: 1000 };
+    });
+    const fixedNow = new Date(2026, 0, 15); // 2026-01-15
+    expect(annualizedRevenue(rows, null, { now: fixedNow })).toBeCloseTo(12000);
+  });
 });
 
 describe('annualInvestmentCost', () => {

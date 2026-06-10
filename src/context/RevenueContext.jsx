@@ -65,8 +65,10 @@ export function RevenueProvider({ children }) {
         { rethrow: true, errorMessage: 'Revenue import failed mid-batch' },
       );
     }
-    // ADR-0013: mirror to Supabase — #481 fire-and-forget (Firestore is authoritative).
-    void dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
+    // ADR-0013: mirror to Supabase — #481 Firestore is authoritative; await so that
+    // refreshRevenue() reads after the write resolves (#621). The .catch() swallows
+    // Supabase errors so a dual-write failure never blocks the Firestore-authoritative import.
+    await dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
       .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
     // #387 — force a re-fetch so the Supabase-backed table reflects the new rows
     // immediately without requiring navigation. No-op when DATA_LAYER=firestore

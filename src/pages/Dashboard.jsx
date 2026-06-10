@@ -25,7 +25,7 @@ import {
 } from '../utils/calculations.js';
 import {
   avgTripsPerDay, revenuePerTrip,
-  vehicleUtilization, combinedMonthlyTrend, actualRevenuePerScooterMonthly,
+  vehicleUtilization, combinedMonthlyTrend,
   filterRevenueByLocation, allTimeCombinedTrend, dailyRevenueTrend,
   revenuePerCityBreakdown,
   applyFinancialAdjustments,
@@ -219,7 +219,13 @@ export default function Dashboard() {
   const tripsPerDay        = avgTripsPerDay(periodRevenue);
   const revPerTrip         = revenuePerTrip(periodRevenue);
   const utilization        = vehicleUtilization(periodRevenue, effectiveFleetSize);
-  const actualRevPerScooter= actualRevenuePerScooterMonthly(periodRevenue, effectiveFleetSize);
+  // #615 — use NET operating revenue (after 19% Hopp fee + €150/mo SIM) so
+  // Revenue/Scooter, Gross Margin, and Margin % are all on a consistent net basis.
+  // revBreakdown.operatingRevenue is the hub's period NET; divide by periodMonths
+  // to get the monthly rate, then by fleet size for per-scooter.
+  const actualRevPerScooter = hasPeriodData && effectiveFleetSize > 0
+    ? revBreakdown.operatingRevenue / periodMonths / effectiveFleetSize
+    : null;
   const rawCombinedTrend   = hasRevenue
     ? (viewMode === 'all'
         ? allTimeCombinedTrend(filteredCosts, filteredRevenue)
@@ -829,7 +835,7 @@ export default function Dashboard() {
                 <>
                   <div className={styles.econDivider} />
                   <div className={styles.econItem}>
-                    <span className={styles.econLabel}>Revenue / Scooter</span>
+                    <span className={styles.econLabel}>Revenue / Scooter (net)</span>
                     <span className={styles.econValue} style={{ color: 'var(--color-success)' }}>
                       {formatEUR(actualRevPerScooter)}
                     </span>

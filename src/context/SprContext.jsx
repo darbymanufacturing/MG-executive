@@ -11,7 +11,7 @@ import {
 import { useOrg } from './OrgContext.jsx';
 import { useFleet } from './FleetContext.jsx';
 import { useOrgTable } from '../hooks/useSupabaseTable.js';
-import { dualWriteSupabase } from '../lib/supabase.js';
+import { dualWriteSupabase, dualClearSupabase } from '../lib/supabase.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
@@ -157,6 +157,8 @@ export function SprProvider({ children }) {
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
       more = snap.docs.length === BATCH_SIZE;
     }
+    // ADR-0013: mirror the clear to Supabase so the read store stays in sync (#620).
+    await dualClearSupabase(EVENTS_COL, orgId, city ? [['city', '==', city]] : []);
   }, [orgId]);
 
   // ── Weather import (upsert by date_city docId) ────────────────────────────
@@ -198,6 +200,8 @@ export function SprProvider({ children }) {
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'SPR batch write failed' });
       more = snap.docs.length === BATCH_SIZE;
     }
+    // ADR-0013: mirror the clear to Supabase so the read store stays in sync (#620).
+    await dualClearSupabase(WEATHER_COL, orgId, city ? [['city', '==', city]] : []);
   }, [orgId]);
 
   // ── Nafplio seed data loader ──────────────────────────────────────────────

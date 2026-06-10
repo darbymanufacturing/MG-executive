@@ -18,7 +18,7 @@ import { monthlyRevenueSummary } from './revenueCalculations.js';
  * When `financial` (config.financial) is provided, applies franchise fee and monthly
  * SIM deductions so downstream health metrics reflect operating revenue, not gross.
  */
-export function annualizedRevenue(revenueData, financial) {
+export function annualizedRevenue(revenueData, financial, options = {}) {
   if (!revenueData.length) return 0;
 
   const fin = financial ? {
@@ -45,7 +45,7 @@ export function annualizedRevenue(revenueData, financial) {
 
   if (spanMonths >= 12) {
     // Sum the last 12 complete calendar months (including off-season zeros)
-    const now = new Date();
+    const now = options.now ?? new Date();
     let grossTotal = 0;
     for (let i = 0; i < 12; i++) {
       const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);

@@ -14,6 +14,7 @@ vi.mock('../../context/RevenueContext.jsx', () => ({ useRevenue: vi.fn() }));
 vi.mock('../../context/IssueContext.jsx', () => ({ useIssues: vi.fn() }));
 vi.mock('../../context/MaintenanceContext.jsx', () => ({ useMaintenance: vi.fn() }));
 vi.mock('../../context/ProjectContext.jsx', () => ({ useProjects: vi.fn() }));
+vi.mock('../../context/MetricsContext.jsx', () => ({ useMetrics: vi.fn() }));
 vi.mock('../../utils/orgDocId.js', () => ({ orgDocId: vi.fn((a, b) => `${a}_${b}`) }));
 vi.mock('../../utils/apiClient.js', () => ({ authedFetch: vi.fn() }));
 vi.mock('./DailyBrief.module.css', () => ({ default: {} }));
@@ -126,5 +127,55 @@ describe('buildBriefPayload — dataIsVoid', () => {
       TODAY,
     );
     expect(dataIsVoid).toBe(false);
+  });
+});
+
+/* ── 6. metricsOverride (#616): costsMTD and net operatingRevenue take precedence ── */
+describe('buildBriefPayload — metricsOverride (#616)', () => {
+  test('uses metricsOverride.costsMTD instead of inline startDate filter', () => {
+    // Inline logic would only count costs whose startDate is in monthKey (2026-06).
+    // A recurring cost started in 2026-01 would be MISSED by the inline filter but
+    // should be counted via metricsOverride.costsMTD.
+    const costs = [
+      { startDate: '2026-01-01', frequency: 'monthly', amount: 500 }, // started before month — missed inline
+      { startDate: '2026-06-01', frequency: 'one-time', amount: 100 }, // in month — counted inline
+    ];
+    const metricsOverride = { costsMTD: 620, revenue: { operatingRevenue: 800 } };
+
+    const { costsThisMonth } = buildBriefPayload(
+      { costsCtx: { costs }, maintenanceCtx: null, issueCtx: null, projectCtx: null, revenueCtx: null },
+      TODAY,
+      metricsOverride,
+    );
+    // Must use metricsOverride.costsMTD (620), NOT the inline sum (100)
+    expect(costsThisMonth).toBe(620);
+  });
+
+  test('uses metricsOverride.revenue.operatingRevenue (net) instead of gross totalPaidRevenue', () => {
+    // Gross revenue row: 1000. After 19% Hopp fee (190) + €150 SIM = 660 net.
+    // metricsOverride supplies the already-computed net figure.
+    const revenueData = [{ date: todayStr, totalPaidRevenue: 1000 }];
+    const metricsOverride = { costsMTD: 0, revenue: { operatingRevenue: 660 } };
+
+    const { revenueThisMonth } = buildBriefPayload(
+      { revenueCtx: { revenueData }, maintenanceCtx: null, issueCtx: null, projectCtx: null, costsCtx: null },
+      TODAY,
+      metricsOverride,
+    );
+    // Must use the net figure (660), NOT gross (1000)
+    expect(revenueThisMonth).toBe(660);
+  });
+
+  test('falls back to inline logic when metricsOverride is null (backward-compat for tests)', () => {
+    const costs = [{ startDate: todayStr, frequency: 'one-time', amount: 200 }];
+    const revenueData = [{ date: todayStr, totalPaidRevenue: 500 }];
+
+    const { costsThisMonth, revenueThisMonth } = buildBriefPayload(
+      { costsCtx: { costs }, revenueCtx: { revenueData }, maintenanceCtx: null, issueCtx: null, projectCtx: null },
+      TODAY,
+      null,
+    );
+    expect(costsThisMonth).toBe(200);
+    expect(revenueThisMonth).toBe(500);
   });
 });

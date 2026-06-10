@@ -7,6 +7,8 @@ vi.mock('../../lib/firebase.js', () => ({ db: {}, auth: {} }));
 vi.mock('../../context/CostContext.jsx', () => ({ useCosts: vi.fn() }));
 vi.mock('../../context/RevenueContext.jsx', () => ({ useRevenue: vi.fn() }));
 vi.mock('../../context/MaintenanceContext.jsx', () => ({ useMaintenance: vi.fn() }));
+vi.mock('../../context/FleetContext.jsx', () => ({ useFleet: vi.fn() }));
+vi.mock('../../context/MetricsContext.jsx', () => ({ useMetrics: vi.fn() }));
 vi.mock('./PulseStrip.module.css', () => ({ default: {} }));
 // lucide-react stubs — must include every icon imported by transitive deps (Toast.jsx etc.)
 vi.mock('lucide-react', () => ({
@@ -23,6 +25,8 @@ vi.mock('lucide-react', () => ({
 import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
+import { useFleet } from '../../context/FleetContext.jsx';
+import { useMetrics } from '../../context/MetricsContext.jsx';
 import PulseStrip from './PulseStrip.jsx';
 
 beforeEach(() => {
@@ -65,5 +69,41 @@ describe('PulseStrip — Active fleet tile', () => {
     useCosts.mockReturnValue({ costs: [], config: {} });
     render(<PulseStrip />);
     expect(screen.getByText('2')).toBeTruthy();
+  });
+});
+
+/* ── BUG #617: Net margin tile must use net operating revenue as denominator ── */
+describe('PulseStrip — Net margin tile (#617)', () => {
+  // Build a revenue row dated in the current calendar month.
+  function currentMonthRow(totalPaidRevenue) {
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    return { date, totalPaidRevenue };
+  }
+
+  test('uses net operating revenue (after Hopp fee + SIM) as denominator, not gross', () => {
+    // gross MTD = 1000; one-time cost dated this month = 100
+    // operatingRevenueMTD = 1000 * 0.81 - 150 = 660
+    // correct margin = round((660 - 100) / 660 * 100) = round(84.85%) = 85%
+    // buggy margin (old denominator) = round((1000 - 100) / 1000 * 100) = 90%
+    const now = new Date();
+    const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    useCosts.mockReturnValue({
+      costs: [{ id: 'c1', frequency: 'one-time', amount: 100, startDate }],
+      config: { fleetSize: 10 },
+    });
+    useRevenue.mockReturnValue({ revenueData: [currentMonthRow(1000)] });
+
+    render(<PulseStrip />);
+    // Must show 85%, NOT 90% (the buggy gross-denominator value)
+    expect(screen.getByText('85%')).toBeTruthy();
+    expect(screen.queryByText('90%')).toBeNull();
+  });
+
+  test('shows — when no revenue this month', () => {
+    useRevenue.mockReturnValue({ revenueData: [] });
+    render(<PulseStrip />);
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
   });
 });

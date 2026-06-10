@@ -4,13 +4,9 @@ import {
 } from 'recharts';
 import { TrendingUp, Target, Clock, BarChart2, Info } from 'lucide-react';
 import { useCosts } from '../../context/CostContext.jsx';
-import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMetrics } from '../../context/MetricsContext.jsx';
 import {
   annualInvestmentCost,
-  calcROI,
-  calcPaybackPeriod,
-  calcEBITDA,
   getHealthColor,
 } from '../../utils/financialHealth.js';
 import {
@@ -24,10 +20,8 @@ import styles from './FleetRoiTab.module.css';
 const HORIZON_OPTIONS = [24, 36, 48, 60, 84];
 
 export default function FleetRoiTab() {
-  const { costs, config } = useCosts();
-  const { revenueData } = useRevenue();
+  const { costs } = useCosts();
   const { allTime } = useMetrics();
-  const financial = config?.financial ?? null;
 
   // ── Derived actuals (base values before overrides) ──────────────────────
   // W5/ADR-0024 — pull the two base figures from the numbers hub for EXACT-BASIS parity:
@@ -62,9 +56,47 @@ export default function FleetRoiTab() {
   const breakEvenMonth = useMemo(() => findBreakEvenMonth(pnlSeries), [pnlSeries]);
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
-  const roi = useMemo(() => calcROI(costs, revenueData, financial), [costs, revenueData, financial]);
-  const payback = useMemo(() => calcPaybackPeriod(costs, revenueData, financial), [costs, revenueData, financial]);
-  const ebitda = useMemo(() => calcEBITDA(costs, revenueData, financial), [costs, revenueData, financial]);
+  // #618 — use fleet-scoped hub values so KPIs and the projection chart share the same
+  // basis.  Raw `costs`/`revenueData` from useCosts()/useRevenue() are unscoped and would
+  // show all-fleet totals even when a specific fleet is selected.
+  //
+  // allTime.annualizedRevenue      — fleet-scoped trailing-12-month annualized revenue
+  //   (identical basis to what calcROI/calcPaybackPeriod/calcEBITDA call internally via
+  //   annualizedRevenue(revenueData, financial) — MetricsContext passes financial through).
+  // allTime.monthlyCostRate * 12   — fleet-scoped annual recurring cost (≡ totalMonthlyCost(costs)*12).
+  //   One-time items have monthlyMultiplier=0 so they do not inflate this figure.
+  // allTime.monthlyOpexExInvestment * 12 — fleet-scoped annual opex excl. investment category
+  //   (the correct denominator for EBITDA per calcEBITDA's filter).
+  // baseInvestment (annualInvestmentCost from line above) — uses normalizeToAnnual on
+  //   investment-category items; one-time investments have annualMultiplier=1 so their
+  //   full purchase price is captured.  This still reads raw `costs` because annualTotal
+  //   (monthly*12) excludes one-time items and there is no equivalent in the hub yet.
+  //   The projection-chart inputs already use baseInvestment the same way, so the
+  //   investment-cost basis is at least internally consistent within this component.
+  const roi = useMemo(() => {
+    if (!baseInvestment) return null;
+    const annualRev = allTime.annualizedRevenue;
+    if (!annualRev) return null;
+    const netProfit = annualRev - allTime.annualTotal;
+    return (netProfit / baseInvestment) * 100;
+  }, [baseInvestment, allTime]);
+
+  const payback = useMemo(() => {
+    if (!baseInvestment) return null;
+    const annualRev = allTime.annualizedRevenue;
+    if (!annualRev) return null;
+    const monthlyNet = annualRev / 12 - allTime.monthlyCostRate;
+    if (monthlyNet <= 0) return Infinity;
+    return baseInvestment / monthlyNet;
+  }, [baseInvestment, allTime]);
+
+  const ebitda = useMemo(() => {
+    const annualRev = allTime.annualizedRevenue;
+    if (!annualRev) return { ebitda: null, ebitdaMargin: null };
+    const annualOpsCost = allTime.monthlyOpexExInvestment * 12;
+    const ebitdaVal = annualRev - annualOpsCost;
+    return { ebitda: ebitdaVal, ebitdaMargin: (ebitdaVal / annualRev) * 100 };
+  }, [allTime]);
 
   const netReturnAtHorizon = pnlSeries[pnlSeries.length - 1]?.cumulative ?? 0;
   const monthlyProfit = monthlyRevenue - monthlyOpex;
