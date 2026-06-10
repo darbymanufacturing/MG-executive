@@ -19,9 +19,11 @@ import { IssueProvider } from './context/IssueContext.jsx';
 import { InboxProvider } from './context/InboxContext.jsx';
 import { RepairProcedureProvider } from './context/RepairProcedureContext.jsx';
 import { RepairSessionProvider } from './context/RepairSessionContext.jsx';
+import { MetricsProvider } from './context/MetricsContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import TopBar from './components/Layout/TopBar.jsx';
 import CaptureModal from './components/Capture/CaptureModal.jsx';
+import NumbersInspector from './components/Debug/NumbersInspector.jsx';
 import OmniLoading from './components/Shared/OmniLoading.jsx';
 
 /* Pages */
@@ -326,6 +328,9 @@ function AppShell() {
           an always-on overlay cannot reach the AppShell-level boundary and unmount
           the whole shell (Bug #291). */}
       <ErrorBoundary><CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} /></ErrorBoundary>
+      {/* Numbers Inspector (W5/ADR-0024) — dev-only floating overlay; renders null in
+          prod and for non-admin/owner roles. Occupies the old DiaryBubble slot. */}
+      <ErrorBoundary><NumbersInspector /></ErrorBoundary>
     </div>
   );
 }
@@ -419,9 +424,15 @@ export default function App() {
                                             /settings, eliminates the duplicate local wrapper in
                                             Settings.jsx. */}
                                         <ScooterConfigProvider>
-                                          <ErrorBoundary>
-                                            <AppShell />
-                                          </ErrorBoundary>
+                                          {/* MetricsProvider (W5/ADR-0024) — the numbers
+                                              hub. Mounts innermost so it can consume Cost,
+                                              Revenue, Maintenance (scooters) + Fleet; every
+                                              financial page reads useMetrics() from here. */}
+                                          <MetricsProvider>
+                                            <ErrorBoundary>
+                                              <AppShell />
+                                            </ErrorBoundary>
+                                          </MetricsProvider>
                                         </ScooterConfigProvider>
                                       </NotificationProvider>
                                     </InboxProvider>
