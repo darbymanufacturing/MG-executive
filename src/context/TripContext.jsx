@@ -62,8 +62,10 @@ export function TripProvider({ children }) {
             ? row.startedAt
             : String(row.startedAt ?? '');
         // Org-prefix the deterministic id (ADR-0002). row._docId is the parser's
-        // un-prefixed fingerprint; prefix it (or the built scooterId_startedAt id).
-        const baseId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[^0-9TZ]/g, '').slice(0, 19));
+        // un-prefixed fingerprint; prefix it (or build one with the CANONICAL trip
+        // normalization — `[:.]` → `-` — shared by parseTripLogCsv + the hopp-sync
+        // worker, so the same trip from any source upserts the same key, #468).
+        const baseId = row._docId || (row.scooterId + '_' + safeStartedAt.replace(/[:.]/g, '-'));
         const docId = orgDocId(orgId, baseId);
         batch.set(
           doc(db, TRIPS_COL, docId),
