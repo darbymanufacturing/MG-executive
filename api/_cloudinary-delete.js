@@ -15,6 +15,7 @@
 import crypto from 'node:crypto';
 import { requireUser } from './_lib/require-auth.js';
 import { verifyIdToken } from './_lib/firebase-admin.js';
+import { sbGetByOrg } from './_lib/supabase-admin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -42,7 +43,24 @@ export default async function handler(req, res) {
   // Org-scope assertion: only allow deletion of assets under this org's path prefix.
   const expectedPrefix = `repair-photos/${callerOrgId}/`;
   if (!publicId.startsWith(expectedPrefix)) {
-    return res.status(403).json({ error: 'Forbidden: publicId does not belong to your organisation.' });
+    // #613 transition — photos uploaded before the org-scoped path change live at the
+    // legacy `repair-photos/<sessionId>/...` form. Keep them deletable WITHOUT reopening
+    // the cross-org hole: allow only if that repair session belongs to the caller's org
+    // (verified against the service-role store).
+    const legacy = publicId.match(/^repair-photos\/([^/]+)\//);
+    const legacySessionId = legacy?.[1] ?? null;
+    let owned = false;
+    if (legacySessionId) {
+      try {
+        const sessions = await sbGetByOrg('repair_sessions', callerOrgId);
+        owned = sessions.some((s) => s._docId === legacySessionId);
+      } catch (err) {
+        console.error('cloudinary-delete: legacy-path ownership check failed:', err);
+      }
+    }
+    if (!owned) {
+      return res.status(403).json({ error: 'Forbidden: publicId does not belong to your organisation.' });
+    }
   }
 
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
