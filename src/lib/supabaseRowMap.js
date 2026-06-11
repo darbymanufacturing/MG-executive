@@ -79,6 +79,10 @@ export const SUPABASE_QUERY_MAP = Object.freeze({
   issues: { createdAt: 'created_at_ts' },
   notifications: { createdAt: 'created_at_ts' },
   repairProcedures: { createdAt: 'created_at_ts' },
+  // #366 — maintenance_tickets.date_entered is a generated `date` column derived from
+  // data->>'dateEntered' (migration bugfix_rpc_allowlist_date_entered_search_path_execute),
+  // so the capped tickets listener can orderBy it instead of keeping an arbitrary slice.
+  maintenanceTickets: { dateEntered: 'date_entered' },
 });
 
 /**

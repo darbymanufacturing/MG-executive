@@ -172,7 +172,10 @@ export function MaintenanceProvider({ children }) {
   const configDocId = orgId ? `${orgId}_maintenance` : null;
 
   // ── Reads (ADR-0003 org-scoped) ──────────────────────────────────────────
-  const { items: tickets, loading: ticketsLoading, error } = useOrgCollection(TICKETS_COL, { limit: MAX_TICKETS });
+  // #366 — orderBy date_entered so the MAX_TICKETS cap keeps the NEWEST tickets, not an
+  // arbitrary slice (date_entered is a generated column on maintenance_tickets; mapped in
+  // SUPABASE_QUERY_MAP). Newest-first.
+  const { items: tickets, loading: ticketsLoading, error } = useOrgCollection(TICKETS_COL, { limit: MAX_TICKETS, orderBy: ['dateEntered', 'desc'] });
   const { items: parts, loading: partsLoading } = useOrgCollection(PARTS_COL, { limit: MAX_PARTS });
   const { items: scooters, loading: scootersLoading } = useOrgCollection(SCOOTERS_COL, { limit: MAX_SCOOTERS });
   const { items: schedules, loading: schedulesLoading } = useOrgCollection(SCHEDULES_COL, { limit: MAX_SCHEDULES });
