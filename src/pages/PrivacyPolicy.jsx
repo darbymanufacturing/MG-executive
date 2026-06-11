@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { legalStyles as s } from './legalStyles.js';
 
 /**
@@ -12,10 +13,11 @@ import { legalStyles as s } from './legalStyles.js';
 const EFFECTIVE = '10 June 2026';
 
 export default function PrivacyPolicy() {
+  const { t } = useTranslation();
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <Link to="/login" style={s.back}>← Back</Link>
+        <Link to="/login" style={s.back}>← {t('common.back')}</Link>
         <h1 style={s.h1}>Privacy Policy</h1>
         <p style={s.meta}>Effective {EFFECTIVE} · Omni, operated by Micromobility Greece</p>
 

@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './i18n/index.js'; // #8 — initialise the i18n framework (Greek default)
 
 // #551 — Import firebase eagerly inside a try so that a missing/invalid
 // VITE_FIREBASE_WEB_API_KEY throws a catchable Error here instead of crashing
