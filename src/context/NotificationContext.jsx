@@ -123,19 +123,22 @@ export function NotificationProvider({ children }) {
   );
   const badgeCount = useMemo(() => activeNotifications.length, [activeNotifications]);
 
+  const value = useMemo(
+    () => ({
+      notifications,
+      activeNotifications,
+      badgeCount,
+      unreadCount: badgeCount, /* Omni alias */
+      loading,
+      pushNotification,
+      dismissNotification,
+      dismissAll,
+    }),
+    [notifications, activeNotifications, badgeCount, loading, pushNotification, dismissNotification, dismissAll],
+  );
+
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        activeNotifications,
-        badgeCount,
-        unreadCount: badgeCount, /* Omni alias */
-        loading,
-        pushNotification,
-        dismissNotification,
-        dismissAll,
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );

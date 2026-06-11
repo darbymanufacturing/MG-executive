@@ -330,6 +330,8 @@ export function ProjectProvider({ children }) {
 
   // ── Project interconnection ───────────────────────────────────────────────
   const promotePhaseToProject = useCallback(async (docId, phaseId) => {
+    // Read phase metadata from React snapshot only to build the new project payload
+    // (this is a one-time create, not a read-modify-write on an existing array).
     const project = projects.find((p) => p._docId === docId);
     if (!project) return null;
     const phase = (project.phases || []).find((ph) => ph.id === phaseId);
@@ -355,41 +357,47 @@ export function ProjectProvider({ children }) {
     }, { rethrow: true, errorMessage: 'Failed to promote phase to project' });
     const newProjectRef = addResult.data;
 
-    const phases = (project.phases || []).map((ph) =>
-      ph.id === phaseId ? { ...ph, childProjectId: newProjectRef.id } : ph,
-    );
-    const parentLinked = [...(project.linkedProjectIds || []), newProjectRef.id];
-    await patchProject(
-      docId,
-      { phases, linkedProjectIds: parentLinked },
-      'Phase promoted but failed to link back to parent project',
-    );
+    // Use orgTransaction so phases[] and linkedProjectIds are read from the live
+    // Firestore document — not from the stale React snapshot (#646).
+    await orgTransaction(PROJECTS_COL, docId, (data) => {
+      const phases = (data.phases || []).map((ph) =>
+        ph.id === phaseId ? { ...ph, childProjectId: newProjectRef.id } : ph,
+      );
+      const existing = data.linkedProjectIds || [];
+      const linkedProjectIds = existing.includes(newProjectRef.id)
+        ? existing
+        : [...existing, newProjectRef.id];
+      return { phases, linkedProjectIds };
+    });
 
     return newProjectRef.id;
-  }, [projects, patchProject]);
+  }, [projects]);
 
   const linkProjects = useCallback(async (aId, bId) => {
-    const a = projects.find((p) => p._docId === aId);
-    const b = projects.find((p) => p._docId === bId);
-    if (!a || !b) return;
-    if (!(a.linkedProjectIds || []).includes(bId)) {
-      await patchProject(aId, { linkedProjectIds: [...(a.linkedProjectIds || []), bId] }, 'Failed to link projects');
-    }
-    if (!(b.linkedProjectIds || []).includes(aId)) {
-      await patchProject(bId, { linkedProjectIds: [...(b.linkedProjectIds || []), aId] }, 'Failed to link projects');
-    }
-  }, [projects, patchProject]);
+    // Use orgTransaction on both docs so linkedProjectIds is read from the live
+    // Firestore document — not from stale React state (#646).
+    await orgTransaction(PROJECTS_COL, aId, (data) => {
+      const existing = data.linkedProjectIds || [];
+      if (existing.includes(bId)) return {};
+      return { linkedProjectIds: [...existing, bId] };
+    });
+    await orgTransaction(PROJECTS_COL, bId, (data) => {
+      const existing = data.linkedProjectIds || [];
+      if (existing.includes(aId)) return {};
+      return { linkedProjectIds: [...existing, aId] };
+    });
+  }, []);
 
   const unlinkProjects = useCallback(async (aId, bId) => {
-    const a = projects.find((p) => p._docId === aId);
-    const b = projects.find((p) => p._docId === bId);
-    if (a) {
-      await patchProject(aId, { linkedProjectIds: (a.linkedProjectIds || []).filter((id) => id !== bId) }, 'Failed to unlink projects');
-    }
-    if (b) {
-      await patchProject(bId, { linkedProjectIds: (b.linkedProjectIds || []).filter((id) => id !== aId) }, 'Failed to unlink projects');
-    }
-  }, [projects, patchProject]);
+    // Use orgTransaction on both docs so linkedProjectIds is read from the live
+    // Firestore document — not from stale React state (#646).
+    await orgTransaction(PROJECTS_COL, aId, (data) => ({
+      linkedProjectIds: (data.linkedProjectIds || []).filter((id) => id !== bId),
+    }));
+    await orgTransaction(PROJECTS_COL, bId, (data) => ({
+      linkedProjectIds: (data.linkedProjectIds || []).filter((id) => id !== aId),
+    }));
+  }, []);
 
   // ── Decision Gates CRUD ───────────────────────────────────────────────────
   const addGate = useCallback(async (data) => {

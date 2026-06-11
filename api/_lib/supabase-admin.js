@@ -16,7 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Lazy singleton — null when env vars are unset (mirrors api/_cron-hopp-sync.js:361-369).
+// Lazy singleton — null when env vars are unset (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).
 let _supa = null;
 
 /**

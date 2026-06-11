@@ -26,7 +26,7 @@ export default function ScooterEventTimeline({ scooterId }) {
 
   const scooterEvents = useMemo(() => {
     return events
-      .filter((e) => e.scooterId === scooterId)
+      .filter((e) => String(e.scooterId) === String(scooterId))
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp)); // newest first
   }, [events, scooterId]);
 

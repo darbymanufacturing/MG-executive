@@ -1,10 +1,10 @@
 /**
  * require-auth — shared serverless auth guard (#16/#17).
  *
- * Generalizes the dual-auth at the top of cron-hopp-sync.js so every endpoint can
- * enforce "a signed-in Firebase user (optionally with an allowed role)" — or the
- * Vercel cron secret — in one line. Before this, 8 of 10 endpoints were publicly
- * callable (anyone could spend Anthropic $, hit the bank aggregator, or send email).
+ * Shared auth guard so every endpoint can enforce "a signed-in Firebase user
+ * (optionally with an allowed role)" — or the Vercel cron secret — in one line.
+ * Before this, 8 of 10 endpoints were publicly callable (anyone could spend
+ * Anthropic $, hit the bank aggregator, or send email).
  *
  * Each helper RESPONDS with 401/403 and returns null on failure, so callers do:
  *   const user = await requireUser(req, res, { roles: ['admin', 'staff'] });
@@ -58,7 +58,7 @@ export async function requireUser(req, res, { roles } = {}) {
 
 /**
  * Allow EITHER the Vercel cron secret OR a signed-in user with an allowed role.
- * Mirrors cron-hopp-sync.js. Returns { trigger: 'cron' | 'manual', uid, role } or null.
+ * Returns { trigger: 'cron' | 'manual', uid, role } or null.
  */
 export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', 'staff'] } = {}) {
   const token = readBearer(req);

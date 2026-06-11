@@ -229,7 +229,7 @@ export function downtimeByCause(events) {
  * Returns { lifetimeMean, last30Rate, ratio, anomaly (ratio > 2) }
  */
 export function overturnBaseline(events, scooterId, windowDays = 30) {
-  const trueOvt = events.filter((e) => e.scooterId === scooterId && isTrueOverturn(e));
+  const trueOvt = events.filter((e) => String(e.scooterId) === String(scooterId) && isTrueOverturn(e));
   if (!trueOvt.length) return { lifetimeMean: 0, last30Rate: 0, ratio: 1, anomaly: false };
 
   // Sort by date to find lifetime span (filter nulls first to avoid TypeError)

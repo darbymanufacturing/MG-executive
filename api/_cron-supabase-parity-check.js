@@ -23,8 +23,6 @@ import { getDb, FieldValue } from './_lib/firebase-admin.js';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
 
-export const maxDuration = 60;
-
 // Firestore collection → Supabase table (the migrated set). `config` + `pow` both
 // fold into app_config, so their Firestore counts are summed against that one table.
 const PAIRS = Object.entries(SUPABASE_TABLE);

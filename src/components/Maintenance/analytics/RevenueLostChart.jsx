@@ -3,7 +3,12 @@ import {
   CartesianGrid,
 } from 'recharts';
 
-const OPEN_STATUSES = ['Active', 'Backlog', 'Investigation', 'Blocked'];
+// Mirror MaintenanceContext TERMINAL_STATUSES — tickets in these states have
+// stopped accruing revenue loss and must be excluded from the chart, matching
+// the totalRevenueLost KPI (!TERMINAL_STATUSES denylist). Bug #642: the old
+// OPEN_STATUSES allowlist omitted 'To be Repainted' and any future non-terminal
+// statuses, causing chart/KPI divergence.
+const TERMINAL_STATUSES = new Set(['Completed', 'Donor']);
 
 const MONTH_LABELS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -14,7 +19,7 @@ function buildData(tickets) {
   const map = {};
 
   tickets
-    .filter((t) => OPEN_STATUSES.includes(t.status) && t.dateEntered)
+    .filter((t) => !TERMINAL_STATUSES.has(t.status) && t.dateEntered)
     .forEach((t) => {
       const d = new Date(t.dateEntered + 'T12:00:00');
       if (isNaN(d.getTime())) return;

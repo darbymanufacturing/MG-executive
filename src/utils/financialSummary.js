@@ -141,9 +141,10 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
   const liveFleetSize = safeScooters.length > 0 ? safeScooters.length : null;
   // Dashboard.jsx:112 — effective = live ?? configured scalar.
   const fleetSizeEffective = liveFleetSize ?? cfg.fleetSize;
-  // Per-scooter rates use the FULL (unfiltered) cost set, matching Dashboard.jsx:220-221.
-  const perScooterMonthly = costPerScooterMonthly(safeCosts, fleetSizeEffective);
-  const perScooterDaily = costPerScooterDaily(safeCosts, fleetSizeEffective);
+  // #640 — use costsForRate (period-filtered in month mode, same as monthlyCostRate) so that
+  // perScooterMonthly === monthlyCostRate / fleetSize for any selected period.
+  const perScooterMonthly = costPerScooterMonthly(costsForRate, fleetSizeEffective);
+  const perScooterDaily = costPerScooterDaily(costsForRate, fleetSizeEffective);
   const perScooterAnnual = perScooterMonthly * 12; // #601-consistent run-rate × 12.
 
   // ── Counts ─────────────────────────────────────────────────────────────────

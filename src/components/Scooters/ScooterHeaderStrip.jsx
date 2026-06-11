@@ -64,7 +64,7 @@ export default function ScooterHeaderStrip({ scooter }) {
 
   // Telemetry timestamps
   const scooterEvents = useMemo(() =>
-    events.filter((e) => e.scooterId === scooterId),
+    events.filter((e) => String(e.scooterId) === String(scooterId)),
   [events, scooterId]);
 
   const latestPosition = useMemo(() => {

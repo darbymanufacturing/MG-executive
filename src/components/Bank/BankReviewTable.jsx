@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, AlertTriangle, RefreshCw } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import CategoryBadge from '../Costs/CategoryBadge.jsx';
@@ -49,6 +49,15 @@ export default function BankReviewTable({ result, onBack, onCommitted }) {
   const [committing, setCommitting] = useState(false);
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState(null);
+
+  // Reconcile selection whenever costs finish loading after mount.
+  // The lazy useState initializer above only runs once; if CostContext resolves
+  // after the first render, existingTxIds (and therefore newDebits) changes and
+  // already-imported rows must be deselected. The write path deduplicates by
+  // _bankTxId so this is a UI-only correctness fix.
+  useEffect(() => {
+    setSelected(new Set(newDebits.map((r) => r._bankTxId)));
+  }, [newDebits]);
 
   const catOf = (r) => overrides[r._bankTxId] ?? effective[r._bankTxId]?.category ?? r.category;
   const matchedOf = (r) => effective[r._bankTxId]?.matched ?? r.matched;

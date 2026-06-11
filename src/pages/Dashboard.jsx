@@ -20,7 +20,7 @@ import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import {
   monthlyTrendData, budgetVariance, filterCostsByLocation,
-  allTimeMonthlyTrendData, normalizeToMonthly,
+  allTimeMonthlyTrendData, normalizeToMonthly, breakdownByCategory,
 } from '../utils/calculations.js';
 import {
   avgTripsPerDay, revenuePerTrip,
@@ -204,8 +204,8 @@ export default function Dashboard() {
   const perScooterAnnual  = summary.perScooterAnnual;  // #601-consistent run-rate × 12
   const breakdown         = summary.costByCategory;
   // Live/effective fleet size (drives the Fleet Size card + per-scooter + util labels).
-  const liveFleetSize     = summary.liveFleetSize;
-  const effectiveFleetSize= summary.fleetSizeEffective;
+  const effectiveFleetSize  = summary.fleetSizeEffective;
+  const scooterCountActive  = summary.scooterCountActive;
   const trendData         = viewMode === 'all'
     ? allTimeMonthlyTrendData(filteredCosts)
     : monthlyTrendData(filteredCosts, chartYear);
@@ -450,13 +450,13 @@ export default function Dashboard() {
             icon={ListChecks}
             label="Active Cost Items"
             value={filteredCosts.length}
-            sub={`${Object.keys(breakdown).length} categories`}
+            sub={`${Object.keys(breakdownByCategory(filteredCosts)).length} categories`}
           />
           <KpiCard
             icon={Target}
             label="Fleet Size"
-            value={effectiveFleetSize}
-            sub={liveFleetSize != null ? 'live scooter count' : 'configured fleet size'}
+            value={`${scooterCountActive} / ${effectiveFleetSize}`}
+            sub="active / owned scooters"
           />
           {config.targetCostPerScooter && (
             <KpiCard

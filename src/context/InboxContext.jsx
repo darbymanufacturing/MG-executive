@@ -160,8 +160,10 @@ export function InboxProvider({ children }) {
     });
   }, [issueCtx?.activeIssues, maintenanceCtx?.tickets, projectCtx?.projects]);
 
+  const value = useMemo(() => ({ inboxItems }), [inboxItems]);
+
   return (
-    <InboxContext.Provider value={{ inboxItems }}>
+    <InboxContext.Provider value={value}>
       {children}
     </InboxContext.Provider>
   );

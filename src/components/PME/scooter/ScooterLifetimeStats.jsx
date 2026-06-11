@@ -24,8 +24,8 @@ export default function ScooterLifetimeStats({ scooterId }) {
 
   const stats = useMemo(() => {
     if (!scooterId) return null;
-    const scooterEvents = events.filter((e) => e.scooterId === scooterId);
-    const good          = validTickets(tickets).filter((t) => t.scooterId === scooterId);
+    const scooterEvents = events.filter((e) => String(e.scooterId) === String(scooterId));
+    const good          = validTickets(tickets).filter((t) => String(t.scooterId) === String(scooterId));
 
     const trips         = countRealTrips(scooterEvents);
     // allOverturns: raw count via eventType OR direct afterState check (same robustness as isTrueOverturn)

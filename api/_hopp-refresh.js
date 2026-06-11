@@ -3,10 +3,7 @@ import { requireUser } from './_lib/require-auth.js';
 // On-demand Hopp sync: auth-gated proxy to the always-on hopp-sync worker's
 // /sync/trigger. The worker owns auth/rotation against Hopp and writes runs to
 // Supabase hopp_sync_runs; this endpoint just forwards the kick and relays the
-// result. Documentary — the deployed function is api/[...path].js whose
-// config.maxDuration=60 governs.
-export const maxDuration = 60;
-
+// result. Runtime timeout governed by api/[...path].js config.maxDuration=60.
 const UPSTREAM_TIMEOUT_MS = 55_000; // abort before Vercel's 60s kill so we can still respond
 
 export default async function handler(req, res) {

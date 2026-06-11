@@ -50,8 +50,13 @@ export function BankRulesProvider({ children }) {
     await orgDelete(RULES_COL, docId, { rethrow: true, errorMessage: 'Failed to delete rule' });
   }, []);
 
+  const value = useMemo(
+    () => ({ rules, loading, addRule, updateRule, deleteRule }),
+    [rules, loading, addRule, updateRule, deleteRule],
+  );
+
   return (
-    <BankRulesContext.Provider value={{ rules, loading, addRule, updateRule, deleteRule }}>
+    <BankRulesContext.Provider value={value}>
       {children}
     </BankRulesContext.Provider>
   );

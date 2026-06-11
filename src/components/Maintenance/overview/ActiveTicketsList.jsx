@@ -2,12 +2,13 @@ import { CheckCircle } from 'lucide-react';
 import styles from './ActiveTicketsList.module.css';
 
 const STATUS_COLORS = {
-  Active:        '#0ea5e9',
-  Backlog:       '#888',
-  Investigation: '#FF9800',
-  Blocked:       '#F44336',
-  Donor:         '#8E24AA',
-  Completed:     '#4CAF50',
+  Active:            '#0ea5e9',
+  Backlog:           '#888',
+  Investigation:     '#FF9800',
+  Blocked:           '#F44336',
+  'To be Repainted': '#A0521D',
+  Donor:             '#8E24AA',
+  Completed:         '#4CAF50',
 };
 
 function truncate(str, max) {

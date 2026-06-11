@@ -81,8 +81,14 @@ export default async function handler(req, res) {
     const newUser = await getAuth().createUser({ email, password, displayName: resolvedDisplayName });
     newUid = newUser.uid;
   } catch (err) {
-    // Bubble Firebase auth errors (e.g. email-already-exists) as 400.
-    const msg = err?.message || 'Failed to create user account.';
+    // Sanitize Firebase Admin error codes — never leak raw err.message (#436/#647).
+    const SAFE_AUTH_ERRORS = {
+      'auth/email-already-exists': 'An account with this email already exists.',
+      'auth/weak-password': 'Password is too weak.',
+      'auth/invalid-email': 'Invalid email address.',
+      'auth/invalid-password': 'Password is too weak.',
+    };
+    const msg = SAFE_AUTH_ERRORS[err?.code] || 'Failed to create user account.';
     return res.status(400).json({ error: msg });
   }
 

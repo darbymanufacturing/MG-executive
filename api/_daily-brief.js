@@ -80,7 +80,8 @@ Use the daily_brief tool to return the structured brief.
 IMPORTANT FORMATTING RULES (#604):
 - The "narrative" field must contain ONLY plain English prose. Do NOT include any XML tags, <parameter> declarations, JSON, brackets, or tool-call formatting inside the narrative string. The narrative ends at the final full stop of your 2-3 sentence summary — anything after that belongs in the "sections" field.
 - For the narrative: write 2-3 sentences summarising the key operational state and the biggest thing needing attention today. Mention any trend (revenue up/down, fleet availability, etc.). Be direct, not flowery.
-- For sections: keep each items entry concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.`;
+- For sections: keep each items entry concise (under 80 chars). Max 3 items per section. Omit sections with no meaningful content.
+- Refer to the company as "Omni" only. Never use "XSlide", "X-Slide", or any other legacy brand name in narrative or section text you author — but do reproduce verbatim any issue/project titles supplied in the operational data above.`;
 }
 
 export default async function handler(req, res) {

@@ -12,7 +12,8 @@
  *                                   (download from Firebase Console → Service Accounts)
  *
  * Used by:
- *   api/cron-hopp-sync.js — both for verifyIdToken (manual-trigger auth) and db writes
+ *   api/[...path].js — dispatches all handlers; see _cron-purge-deleted-orgs.js,
+ *   _cron-supabase-parity-check.js, and others for verifyIdToken + db write usage.
  *
  * See docs/SECURITY.md "Secrets inventory" for rotation procedure.
  */

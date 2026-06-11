@@ -38,8 +38,6 @@ import {
   sbDelByOrg,
 } from './_lib/supabase-admin.js';
 
-export const maxDuration = 60;
-
 const BATCH_SIZE = 450;
 // Spark free tier = 20k writes/day. Keep well under it so a purge can't starve the
 // app's normal writes. Each deleted Firestore doc = 1 write.

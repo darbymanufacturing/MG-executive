@@ -39,7 +39,7 @@ export default function AnomalyFlags({ scooterId }) {
     }
 
     // No events at all
-    const scooterEvents = events.filter((e) => e.scooterId === scooterId);
+    const scooterEvents = events.filter((e) => String(e.scooterId) === String(scooterId));
     if (!scooterEvents.length) {
       result.push({
         severity: 'info',

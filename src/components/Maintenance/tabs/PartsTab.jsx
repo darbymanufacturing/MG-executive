@@ -31,7 +31,18 @@ export default function PartsTab() {
       const matchesName = (p.partName || '').toLowerCase().includes(q);
       if (!matchesSku && !matchesName) return false;
     }
-    if (filters.status && p.status !== filters.status) return false;
+    if (filters.status) {
+      if (filters.status === 'Low Stock') {
+        // Inventory-derived: in stock but at or below reorder point
+        if (!(p.stockOnHand > 0 && p.reorderPoint > 0 && p.stockOnHand <= p.reorderPoint)) return false;
+      } else if (filters.status === 'Out of Stock') {
+        // Inventory-derived: nothing on hand
+        if (!((p.stockOnHand ?? 0) <= 0)) return false;
+      } else {
+        // All other status values (In Stock, On Order, Discontinued) match the stored field
+        if (p.status !== filters.status) return false;
+      }
+    }
     if (filters.model && p.model !== filters.model) return false;
     if (filters.supplier) {
       const q = filters.supplier.toLowerCase();

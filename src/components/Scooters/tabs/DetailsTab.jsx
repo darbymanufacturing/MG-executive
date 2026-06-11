@@ -37,7 +37,7 @@ export default function DetailsTab({ scooter }) {
 
   const latestEvent = useMemo(() =>
     events
-      .filter((e) => e.scooterId === scooter.scooterId)
+      .filter((e) => String(e.scooterId) === String(scooter.scooterId))
       .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))[0],
   [events, scooter.scooterId]);
 
