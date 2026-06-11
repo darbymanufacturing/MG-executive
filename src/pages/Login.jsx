@@ -134,7 +134,10 @@ export default function Login() {
       </div>
 
       {/* Branded footer — lowercase "omni" per brand */}
-      <p className={styles.footer}>omni · Secure access</p>
+      <p className={styles.footer}>
+        omni · Secure access · <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'underline' }}>Privacy</Link>
+        {' · '}<Link to="/terms" style={{ color: 'inherit', textDecoration: 'underline' }}>Terms</Link>
+      </p>
     </div>
   );
 }

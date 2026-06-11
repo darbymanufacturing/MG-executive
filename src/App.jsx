@@ -37,6 +37,8 @@ import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import AcceptInvite from './pages/AcceptInvite.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import TermsOfService from './pages/TermsOfService.jsx';
 import Onboarding from './pages/Onboarding.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
@@ -363,6 +365,9 @@ export default function App() {
               <Route path="/signup" element={<Signup />} />
               {/* Phase 2.5 F6 — contractor invite acceptance (public; token in query) */}
               <Route path="/accept-invite" element={<AcceptInvite />} />
+              {/* #12 — public legal pages (no auth) */}
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
 
               {/* Crew routes — lightweight shell, no heavy admin contexts */}
               <Route
