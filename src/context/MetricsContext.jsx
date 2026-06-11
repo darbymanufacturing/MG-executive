@@ -80,7 +80,11 @@ export function MetricsProvider({ children }) {
     fleetScope,
     isAllFleets,
     activeFleet,
-  }), [getSummary, mtd, allTime, fleetScope, isAllFleets, activeFleet]);
+    // Exposed so Dashboard (and other chart consumers) can build location-filtered
+    // arrays from already-fleet-scoped data, matching the hub's own scope (#638).
+    scopedCosts,
+    scopedRevenue,
+  }), [getSummary, mtd, allTime, fleetScope, isAllFleets, activeFleet, scopedCosts, scopedRevenue]);
 
   return <MetricsContext.Provider value={value}>{children}</MetricsContext.Provider>;
 }

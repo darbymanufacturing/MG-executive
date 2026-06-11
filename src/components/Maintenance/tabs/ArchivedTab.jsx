@@ -57,8 +57,8 @@ export default function ArchivedTab({ filteredTickets }) {
       <TicketTable
         tickets={archived}
         onEdit={(ticket) => { setEditingTicket(ticket); setShowForm(true); }}
-        onDelete={async (_docId) => { /* soft-protection: no delete from archive */ }}
         onComplete={() => {}}
+        hideDelete
       />
 
       <TicketForm

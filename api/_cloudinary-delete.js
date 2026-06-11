@@ -77,12 +77,12 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error('cloudinary-delete: Cloudinary error', data);
-      return res.status(response.status).json({ error: data.error?.message || 'Cloudinary delete failed' });
+      return res.status(response.status).json({ error: 'Cloudinary delete failed' });
     }
 
     return res.status(200).json({ result: data.result });
   } catch (err) {
     console.error('cloudinary-delete error:', err);
-    return res.status(500).json({ error: err.message || 'Delete request failed' });
+    return res.status(500).json({ error: 'Delete request failed' });
   }
 }

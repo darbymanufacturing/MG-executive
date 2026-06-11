@@ -93,6 +93,40 @@ describe('parseAlphaBankCsv — loan feed detection', () => {
   });
 });
 
+describe('parseAlphaBankCsv — fallback dedup key (no txnId)', () => {
+  // Two identical rows (same date, same desc, same amount) with an empty txn-id column.
+  // They must produce distinct _bankTxId values so neither is silently dropped as a duplicate.
+  const NO_TXNID_CSV = [
+    'Κινήσεις Λογαριασμού: GR1601400000000000000000269',
+    'Προηγούμενο λογιστικό υπόλοιπο: 5.000,00',
+    'Νέο λογιστικό υπόλοιπο: 4.900,00',
+    'Α/Α;Ημερομηνία;Αιτιολογία;Κατάστημα;Τοκισμός από;Αρ. συναλλαγής;Ποσό;Πρόσημο ποσού',
+    '="1";="02/05/2026";="ΣΕΡΒΙΣ ΜΟΤΟ";="99";="02/05/2026";="";="50,00";="Χ"',
+    '="2";="02/05/2026";="ΣΕΡΒΙΣ ΜΟΤΟ";="99";="02/05/2026";="";="50,00";="Χ"',
+  ].join('\n');
+
+  it('assigns distinct _bankTxId values when txnId is empty and rows share date/desc/amount', () => {
+    const res = parseAlphaBankCsv(NO_TXNID_CSV);
+    expect(res.rowCount).toBe(2);
+    const [id0, id1] = res.rows.map((r) => r._bankTxId);
+    expect(id0).not.toBe(id1);
+  });
+
+  it('includes the row index tiebreaker in the fallback key', () => {
+    const res = parseAlphaBankCsv(NO_TXNID_CSV);
+    // headerIdx is 3 (0-based), so data rows are at loop index i=4 and i=5
+    expect(res.rows[0]._bankTxId).toBe('alphabank_2026-05-02_ΣΕΡΒΙΣ_ΜΟΤΟ_50_r4');
+    expect(res.rows[1]._bankTxId).toBe('alphabank_2026-05-02_ΣΕΡΒΙΣ_ΜΟΤΟ_50_r5');
+  });
+
+  it('re-importing the same file produces the same keys (deterministic)', () => {
+    const res1 = parseAlphaBankCsv(NO_TXNID_CSV);
+    const res2 = parseAlphaBankCsv(NO_TXNID_CSV);
+    expect(res1.rows[0]._bankTxId).toBe(res2.rows[0]._bankTxId);
+    expect(res1.rows[1]._bankTxId).toBe(res2.rows[1]._bankTxId);
+  });
+});
+
 describe('parseAlphaBankCsv — bad input', () => {
   it('returns a friendly error when no header is found', () => {
     const res = parseAlphaBankCsv('just;some;garbage\n1;2;3');

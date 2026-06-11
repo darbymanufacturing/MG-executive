@@ -17,9 +17,9 @@ export default function ProjectsHUD() {
   const [activeTab, setActiveTab] = useState('overview');
   const { activeProjects } = useProjects();
 
-  const red   = activeProjects.filter((p) => p.status === 'Red').length;
-  const amber = activeProjects.filter((p) => p.status === 'Amber').length;
-  const green = activeProjects.filter((p) => p.status === 'Green').length;
+  const red   = activeProjects.filter((p) => p.status === 'blocked').length;
+  const amber = activeProjects.filter((p) => p.status === 'needsAttention').length;
+  const green = activeProjects.filter((p) => p.status === 'onTrack').length;
 
   if (collapsed) {
     return (

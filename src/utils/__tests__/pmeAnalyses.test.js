@@ -225,4 +225,52 @@ describe('overturnBaseline', () => {
     // Only the valid-timestamp event is counted (null-ts event filtered out)
     expect(result.totalCount).toBe(1);
   });
+
+  // bug #628 — minimum-events / minimum-age guard regression tests
+  it('does not flag anomaly when scooter has fewer than 3 lifetime events (bug #628)', () => {
+    // 1 old event + 1 recent → ratio would be ~12 without the guard
+    const twoWeeksAgo = new Date(Date.now() - 15 * 86_400_000).toISOString();
+    const yesterday   = new Date(Date.now() - 1  * 86_400_000).toISOString();
+    const events = [
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: twoWeeksAgo, reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: yesterday,   reason: '' },
+    ];
+    const result = overturnBaseline(events, 'SC1');
+    expect(result.anomaly).toBe(false);
+    expect(result.ratio).toBe(1);
+  });
+
+  it('does not flag anomaly when scooter history is shorter than 14 days (bug #628)', () => {
+    // 3 events but all within the last week → lifetimeDays < 14
+    const daysAgo6 = new Date(Date.now() - 6 * 86_400_000).toISOString();
+    const daysAgo3 = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const yesterday = new Date(Date.now() - 1 * 86_400_000).toISOString();
+    const events = [
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: daysAgo6,  reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: daysAgo3,  reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: yesterday, reason: '' },
+    ];
+    const result = overturnBaseline(events, 'SC1');
+    expect(result.anomaly).toBe(false);
+    expect(result.ratio).toBe(1);
+  });
+
+  it('still detects a genuine anomaly when criteria are met (bug #628 non-regression)', () => {
+    // 6 events evenly spread over 180 days, then 3 in the last 30 days → real spike
+    const base = (daysBack) => new Date(Date.now() - daysBack * 86_400_000).toISOString();
+    const events = [
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(180), reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(150), reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(120), reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(90),  reason: '' },
+      // spike in last 30 days
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(20),  reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(10),  reason: '' },
+      { scooterId: 'SC1', eventType: 'overturned', beforeState: 'on trip', afterState: 'overturned', timestamp: base(5),   reason: '' },
+    ];
+    const result = overturnBaseline(events, 'SC1');
+    // 4 events over ~180 days ≈ 0.022/day; 3 events in 30 days = 0.1/day; ratio ≈ 4.5
+    expect(result.anomaly).toBe(true);
+    expect(result.ratio).toBeGreaterThan(2);
+  });
 });

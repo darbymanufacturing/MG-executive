@@ -200,7 +200,7 @@ export default async function handler(req, res) {
 
     if (result.error) {
       console.error('Resend error:', result.error);
-      return res.status(500).json({ error: result.error.message || 'Email send failed' });
+      return res.status(500).json({ error: 'Email send failed' });
     }
 
     return res.status(200).json({
@@ -212,6 +212,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('accountant-forward error:', err);
-    return res.status(500).json({ error: err.message || 'Forward failed' });
+    return res.status(500).json({ error: 'Forward failed' });
   }
 }

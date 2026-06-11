@@ -148,6 +148,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('invoice-parse error:', err);
-    return res.status(500).json({ error: err.message || 'Invoice parsing failed' });
+    return res.status(500).json({ error: 'Invoice parsing failed' });
   }
 }

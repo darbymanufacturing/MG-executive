@@ -308,11 +308,6 @@ export default function DailyBrief() {
     }
 
     fetchOrGenerate();
-
-    // BUG #160: reset hasFetched on cleanup so StrictMode remounts (and retries) re-fetch
-    return () => {
-      hasFetched.current = false;
-    };
   }, [user, dismissed, retryCount, contextsLoading]); // retryCount = manual retry; contextsLoading = wait for data (#497)
 
   const handleDismiss = () => {
@@ -321,7 +316,9 @@ export default function DailyBrief() {
   };
 
   // BUG #304: retry handler — reset state and bump counter
+  // #639: reset hasFetched so the effect can re-run after a manual retry
   const handleRetry = () => {
+    hasFetched.current = false;
     setBrief(null);
     setStatus('loading');
     setRetryCount(c => c + 1);

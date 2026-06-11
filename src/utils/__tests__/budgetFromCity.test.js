@@ -82,6 +82,38 @@ describe('budgetFromCity', () => {
     expect(result.revTransactions[0].amount).toBe(100); // raw row amount, not normalized
   });
 
+  // Bug #630 regressions: one-time / weekly / daily must be normalized to monthly
+  it('excludes one-time costs from monthly expenses (Bug #630)', () => {
+    const costs = [
+      { name: 'Monthly op',    category: 'other', amount: 200,  frequency: 'monthly'  },
+      { name: 'Setup fee',     category: 'other', amount: 1000, frequency: 'one-time' },
+    ];
+    const { expenses } = budgetFromCity(costs, [], null);
+    // one-time should not count → expenses = 200
+    expect(expenses).toBeCloseTo(200, 5);
+    expect(expenses).not.toBeCloseTo(1200, 0); // old buggy value
+  });
+
+  it('normalizes weekly costs to monthly (Bug #630)', () => {
+    const costs = [
+      { name: 'Weekly wash', category: 'other', amount: 100, frequency: 'weekly' },
+    ];
+    const { expenses } = budgetFromCity(costs, [], null);
+    // 100 * (52/12) ≈ 433.33
+    expect(expenses).toBeCloseTo(100 * (52 / 12), 5);
+    expect(expenses).not.toBeCloseTo(100, 0); // old buggy value was raw amount
+  });
+
+  it('normalizes daily costs to monthly (Bug #630)', () => {
+    const costs = [
+      { name: 'Daily parking', category: 'other', amount: 10, frequency: 'daily' },
+    ];
+    const { expenses } = budgetFromCity(costs, [], null);
+    // 10 * (365/12) ≈ 304.17
+    expect(expenses).toBeCloseTo(10 * (365 / 12), 5);
+    expect(expenses).not.toBeCloseTo(10, 0); // old buggy value was raw amount
+  });
+
   it('net uses monthly-equivalent revenue, not cumulative (regression guard)', () => {
     // 12 months × 500 = cumulative 6000; monthly avg = 500
     const revenueData = Array.from({ length: 12 }, (_, i) => ({

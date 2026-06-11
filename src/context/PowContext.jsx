@@ -6,7 +6,7 @@ import { layerFor } from '../lib/dataLayerConfig.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
-import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
+import { orgWrite, orgUpdate, orgDelete, orgTransaction } from '../hooks/orgWrite.js';
 
 const PowContext = createContext(null);
 
@@ -149,16 +149,18 @@ export function PowProvider({ children }) {
     });
   }, [currentWeek]);
 
-  /** Toggle a step checkbox by its index */
+  /** Toggle a step checkbox by its index.
+   *  Uses orgTransaction so concurrent clients can't clobber each other
+   *  (mirrors the toggleAssignee pattern — #632). */
   const toggleStep = useCallback(async (id, stepIndex) => {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    const checked = task.checkedSteps ?? [];
-    const checkedSteps = checked.includes(stepIndex)
-      ? checked.filter((i) => i !== stepIndex)
-      : [...checked, stepIndex];
-    await orgUpdate(TASKS_COL, id, { checkedSteps }, { rethrow: true, errorMessage: 'Failed to update POW step' });
-  }, [tasks]);
+    await orgTransaction(TASKS_COL, id, (data) => {
+      const checked = data.checkedSteps ?? [];
+      const checkedSteps = checked.includes(stepIndex)
+        ? checked.filter((i) => i !== stepIndex)
+        : [...checked, stepIndex];
+      return { checkedSteps };
+    });
+  }, []);
 
   const markDone = useCallback(async (id) => {
     await orgUpdate(TASKS_COL, id, { status: 'done', doneWeek: currentWeek }, {

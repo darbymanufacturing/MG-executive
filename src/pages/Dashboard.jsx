@@ -16,7 +16,6 @@ import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import Skeleton from '../components/Shared/Skeleton.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useCosts } from '../context/CostContext.jsx';
-import { useRevenue } from '../context/RevenueContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import {
@@ -84,7 +83,6 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { costs, config, loadSampleData, loading: costsLoading } = useCosts();
-  const { revenueData } = useRevenue();
   const {
     totalRevenueLost,
     activeCount,
@@ -95,7 +93,7 @@ export default function Dashboard() {
     config: maintConfig,
   } = useMaintenance();
   const { activeProjects, archivedProjects } = useProjects();
-  const { getSummary } = useMetrics();
+  const { getSummary, scopedCosts, scopedRevenue } = useMetrics();
   const navigate = useNavigate();
 
   // ── Financial config (Hopp fee, VAT, SIM) ────────────────────────────────
@@ -119,8 +117,10 @@ export default function Dashboard() {
   const locations = config.locations || [];
 
   // ── Location-filtered base arrays ─────────────────────────────────────────
-  const filteredCosts   = useMemo(() => filterCostsByLocation(costs, locationFilter),         [costs, locationFilter]);
-  const filteredRevenue = useMemo(() => filterRevenueByLocation(revenueData, locationFilter), [revenueData, locationFilter]);
+  // #638: use fleet-scoped arrays from the metrics hub so charts and financial-health
+  // blocks see the same fleet scope as the KPI cards (which go through getSummary).
+  const filteredCosts   = useMemo(() => filterCostsByLocation(scopedCosts, locationFilter),   [scopedCosts, locationFilter]);
+  const filteredRevenue = useMemo(() => filterRevenueByLocation(scopedRevenue, locationFilter), [scopedRevenue, locationFilter]);
 
   // ── Available months for selectors ───────────────────────────────────────
   const availableMonths = useMemo(() => {

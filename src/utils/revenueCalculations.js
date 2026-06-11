@@ -332,7 +332,7 @@ export function revenuePerCityBreakdown(periodRevenue, scooters, cities) {
     const revenue = sumCents(cityRevenue, (r) => r.totalPaidRevenue);
     const trips   = cityRevenue.reduce((s, r) => s + (r.totalTrips || 0), 0);
 
-    const cityScooters   = scooters.filter((s) => s.city === city);
+    const cityScooters   = scooters.filter((s) => (s.city || '').toLowerCase() === cityLower);
     const activeScooters = cityScooters.filter((s) => s.status === 'Active').length;
     const totalScooters  = cityScooters.length;
 

@@ -155,7 +155,7 @@ export function parseAlphaBankCsv(csvText) {
     const txnId = (cells[col.txnId] || '').replace(/[="]/g, '').trim();
     const _bankTxId = txnId
       ? `alphabank_${txnId}`
-      : `alphabank_${date}_${rawDesc.slice(0, 16).replace(/\s+/g, '_')}_${amount}`;
+      : `alphabank_${date}_${rawDesc.slice(0, 16).replace(/\s+/g, '_')}_${amount}_r${i}`;
     const { category, matched } = inferCategoryFromText(rawDesc);
 
     rows.push({

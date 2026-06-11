@@ -242,6 +242,22 @@ export function overturnBaseline(events, scooterId, windowDays = 30) {
   const _lastEv = sorted[sorted.length - 1].timestamp;
   const lifetimeDays = Math.max(1, daysBetween(firstEv, new Date().toISOString()));
 
+  // #628 — require at least 3 events AND 14 days of history before the ratio is
+  // statistically meaningful. A scooter with 1–2 lifetime events or < 2 weeks of
+  // data can produce extreme ratios from a single incident; return neutral values.
+  if (sorted.length < 3 || lifetimeDays < 14) {
+    const cutoffEarly = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+    const last30Early = sorted.filter((e) => e.timestamp >= cutoffEarly);
+    return {
+      lifetimeMean: 0,
+      last30Rate:   0,
+      ratio:        1,
+      anomaly:      false,
+      last30Count:  last30Early.length,
+      totalCount:   sorted.length,
+    };
+  }
+
   const lifetimeMean = sorted.length / lifetimeDays; // per day (null-ts events excluded)
 
   const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();

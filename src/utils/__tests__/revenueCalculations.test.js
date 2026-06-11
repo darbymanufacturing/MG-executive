@@ -229,6 +229,25 @@ describe('revenuePerCityBreakdown', () => {
     expect(revenuePerCityBreakdown([], [], null)).toEqual([]);
   });
 
+  test('matches scooters case-insensitively (bug #631)', () => {
+    // Revenue row uses lowercase 'athens', city config uses 'Athens',
+    // scooter uses 'ATHENS' — all three should resolve to the same bucket.
+    const rev = [
+      { location: 'athens', totalPaidRevenue: 200, totalTrips: 20 },
+    ];
+    const scooters = [
+      { city: 'ATHENS', status: 'Active' },
+      { city: 'Athens', status: 'In Repair' },
+    ];
+    const result = revenuePerCityBreakdown(rev, scooters, ['Athens']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].city).toBe('Athens');
+    expect(result[0].totalScooters).toBe(2);
+    expect(result[0].activeScooters).toBe(1);
+    expect(result[0].revenue).toBe(200);
+  });
+
   test('aggregates revenue + scooters per city and sorts by revenue', () => {
     const rev = [
       { location: 'Athens', totalPaidRevenue: 100, totalTrips: 10 },

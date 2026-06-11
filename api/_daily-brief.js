@@ -158,6 +158,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('daily-brief error:', err);
-    return res.status(500).json({ error: err.message || 'Brief generation failed' });
+    return res.status(500).json({ error: 'Brief generation failed' });
   }
 }

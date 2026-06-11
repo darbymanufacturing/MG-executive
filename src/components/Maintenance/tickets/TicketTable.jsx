@@ -42,7 +42,7 @@ function CategoryBadge({ code }) {
   );
 }
 
-export default function TicketTable({ tickets, onEdit, onDelete, onComplete, technicians = [], onAssign }) {
+export default function TicketTable({ tickets, onEdit, onDelete, onComplete, technicians = [], onAssign, hideDelete = false }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { docId, scooterId }
 
   if (tickets.length === 0) {
@@ -140,13 +140,15 @@ export default function TicketTable({ tickets, onEdit, onDelete, onComplete, tec
                     >
                       <CheckSquare size={14} />
                     </button>
-                    <button
-                      className={`${styles.actionBtn} ${styles.actionDelete}`}
-                      title="Delete"
-                      onClick={() => setDeleteConfirm({ docId: ticket._docId, scooterId: ticket.scooterId })}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!hideDelete && (
+                      <button
+                        className={`${styles.actionBtn} ${styles.actionDelete}`}
+                        title="Delete"
+                        onClick={() => setDeleteConfirm({ docId: ticket._docId, scooterId: ticket.scooterId })}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

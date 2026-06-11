@@ -24,7 +24,7 @@ export default function TaskCard({ task, assigneeContext = null }) {
 
   // Which steps to show in POW board for this person
   const powStepIndices = assigneeContext
-    ? (task.powSteps?.[assigneeContext] ?? allSteps.map(s => s.index))
+    ? (task.powSteps?.[assigneeContext] ?? allSteps.map((_, i) => i))
     : null;
 
   const visibleSteps = powStepIndices !== null

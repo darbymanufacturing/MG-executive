@@ -83,7 +83,11 @@ export function budgetFromCity(costs, revenueData, linkedCity) {
     if (c.frequency === 'monthly') return amt;
     if (c.frequency === 'yearly' || c.frequency === 'annual') return amt / 12;
     if (c.frequency === 'quarterly') return amt / 3;
-    return amt; // one-time / weekly / daily: count as full for budget display
+    if (c.frequency === 'weekly')    return amt * (52 / 12);
+    if (c.frequency === 'daily')     return amt * (365 / 12);
+    // one-time costs are not recurring; exclude from monthly sum
+    // (they still appear in costTransactions for display)
+    return 0;
   };
   const expenses = costs.reduce((sum, c) => sum + monthlyAmount(c), 0);
 

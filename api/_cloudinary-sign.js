@@ -11,11 +11,16 @@
  * POST body: { folder: string, public_id: string, context: string }
  * Returns:   { signature: string, api_key: string, timestamp: number, cloud_name: string }
  *
+ * Security: the folder MUST begin with `repair-photos/<orgId>/` where orgId is
+ * taken from the caller's JWT custom claims (set by sync-claim.js). Any attempt
+ * to obtain a signature for another org's folder is rejected with 403.
+ *
  * Requires a valid Firebase auth token — unauthenticated callers cannot obtain
  * a signature and therefore cannot upload to the account.
  */
 import crypto from 'node:crypto';
 import { requireUser } from './_lib/require-auth.js';
+import { verifyIdToken } from './_lib/firebase-admin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,10 +30,26 @@ export default async function handler(req, res) {
   const authUser = await requireUser(req, res);
   if (!authUser) return;
 
+  // Read the full decoded token to get the orgId custom claim (set by sync-claim.js).
+  // requireUser already validated the token so verifyIdToken will not throw here.
+  const rawToken = (req.headers.authorization || '').replace(/^Bearer /, '').trim();
+  const decoded = await verifyIdToken(rawToken);
+  const callerOrgId = decoded.orgId ?? null;
+
+  if (!callerOrgId) {
+    return res.status(403).json({ error: 'No org claim found — re-authenticate and try again.' });
+  }
+
   const { folder, public_id, context } = req.body || {};
 
   if (!folder || !public_id) {
     return res.status(400).json({ error: 'folder and public_id are required' });
+  }
+
+  // Org-scope assertion: only allow signing uploads into this org's path prefix.
+  const expectedPrefix = `repair-photos/${callerOrgId}/`;
+  if (!folder.startsWith(expectedPrefix)) {
+    return res.status(403).json({ error: 'Forbidden: folder does not belong to your organisation.' });
   }
 
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;

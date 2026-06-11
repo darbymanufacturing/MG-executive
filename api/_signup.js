@@ -19,7 +19,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { getAuth, verifyIdToken } from './_lib/firebase-admin.js';
-import { sbPutDoc, sbDelDoc } from './_lib/supabase-admin.js';
+import { sbGetDoc, sbPutDoc, sbDelDoc } from './_lib/supabase-admin.js';
 
 const TRIAL_DAYS = 14;
 
@@ -42,6 +42,19 @@ export default async function handler(req, res) {
 
   const uid = decoded.uid;
   const email = decoded.email ?? '';
+
+  // Idempotency guard: reject if this UID already has a provisioned users row.
+  // Without this check a valid Bearer holder can POST /api/signup a second time,
+  // generate a fresh orgId, and silently orphan their previous organization.
+  let existingUser;
+  try { existingUser = await sbGetDoc('users', uid); }
+  catch (err) {
+    console.error('_signup idempotency check failed:', err);
+    return res.status(500).json({ error: 'Could not create your organization. Please try again.' });
+  }
+  if (existingUser) {
+    return res.status(409).json({ error: 'An organization already exists for this account.' });
+  }
 
   // Validate body.
   const orgName = typeof req.body?.orgName === 'string' ? req.body.orgName.trim() : '';
