@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Package } from 'lucide-react';
 import Button from '../../Shared/Button.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './PartsTable.module.css';
 
 const STATUS_COLORS = {
@@ -21,13 +23,11 @@ export default function PartsTable({ parts, onEdit, onDelete }) {
 
   if (!parts || parts.length === 0) {
     return (
-      <div className={styles.empty}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={styles.emptyIcon}>
-          <rect x="2" y="7" width="20" height="14" rx="2" />
-          <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 014 0" />
-        </svg>
-        <p>No parts found. Add your first part or adjust the filters.</p>
-      </div>
+      <EmptyState
+        icon={Package}
+        title="No parts found"
+        description="Add your first part or adjust the filters."
+      />
     );
   }
 

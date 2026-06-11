@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { CalendarClock, Plus, Check, Wrench, Trash2, Repeat, X, AlertTriangle } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { useToast } from '../../../context/ToastContext.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './ScheduleTab.module.css';
 
 const RECURRENCE_OPTIONS = [
@@ -241,13 +242,11 @@ export default function ScheduleTab() {
       {schedulesLoading ? (
         <div className={styles.empty}>Loading schedules…</div>
       ) : schedules.length === 0 ? (
-        <div className={styles.empty}>
-          <CalendarClock size={40} className={styles.emptyIcon} />
-          <p className={styles.emptyTitle}>Nothing scheduled yet</p>
-          <p className={styles.emptyDesc}>
-            Add a recurring service (e.g. a 90-day brake check) or a one-off date for any scooter.
-          </p>
-        </div>
+        <EmptyState
+          icon={CalendarClock}
+          title="Nothing scheduled yet"
+          description="Add a recurring service (e.g. a 90-day brake check) or a one-off date for any scooter."
+        />
       ) : (
         <div className={styles.table}>
           <div className={styles.tHead}>

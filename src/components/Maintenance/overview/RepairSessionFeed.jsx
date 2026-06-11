@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Activity, X, Image } from 'lucide-react';
 import { useRepairSessions } from '../../../context/RepairSessionContext.jsx';
 import { sanitizeCloudinaryUrl } from '../../../utils/sanitizeCloudinaryUrl.js';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './RepairSessionFeed.module.css';
 
 function formatDate(iso) {
@@ -164,14 +165,11 @@ export default function RepairSessionFeed() {
       {loading ? (
         <p className={styles.loading}>Loading activity…</p>
       ) : filtered.length === 0 ? (
-        <div className={styles.empty}>
-          <Activity size={32} className={styles.emptyIcon} />
-          <p className={styles.emptyText}>
-            {sessions.length === 0
-              ? 'No repair sessions yet. Sessions appear here when technicians complete repairs.'
-              : 'No sessions match the current filters.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={Activity}
+          title={sessions.length === 0 ? 'No repair sessions yet' : 'No sessions match the current filters'}
+          description={sessions.length === 0 ? 'Sessions appear here when technicians complete repairs.' : undefined}
+        />
       ) : (
         <div className={styles.feed}>
           <p className={styles.count}>{filtered.length} session{filtered.length !== 1 ? 's' : ''}</p>

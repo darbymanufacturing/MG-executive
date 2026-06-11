@@ -8,6 +8,7 @@ import { useIssues } from '../../context/IssueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import styles from './Inbox.module.css';
+import EmptyState from '../Shared/EmptyState.jsx';
 
 /* ─── Constants ─── */
 const URGENCY = {
@@ -149,19 +150,6 @@ function SnoozeSheet({ item, onClose }) {
   );
 }
 
-/* ─── Empty state ─── */
-function EmptyInbox() {
-  return (
-    <div className={styles.emptyState}>
-      <div className={styles.emptyIcon}>
-        <Check size={32} strokeWidth={2} />
-      </div>
-      <div className={styles.emptyTitle}>Inbox zero.</div>
-      <div className={styles.emptySub}>Nothing needs your attention right now.</div>
-    </div>
-  );
-}
-
 /* ─── Loading skeleton ─── */
 function InboxSkeleton() {
   return (
@@ -236,7 +224,7 @@ export default function Inbox({ items = [], grouping = 'urgency', showHeader = t
       {isLoading ? (
         <InboxSkeleton />
       ) : items.length === 0 ? (
-        <EmptyInbox />
+        <EmptyState icon={Check} title="Inbox zero." description="Nothing needs your attention right now." />
       ) : (
         <>
           {groups.map(g => (

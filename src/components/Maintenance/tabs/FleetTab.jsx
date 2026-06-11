@@ -7,6 +7,7 @@ import { useCosts } from '../../../context/CostContext.jsx';
 import ScooterForm from '../fleet/ScooterForm.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
 import Button from '../../Shared/Button.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './FleetTab.module.css';
 
 const STATUS_COLOR = {
@@ -176,11 +177,13 @@ export default function FleetTab() {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className={styles.empty}>
-          {scooters.length === 0
-            ? 'No scooters registered yet. Click "Add Scooter" to build your fleet inventory.'
-            : 'No scooters match the current filters.'}
-        </div>
+        <EmptyState
+          title={
+            scooters.length === 0
+              ? 'No scooters registered yet. Click "Add Scooter" to build your fleet inventory.'
+              : 'No scooters match the current filters.'
+          }
+        />
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>

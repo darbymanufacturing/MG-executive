@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTelemetry } from '../../../context/TelemetryContext.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './Scooter.module.css';
 
 const TYPE_STYLE = {
@@ -58,7 +59,10 @@ export default function ScooterEventTimeline({ scooterId }) {
       </div>
 
       {scooterEvents.length === 0 ? (
-        <p className={styles.empty}>No events loaded for this scooter. Upload a Status Log CSV.</p>
+        <EmptyState
+          title="No events loaded for this scooter."
+          description="Upload a Status Log CSV on the Ingest tab."
+        />
       ) : (
         <>
           <div className={styles.eventList}>

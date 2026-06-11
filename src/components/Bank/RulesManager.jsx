@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import CategoryBadge from '../Costs/CategoryBadge.jsx';
+import EmptyState from '../Shared/EmptyState.jsx';
 import { useBankRules } from '../../context/BankRulesContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { countRuleMatches } from '../../utils/bankRulesEngine.js';
@@ -74,7 +75,10 @@ export default function RulesManager() {
       {loading ? (
         <p className={styles.muted}>Loading rules…</p>
       ) : rules.length === 0 ? (
-        <p className={styles.muted}>No custom rules yet — the built-in keyword rules are doing the work.</p>
+        <EmptyState
+          title="No custom rules yet"
+          description="The built-in keyword rules are doing the work."
+        />
       ) : (
         <ul className={styles.list}>
           {rules.map((r, i) => {

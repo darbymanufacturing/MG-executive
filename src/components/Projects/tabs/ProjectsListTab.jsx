@@ -6,6 +6,7 @@ import ProjectForm from '../ProjectForm.jsx';
 import ProjectWizard from '../ProjectWizard.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
 import Button from '../../Shared/Button.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './ProjectsListTab.module.css';
 
 const STATUS_FILTERS = ['All', 'Green', 'Amber', 'Red'];
@@ -129,12 +130,12 @@ export default function ProjectsListTab() {
 
       {/* List */}
       {sorted.length === 0 ? (
-        <div className={styles.empty}>
-          <p>{activeProjects.length === 0 ? 'No projects yet. Click "New Project" to get started.' : 'No projects match the current filters.'}</p>
-          {activeProjects.length === 0 && (
+        <EmptyState
+          title={activeProjects.length === 0 ? 'No projects yet. Click "New Project" to get started.' : 'No projects match the current filters.'}
+          action={activeProjects.length === 0 && (
             <Button variant="primary" onClick={() => setWizardOpen(true)}><Wand2 size={14} /> Guided Setup</Button>
           )}
-        </div>
+        />
       ) : (
         <div className={styles.list}>
           {sorted.map((p) => (

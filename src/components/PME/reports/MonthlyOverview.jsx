@@ -5,6 +5,7 @@ import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { isTrueOverturn } from '../../../utils/classifyEventType.js';
 import { validTickets } from '../../../utils/repairJunkFilter.js';
 import { countRealTrips } from '../../../utils/pmeAnalyses.js';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './Reports.module.css';
 
 function bucketByMonth(events, tickets) {
@@ -51,7 +52,12 @@ export default function MonthlyOverview() {
   const data = useMemo(() => bucketByMonth(events, tickets), [events, tickets]);
 
   if (!data.length) {
-    return <p className={styles.empty}>No data available. Upload a Status Log CSV on the Ingest tab.</p>;
+    return (
+      <EmptyState
+        title="No data available"
+        description="Upload a Status Log CSV on the Ingest tab."
+      />
+    );
   }
 
   return (

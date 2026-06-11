@@ -9,6 +9,7 @@ import { authedFetch } from '../utils/apiClient.js';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { orgUpdate } from '../hooks/orgWrite.js';
 import styles from './Contractors.module.css';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 
 /* ─── small helpers ─── */
 function initialsOf(name = '', email = '') {
@@ -151,7 +152,6 @@ function AssignModal({ contractor, scooters, onClose, onSave }) {
 /* ─── page ─── */
 export default function Contractors() {
   const { userProfile } = useAuth();
-  const orgId = userProfile?.orgId ?? null;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'owner';
   const maintenanceCtx = useMaintenance();
   const scooters = maintenanceCtx?.scooters ?? [];
@@ -285,14 +285,11 @@ export default function Contractors() {
           {loading ? (
             <div className={styles.empty}>Loading contractors…</div>
           ) : isEmpty ? (
-            <div className={styles.empty}>
-              <Users size={40} className={styles.emptyIcon} />
-              <p className={styles.emptyTitle}>No contractors yet</p>
-              <p className={styles.emptyDesc}>
-                Invite your first contractor — they get a link to set their own password and only ever see the
-                scooters you assign.
-              </p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="No contractors yet"
+              description="Invite your first contractor — they get a link to set their own password and only ever see the scooters you assign."
+            />
           ) : (
             <>
               {contractors.map((c) => (

@@ -15,6 +15,7 @@ import { formatDate, formatEUR, formatRelativeTime } from '../utils/formatters.j
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ScooterForm from '../components/Maintenance/fleet/ScooterForm.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import styles from './Scooters.module.css';
 
 const STATUS_COLOR = {
@@ -169,11 +170,13 @@ export default function Scooters() {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className={styles.empty}>
-          {scoped.length === 0
-            ? 'No scooters registered yet. Click "Add Scooter" to get started.'
-            : 'No scooters match the current filters.'}
-        </div>
+        <EmptyState
+          title={
+            scoped.length === 0
+              ? 'No scooters registered yet. Click "Add Scooter" to get started.'
+              : 'No scooters match the current filters.'
+          }
+        />
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>

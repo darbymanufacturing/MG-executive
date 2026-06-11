@@ -3,6 +3,7 @@ import { MapPin, Plus, Trash2, Navigation, Pencil, X, Check } from 'lucide-react
 import Button from '../Shared/Button.jsx';
 import { useSpr } from '../../context/SprContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import EmptyState from '../Shared/EmptyState.jsx';
 import styles from './ZoneManager.module.css';
 
 const EMPTY_FORM = { name: '', minLat: '', maxLat: '', minLon: '', maxLon: '' };
@@ -107,9 +108,9 @@ export default function ZoneManager({ city }) {
 
       {/* Zone list */}
       {zones.length === 0 ? (
-        <p className={styles.empty}>
-          {city ? `No zones defined for ${city} yet.` : 'Select a city to manage its zones.'}
-        </p>
+        <EmptyState
+          title={city ? `No zones defined for ${city} yet.` : 'Select a city to manage its zones.'}
+        />
       ) : (
         <ul className={styles.zoneList}>
           {zones.map((z) => (

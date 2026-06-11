@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { formatDate, formatEUR } from '../../../utils/formatters.js';
 import Button from '../../Shared/Button.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import TicketForm from '../../Maintenance/tickets/TicketForm.jsx';
 import styles from './Tab.module.css';
 
@@ -44,7 +45,7 @@ export default function RepairsTab({ scooterId }) {
         </div>
 
         {myTickets.length === 0 ? (
-          <p className={styles.emptyText}>No repair tickets for this scooter.</p>
+          <EmptyState title="No repair tickets for this scooter." />
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>

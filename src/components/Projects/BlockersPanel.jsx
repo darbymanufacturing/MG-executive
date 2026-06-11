@@ -4,6 +4,7 @@ import { useProjects } from '../../context/ProjectContext.jsx';
 import { BLOCKER_TYPES } from './constants.js';
 import styles from './BlockersPanel.module.css';
 import sharedStyles from './Projects.module.css';
+import EmptyState from '../Shared/EmptyState.jsx';
 
 export default function BlockersPanel({ project }) {
   const { addBlocker, resolveBlocker, deleteBlocker } = useProjects();
@@ -29,7 +30,7 @@ export default function BlockersPanel({ project }) {
   return (
     <div className={styles.panel}>
       {active.length === 0 && !showForm ? (
-        <p className={sharedStyles.empty}>No active blockers — all clear.</p>
+        <EmptyState title="No active blockers — all clear." />
       ) : (
         <ul className={styles.list}>
           {active.map((b) => {
