@@ -18,7 +18,7 @@
  * fully under their limits, so realtime is accurate in practice; a remount fully
  * reconciles. (Perfect cross-client consistency is not a requirement here.)
  */
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useOrg } from '../context/OrgContext.jsx';
 import { mapRow, OP_MAP } from './useSupabaseTable.js';
@@ -76,6 +76,10 @@ export function useSupabaseCollectionLive(table, opts = {}) {
   // #575 — bumped by a local Supabase write to THIS table (via the write bus) to force a
   // refetch, because the realtime UPDATE stream doesn't reliably deliver RLS-gated events.
   const [refreshTick, setRefreshTick] = useState(0);
+  // #661 — a write-bus/reconnect refetch runs in the BACKGROUND (no `loading` flip), so a
+  // write doesn't flash a skeleton over the list ("refresh on click"). Only the initial
+  // load / param change shows loading; items stay on screen and swap in place.
+  const silentRef = useRef(false);
 
   // Fail loud (ADR-0003 parity): org resolved but absent → never query unscoped.
   // Bug #291: Return error state instead of throwing synchronously during render.
@@ -107,7 +111,9 @@ export function useSupabaseCollectionLive(table, opts = {}) {
     const cmp = makeComparator(orderField, orderDir);
 
     async function doFetch() {
-      setLoading(true);
+      const silent = silentRef.current;
+      silentRef.current = false;
+      if (!silent) setLoading(true);
       let q = supabase.from(table).select('*').eq('org_id', orgId);
       for (const c of extraWhere) {
         const method = OP_MAP[c[1]] ?? 'eq';
@@ -151,7 +157,7 @@ export function useSupabaseCollectionLive(table, opts = {}) {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (subscribedOnce && !cancelled) doFetch(); // reconnect → resync
+          if (subscribedOnce && !cancelled) { silentRef.current = true; doFetch(); } // reconnect → silent resync
           subscribedOnce = true;
         }
       });
@@ -168,7 +174,7 @@ export function useSupabaseCollectionLive(table, opts = {}) {
     const off = onSupabaseWrite((writtenTable) => {
       if (writtenTable !== table) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setRefreshTick((n) => n + 1), 200);
+      timer = setTimeout(() => { silentRef.current = true; setRefreshTick((n) => n + 1); }, 200);
     });
     return () => { off(); if (timer) clearTimeout(timer); };
   }, [table]);

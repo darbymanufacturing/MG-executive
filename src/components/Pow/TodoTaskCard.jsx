@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import StepsList, { getSteps } from './StepsList.jsx';
@@ -18,6 +18,24 @@ export default function TodoTaskCard({ task }) {
   const [expanded,       setExpanded]       = useState(false);
   const [editing,        setEditing]        = useState(false);
   const [assigningFor,   setAssigningFor]   = useState(null); // person string | null
+
+  // #661 — optimistic step toggle: flip the checkbox at 0ms and sync in the background, so
+  // it feels live instead of waiting for the RPC + refetch round-trip. Clear the override
+  // once the server's checkedSteps matches it (prevents a flash-back during rapid toggles).
+  const [optimisticSteps, setOptimisticSteps] = useState(null);
+  const checkedSteps = optimisticSteps ?? (task.checkedSteps ?? []);
+  useEffect(() => {
+    const sc = task.checkedSteps ?? [];
+    if (optimisticSteps && optimisticSteps.length === sc.length && optimisticSteps.every((i) => sc.includes(i))) {
+      setOptimisticSteps(null);
+    }
+  }, [task.checkedSteps, optimisticSteps]);
+  const handleToggleStep = (idx) => {
+    const base = optimisticSteps ?? (task.checkedSteps ?? []);
+    const next = base.includes(idx) ? base.filter((i) => i !== idx) : [...base, idx];
+    setOptimisticSteps(next);
+    Promise.resolve(toggleStep(task.id, idx)).catch(() => setOptimisticSteps(null));
+  };
 
   const isDone    = task.status === 'done';
   const assignees = task.assignees ?? [];
@@ -109,8 +127,8 @@ export default function TodoTaskCard({ task }) {
             {expanded && (
               <StepsList
                 steps={getSteps(task)}
-                checkedSteps={task.checkedSteps ?? []}
-                onToggle={(idx) => toggleStep(task.id, idx)}
+                checkedSteps={checkedSteps}
+                onToggle={handleToggleStep}
               />
             )}
           </>
