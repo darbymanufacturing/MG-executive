@@ -6,7 +6,8 @@ import { layerFor } from '../lib/dataLayerConfig.js';
 import { useOrg } from './OrgContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
-import { orgWrite, orgUpdate, orgDelete, orgTransaction } from '../hooks/orgWrite.js';
+import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
+import { emitSupabaseWrite } from '../lib/supabaseRealtimeBus.js';
 
 const PowContext = createContext(null);
 
@@ -154,15 +155,29 @@ export function PowProvider({ children }) {
   }, [currentWeek]);
 
   /** Toggle a step checkbox by its index.
-   *  Uses orgTransaction so concurrent clients can't clobber each other
-   *  (mirrors the toggleAssignee pattern — #632). */
+   *  #632/#660 — atomic server-side read-modify-write so concurrent clients can't
+   *  clobber each other. Supabase: the toggle_step RPC (FOR UPDATE row lock),
+   *  mirroring toggleAssignee — NOT orgTransaction, whose rmw_read/rmw_commit are
+   *  projects-only (that raised "unsupported table pow_tasks", so the tick did
+   *  nothing). Firestore: a real transaction. */
   const toggleStep = useCallback(async (id, stepIndex) => {
-    await orgTransaction(TASKS_COL, id, (data) => {
-      const checked = data.checkedSteps ?? [];
+    if (layerFor(TASKS_COL) === 'supabase') {
+      const { error } = await supabase.rpc('toggle_step', {
+        p_task_source_id: id, p_step_index: stepIndex,
+      });
+      if (error) throw new Error(error.message);
+      emitSupabaseWrite('pow_tasks'); // #575 — refetch the live read so the checkbox updates
+      return;
+    }
+    const ref = doc(db, TASKS_COL, id);
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(ref);
+      if (!snap.exists()) return;
+      const checked = snap.data().checkedSteps ?? [];
       const checkedSteps = checked.includes(stepIndex)
         ? checked.filter((i) => i !== stepIndex)
         : [...checked, stepIndex];
-      return { checkedSteps };
+      txn.update(ref, { checkedSteps, updatedAt: serverTimestamp() });
     });
   }, []);
 
