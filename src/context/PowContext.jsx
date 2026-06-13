@@ -94,13 +94,17 @@ export function PowProvider({ children }) {
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   const addTask = useCallback(async ({ title, description, steps, categoryId }) => {
-    const id = `task-${crypto.randomUUID()}`;
+    // #659 — the explicit doc id MUST be org-prefixed. orgWrite.requireOrgDoc throws
+    // synchronously if an explicit id doesn't start with `${orgId}_` (ADR-0003), so the
+    // old bare `task-<uuid>` id made EVERY "add POW task" fail with "Something went wrong"
+    // before any network call. Mirror configDocId's `${orgId}_…` convention.
+    const id = `${orgId}_task-${crypto.randomUUID()}`;
     await orgWrite(TASKS_COL, {
       title, description, steps, categoryId,
       assignees: [], checkedSteps: [], powSteps: {},
       status: 'backlog', createdWeek: currentWeek, doneWeek: null,
     }, { id, rethrow: true, errorMessage: 'Failed to create POW task' });
-  }, [currentWeek]);
+  }, [currentWeek, orgId]);
 
   const updateTask = useCallback(async (id, patch) => {
     await orgUpdate(TASKS_COL, id, patch, { rethrow: true, errorMessage: 'Failed to update POW task' });
