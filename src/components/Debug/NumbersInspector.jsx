@@ -6,13 +6,16 @@ import { formatEUR, formatEURCompact } from '../../utils/formatters.js';
 import styles from './NumbersInspector.module.css';
 
 /**
- * Numbers Inspector (W5 / ADR-0024) — a dev-only troubleshooting overlay.
+ * Numbers Inspector (W5 / ADR-0024) — a financial-numbers troubleshooting overlay.
  *
- * Renders `null` unless import.meta.env.DEV AND userRole ∈ {admin, owner}; the dev branch
- * is tree-shaken out of prod builds (import.meta.env.DEV folds to false). It lists every
- * canonical financialSummary field with its formula string + the _inputs provenance, so a
- * Home-vs-Pulse divergence (the #601/#602/#603 class) is visible at a glance. The
- * "Recompute trace" toggle shows month / range / all side-by-side.
+ * Mounting is gated in App.jsx: `(import.meta.env.DEV || devMode) && isAdminOrOwner`, where
+ * `devMode` is the `omni.devMode` localStorage flag set from Settings → Developer. It is
+ * lazy-loaded there (separate chunk) so it never reaches a normal user's bundle. This
+ * component keeps its OWN admin/owner role check as defense-in-depth — crew/contractor must
+ * never see it even if the flag is somehow set. It lists every canonical financialSummary
+ * field with its formula string + the _inputs provenance, so a Home-vs-Pulse divergence (the
+ * #601/#602/#603 class) is visible at a glance. The "Recompute trace" toggle shows
+ * month / range / all side-by-side.
  */
 function Row({ label, value, formula }) {
   return (
@@ -89,8 +92,9 @@ export default function NumbersInspector() {
   const [open, setOpen] = useState(false);
   const [trace, setTrace] = useState(false);
 
-  // Hard dev + role gate — folds to a constant `false` branch in prod (tree-shaken).
-  if (!import.meta.env.DEV) return null;
+  // Defense-in-depth role gate (the dev-vs-devMode visibility gate lives in App.jsx, where
+  // this component is lazy-mounted). Crew/contractor must NEVER see the financial numbers,
+  // even if the omni.devMode flag is somehow set.
   if (userRole !== 'admin' && userRole !== 'owner') return null;
 
   return <InspectorInner open={open} setOpen={setOpen} trace={trace} setTrace={setTrace} />;

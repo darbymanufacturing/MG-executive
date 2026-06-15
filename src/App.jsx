@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
@@ -23,7 +23,10 @@ import { MetricsProvider } from './context/MetricsContext.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import TopBar from './components/Layout/TopBar.jsx';
 import CaptureModal from './components/Capture/CaptureModal.jsx';
-import NumbersInspector from './components/Debug/NumbersInspector.jsx';
+// Lazy-loaded so the Numbers Inspector lives in its own chunk — the entry bundle
+// stays byte-unchanged for normal users; the dynamic import() only fires when the
+// render gate below is true (dev build, or the founder flips devMode in Settings).
+const NumbersInspector = lazy(() => import('./components/Debug/NumbersInspector.jsx'));
 import OmniLoading from './components/Shared/OmniLoading.jsx';
 
 /* Pages */
@@ -62,6 +65,7 @@ import './styles/variables.css';
 import './styles/globals.css';
 import styles from './App.module.css';
 import { safeStorage } from './utils/safeStorage.js';
+import { useLocalStorage } from './hooks/useLocalStorage.js';
 
 /* ─── Route title map ─── */
 const ROUTE_TITLES = {
@@ -193,6 +197,10 @@ function NoAccessScreen() {
 function AppShell() {
   const { userRole } = useAuth();
   const location = useLocation();
+  // Developer mode (Settings → Developer) — runtime toggle that reveals the Numbers
+  // Inspector on ANY build. Read unconditionally (top of the component, before any
+  // early return) so the hook order stays stable per react-hooks/rules-of-hooks.
+  const [devMode] = useLocalStorage('omni.devMode', false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -330,9 +338,19 @@ function AppShell() {
           an always-on overlay cannot reach the AppShell-level boundary and unmount
           the whole shell (Bug #291). */}
       <ErrorBoundary><CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} /></ErrorBoundary>
-      {/* Numbers Inspector (W5/ADR-0024) — dev-only floating overlay; renders null in
-          prod and for non-admin/owner roles. Occupies the old DiaryBubble slot. */}
-      <ErrorBoundary><NumbersInspector /></ErrorBoundary>
+      {/* Numbers Inspector (W5/ADR-0024) — floating debug overlay. Shows in dev builds
+          automatically, or on ANY build when the founder flips Developer mode in Settings
+          (Settings → Developer → omni.devMode). The admin/owner role gate is ALWAYS on:
+          crew/contractor never see it even if the flag is somehow set. Lazy-loaded inside
+          <Suspense> and only rendered when the gate is true, so the dynamic import() — and
+          thus the separate chunk — never loads for normal users. */}
+      {(import.meta.env.DEV || devMode) && (userRole === 'admin' || userRole === 'owner') && (
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <NumbersInspector />
+          </Suspense>
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

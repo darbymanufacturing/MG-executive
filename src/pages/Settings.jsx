@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Download, Upload, Trash2, Database, Bike, Target,
   DollarSign, TrendingUp, MapPin, Plus, X, Link2, PieChart, ClipboardList,
-  Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal, RefreshCw,
+  Users, UserPlus, Loader2, CheckCircle, AlertCircle, Archive, Terminal, RefreshCw, Bug,
 } from 'lucide-react';
 import useHoppSync from '../hooks/useHoppSync.js';
+import { useLocalStorage } from '../hooks/useLocalStorage.js';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { seedProjectsIfEmpty } from '../utils/seedProjects.js';
 import { authedFetch } from '../utils/apiClient.js';
@@ -213,6 +214,10 @@ export default function Settings() {
   const [acctError, setAcctError] = useState(null);
 
   const isOwner = userProfile?.role === 'owner';
+  // Developer mode toggle — admin/owner only. Persists the omni.devMode flag that App.jsx
+  // reads to reveal the Numbers Inspector on any build (see App.jsx render gate).
+  const isAdminOrOwner = userProfile?.role === 'admin' || userProfile?.role === 'owner';
+  const [devMode, setDevMode] = useLocalStorage('omni.devMode', false);
 
   // #452 — if a non-owner somehow has inviteRole='admin' in state (e.g. role
   // was downgraded after the dropdown was opened), reset to 'crew' so the form
@@ -845,6 +850,37 @@ git checkout main`}
             from the syncLogs collection so admins can confirm freshness +
             spot per-scooter errors. See docs/runbooks/hopp-sync-troubleshooting.md. */}
         <HoppSyncSection />
+
+        {/* ─── Developer (admin/owner only) ───────────────────────────────────
+            Runtime toggle for the Numbers Inspector. The Inspector is lazy-loaded +
+            gated in App.jsx as (import.meta.env.DEV || devMode) && isAdminOrOwner, so
+            flipping omni.devMode here surfaces it on the live app for debugging without
+            bloating the normal-user bundle. */}
+        {isAdminOrOwner && (
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <Bug size={18} className={styles.sectionIcon} />
+              <h2 className={styles.sectionTitle}>Developer</h2>
+            </div>
+            <p className={styles.sectionDesc}>
+              Tools for debugging the app. These are visible to admins and owners only.
+            </p>
+            <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
+              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={devMode}
+                  onChange={(e) => setDevMode(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-brand)' }}
+                />
+                <span>Show the Numbers Inspector (debug panel)</span>
+              </label>
+              <p style={{ margin: '6px 0 0 26px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                Surfaces each canonical metric and its inputs (the formulas behind every number) for troubleshooting.
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* ─── Danger Zone: delete account / organization (B5 / ROADMAP 2.6) ─── */}
         <section className={styles.section}>
