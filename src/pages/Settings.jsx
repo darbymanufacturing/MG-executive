@@ -871,7 +871,7 @@ git checkout main`}
                   type="checkbox"
                   checked={devMode}
                   onChange={(e) => setDevMode(e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-brand)' }}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)' }}
                 />
                 <span>Show the Numbers Inspector (debug panel)</span>
               </label>
