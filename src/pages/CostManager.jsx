@@ -12,7 +12,7 @@ import UpcomingPanel from '../components/Money/UpcomingPanel.jsx';
 import CommitmentsPanel from '../components/Money/CommitmentsPanel.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
-import { FREQUENCIES, CATEGORIES, CATEGORY_KEYS } from '../utils/constants.js';
+import { FREQUENCIES, CATEGORIES, CATEGORY_KEYS, COST_GROUPS, COST_GROUP_KEYS, groupForCategory } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
 import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
 import { isCommitment } from '../utils/upcomingPayments.js';
@@ -21,14 +21,11 @@ import { exportCostsCSV, downloadCostTemplate } from '../utils/exportData.js';
 import { parseCostsCSV } from '../utils/costCsvParser.js';
 import styles from './CostManager.module.css';
 
+// Tabs filter by financial group (fixed/variable/investment/debt/transfer) — with ~43
+// categories, group tabs stay legible; the search box handles specific-category lookup.
 const FILTER_TABS = [
   { key: 'all', label: 'All' },
-  { key: 'one-off', label: 'One-Off' },
-  { key: 'fixed', label: 'Fixed' },
-  { key: 'variable', label: 'Variable' },
-  { key: 'investment', label: 'Investments' },
-  { key: 'loan', label: 'Loans' },
-  { key: 'credit-card', label: 'Credit Cards' },
+  ...COST_GROUP_KEYS.map((g) => ({ key: g, label: COST_GROUPS[g].label })),
 ];
 
 const STATUS_LABELS = { active: 'Active', past: 'Ended', future: 'Upcoming' };
@@ -134,7 +131,7 @@ export default function CostManager() {
 
   const filtered = useMemo(() => {
     let list = filterCostsByLocation(costs, locationFilter);
-    if (activeFilter !== 'all') list = list.filter((c) => c.category === activeFilter);
+    if (activeFilter !== 'all') list = list.filter((c) => groupForCategory(c.category) === activeFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q));
@@ -336,7 +333,7 @@ export default function CostManager() {
                     ? '—'
                     : t.key === 'all'
                       ? costs.length
-                      : costs.filter((c) => c.category === t.key).length}
+                      : costs.filter((c) => groupForCategory(c.category) === t.key).length}
                 </span>
               </button>
             ))}

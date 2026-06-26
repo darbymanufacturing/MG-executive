@@ -1,10 +1,18 @@
+// Each category carries a `group` (fixed | variable | investment | debt | transfer)
+// that drives the financial partition logic (projection split, debt-service, trend
+// stacking) so adding a category never requires touching that logic again.
+// Keys for categories imported verbatim from the owner's bookkeeping (BudgetBakers
+// Wallet) are the human-readable strings themselves — quoted because they contain
+// spaces/commas/Greek. Legacy keys ('one-off'…'credit-card') are retained.
 export const CATEGORIES = {
+  // ---- legacy keys (pre-existing rows, hand-entered + the cost form defaults) ----
   'one-off': {
     label: 'One-Off',
     fullLabel: 'One-Off Costs',
     color: '#A0521D',
     textColor: '#FFFFFF',
     icon: 'Zap',
+    group: 'variable',
     description: 'Single purchases, setup costs, licences',
   },
   fixed: {
@@ -13,6 +21,7 @@ export const CATEGORIES = {
     color: '#C97D49',
     textColor: '#FFFFFF',
     icon: 'Lock',
+    group: 'fixed',
     description: 'Recurring costs that stay constant (rent, insurance)',
   },
   variable: {
@@ -22,6 +31,7 @@ export const CATEGORIES = {
     color: '#64748B',
     textColor: '#FFFFFF',
     icon: 'TrendingUp',
+    group: 'variable',
     description: 'Costs that fluctuate with usage (maintenance, charging)',
   },
   investment: {
@@ -30,6 +40,7 @@ export const CATEGORIES = {
     color: '#7A3E16',
     textColor: '#FFFFFF',
     icon: 'PiggyBank',
+    group: 'investment',
     description: 'Capital expenditure and fleet expansion',
   },
   loan: {
@@ -38,6 +49,7 @@ export const CATEGORIES = {
     color: '#1E88E5',
     textColor: '#FFFFFF',
     icon: 'Landmark',
+    group: 'debt',
     description: 'Bank loans, leasing, equipment financing',
   },
   'credit-card': {
@@ -46,11 +58,211 @@ export const CATEGORIES = {
     color: '#8E24AA',
     textColor: '#FFFFFF',
     icon: 'CreditCard',
+    group: 'debt',
     description: 'Credit card charges and revolving credit',
+  },
+
+  // ---- owner bookkeeping categories (imported verbatim from Wallet, 2026-06-26) ----
+  'Accounting and Legal services': {
+    label: 'Accounting & Legal', fullLabel: 'Accounting and Legal Services',
+    color: '#6366F1', textColor: '#FFFFFF', icon: 'Scale', group: 'fixed',
+    description: 'Accountant, legal, professional services',
+  },
+  'VAT': {
+    label: 'VAT', fullLabel: 'VAT',
+    color: '#DC2626', textColor: '#FFFFFF', icon: 'Percent', group: 'variable',
+    description: 'Value-added tax remittances (ΒΕΒΟΦ)',
+  },
+  'ΓΕΜΗ': {
+    label: 'ΓΕΜΗ', fullLabel: 'ΓΕΜΗ — Business Registry',
+    color: '#0891B2', textColor: '#FFFFFF', icon: 'Building2', group: 'fixed',
+    description: 'General Commercial Registry (GEMI) fees',
+  },
+  'Company Registration Fees': {
+    label: 'Company Registration', fullLabel: 'Company Registration Fees',
+    color: '#0E7490', textColor: '#FFFFFF', icon: 'Stamp', group: 'fixed',
+    description: 'Statutory company registration / filing fees',
+  },
+  'Payroll Fees': {
+    label: 'Payroll Fees', fullLabel: 'Payroll Fees',
+    color: '#7C3AED', textColor: '#FFFFFF', icon: 'Users', group: 'variable',
+    description: 'Payroll processing and related fees',
+  },
+  'Transaction Fees': {
+    label: 'Transaction Fees', fullLabel: 'Bank Transaction Fees',
+    color: '#94A3B8', textColor: '#FFFFFF', icon: 'Receipt', group: 'variable',
+    description: 'Bank charges, wire/SEPA fees (ΕΞΟΔΑ ΕΝΤΟΛΗΣ)',
+  },
+  'Bank loans': {
+    label: 'Bank Loans', fullLabel: 'Bank Loan Repayments',
+    color: '#1D4ED8', textColor: '#FFFFFF', icon: 'Landmark', group: 'debt',
+    description: 'Bank loan principal/instalment payments',
+  },
+  'Loan Interest': {
+    label: 'Loan Interest', fullLabel: 'Loan Interest',
+    color: '#2563EB', textColor: '#FFFFFF', icon: 'Percent', group: 'debt',
+    description: 'Interest portion of loans / credit',
+  },
+  'Other debts': {
+    label: 'Other Debts', fullLabel: 'Other Debt Repayments',
+    color: '#3B82F6', textColor: '#FFFFFF', icon: 'HandCoins', group: 'debt',
+    description: 'Personal/other loan repayments (e.g. 10k loan)',
+  },
+  'Transfer, withdraw': {
+    label: 'Transfer / Withdraw', fullLabel: 'Transfers & Withdrawals',
+    color: '#A8A29E', textColor: '#FFFFFF', icon: 'ArrowLeftRight', group: 'transfer',
+    description: 'Internal transfers & cash withdrawals (not a true expense)',
+  },
+  'Insurance': {
+    label: 'Insurance', fullLabel: 'Insurance',
+    color: '#0D9488', textColor: '#FFFFFF', icon: 'ShieldCheck', group: 'fixed',
+    description: 'Vehicle / business insurance premiums',
+  },
+  'Customs': {
+    label: 'Customs', fullLabel: 'Customs & Duties',
+    color: '#B45309', textColor: '#FFFFFF', icon: 'Ship', group: 'variable',
+    description: 'Import customs clearance and duties',
+  },
+  'Logistics services': {
+    label: 'Logistics', fullLabel: 'Logistics Services',
+    color: '#D97706', textColor: '#FFFFFF', icon: 'Truck', group: 'variable',
+    description: 'Shipping, courier, freight (ACS, ELTA)',
+  },
+  'Electricity Bill': {
+    label: 'Electricity', fullLabel: 'Electricity Bill',
+    color: '#F59E0B', textColor: '#FFFFFF', icon: 'Zap', group: 'fixed',
+    description: 'Electricity / power bills',
+  },
+  'Space rent': {
+    label: 'Space Rent', fullLabel: 'Space Rent',
+    color: '#CA8A04', textColor: '#FFFFFF', icon: 'Home', group: 'fixed',
+    description: 'Workshop / storage / office rent',
+  },
+  'Space & Equipment': {
+    label: 'Space & Equipment', fullLabel: 'Space & Equipment',
+    color: '#A16207', textColor: '#FFFFFF', icon: 'Building', group: 'fixed',
+    description: 'Premises fit-out and fixed equipment',
+  },
+  'Fuel': {
+    label: 'Fuel', fullLabel: 'Fuel',
+    color: '#EA580C', textColor: '#FFFFFF', icon: 'Fuel', group: 'variable',
+    description: 'Vehicle fuel (Honda, Chico, van)',
+  },
+  'Consumables': {
+    label: 'Consumables', fullLabel: 'Consumables',
+    color: '#65A30D', textColor: '#FFFFFF', icon: 'Package', group: 'variable',
+    description: 'Workshop consumables (tape, nuts, etc.)',
+  },
+  'Equipment and Tools': {
+    label: 'Equipment & Tools', fullLabel: 'Equipment and Tools',
+    color: '#16A34A', textColor: '#FFFFFF', icon: 'Wrench', group: 'variable',
+    description: 'Tools and workshop equipment',
+  },
+  'Material': {
+    label: 'Material', fullLabel: 'Material',
+    color: '#15803D', textColor: '#FFFFFF', icon: 'Boxes', group: 'variable',
+    description: 'Raw materials and stock',
+  },
+  'Parts': {
+    label: 'Parts', fullLabel: 'Spare Parts',
+    color: '#059669', textColor: '#FFFFFF', icon: 'Cog', group: 'variable',
+    description: 'Scooter spare parts',
+  },
+  'Repairs & maintenance': {
+    label: 'Repairs & Maint.', fullLabel: 'Repairs & Maintenance',
+    color: '#10B981', textColor: '#FFFFFF', icon: 'Hammer', group: 'variable',
+    description: 'Repairs and servicing',
+  },
+  'Machines and Vehicles': {
+    label: 'Machines & Vehicles', fullLabel: 'Machines and Vehicles',
+    color: '#92400E', textColor: '#FFFFFF', icon: 'Car', group: 'investment',
+    description: 'Vehicle / machine purchases (capex)',
+  },
+  '3D Scanner Cost': {
+    label: '3D Scanner', fullLabel: '3D Scanner Cost',
+    color: '#9333EA', textColor: '#FFFFFF', icon: 'ScanLine', group: 'investment',
+    description: '3D scanner hardware / service',
+  },
+  'App Development Fee': {
+    label: 'App Development', fullLabel: 'App Development Fee',
+    color: '#7C3AED', textColor: '#FFFFFF', icon: 'Code', group: 'fixed',
+    description: 'Software / app development (OTORIDE)',
+  },
+  'Operations & computing services': {
+    label: 'Ops & Computing', fullLabel: 'Operations & Computing Services',
+    color: '#4F46E5', textColor: '#FFFFFF', icon: 'Server', group: 'fixed',
+    description: 'Cloud, compute, AI APIs (Anthropic, Google)',
+  },
+  'SW subscriptions, Telco charges': {
+    label: 'Software & Telco', fullLabel: 'Software Subscriptions & Telco',
+    color: '#2563EB', textColor: '#FFFFFF', icon: 'Cloud', group: 'fixed',
+    description: 'SaaS subscriptions, internet, mobile (Starlink, Workadu)',
+  },
+  'Marketing & Sales services': {
+    label: 'Marketing & Sales', fullLabel: 'Marketing & Sales Services',
+    color: '#DB2777', textColor: '#FFFFFF', icon: 'Megaphone', group: 'variable',
+    description: 'Advertising, marketing, sales services',
+  },
+  'Hospitality Cost': {
+    label: 'Hospitality', fullLabel: 'Hospitality Cost',
+    color: '#E11D48', textColor: '#FFFFFF', icon: 'Coffee', group: 'variable',
+    description: 'Coffee, meals, hosting (POW, meetings)',
+  },
+  'Travel expenses': {
+    label: 'Travel', fullLabel: 'Travel Expenses',
+    color: '#F43F5E', textColor: '#FFFFFF', icon: 'Plane', group: 'variable',
+    description: 'Flights, transit, travel (Aegean)',
+  },
+  'Other admin expenses': {
+    label: 'Other Admin', fullLabel: 'Other Admin Expenses',
+    color: '#78716C', textColor: '#FFFFFF', icon: 'FileText', group: 'fixed',
+    description: 'Miscellaneous administrative costs',
+  },
+  'Other Supplies': {
+    label: 'Other Supplies', fullLabel: 'Other Supplies',
+    color: '#A8A29E', textColor: '#FFFFFF', icon: 'Package2', group: 'variable',
+    description: 'Miscellaneous supplies',
+  },
+  'CEO': {
+    label: 'CEO Draw', fullLabel: 'CEO / Owner Draw',
+    color: '#A0521D', textColor: '#FFFFFF', icon: 'Crown', group: 'fixed',
+    description: 'Owner salary / management draw (ΜΙΣΘΟΣ ΔΙΑΧ)',
+  },
+  'Employees': {
+    label: 'Employees', fullLabel: 'Employee Wages',
+    color: '#9A3412', textColor: '#FFFFFF', icon: 'Users', group: 'variable',
+    description: 'Employee wages',
+  },
+  'Contractors': {
+    label: 'Contractors', fullLabel: 'Contractors',
+    color: '#C2410C', textColor: '#FFFFFF', icon: 'HardHat', group: 'variable',
+    description: 'Contractor / freelance fees (diver, etc.)',
+  },
+  'Franchise Fee': {
+    label: 'Franchise Fee', fullLabel: 'Franchise Fee',
+    color: '#8E24AA', textColor: '#FFFFFF', icon: 'Network', group: 'fixed',
+    description: 'Hopp franchise fee',
+  },
+  'Unknown': {
+    label: 'Uncategorized', fullLabel: 'Uncategorized',
+    color: '#9CA3AF', textColor: '#FFFFFF', icon: 'HelpCircle', group: 'variable',
+    description: 'Not yet categorized — needs review',
   },
 };
 
 export const CATEGORY_KEYS = Object.keys(CATEGORIES);
+
+// Category → financial group. Drives the projection split (fixed vs variable),
+// debt-service detection, and trend-chart stacking. Falls back to 'variable'.
+export const COST_GROUPS = {
+  fixed:      { label: 'Fixed',      color: '#C97D49' },
+  variable:   { label: 'Variable',   color: '#64748B' },
+  investment: { label: 'Investment', color: '#7A3E16' },
+  debt:       { label: 'Debt',       color: '#1E88E5' },
+  transfer:   { label: 'Transfers',  color: '#A8A29E' },
+};
+export const COST_GROUP_KEYS = Object.keys(COST_GROUPS);
+export const groupForCategory = (key) => CATEGORIES[key]?.group || 'variable';
 
 export const FREQUENCIES = {
   'one-time': {
@@ -134,14 +346,10 @@ export const CURRENT_VERSION = '1.0.0';
 
 // #145 — static fallback kept so existing consumers don't break;
 // prefer getChartColors() for theme-aware chart rendering.
-export const CHART_COLORS_STATIC = {
-  'one-off':     '#A0521D',
-  fixed:         '#C97D49',
-  variable:      '#64748B',
-  investment:    '#7A3E16',
-  loan:          '#1E88E5',
-  'credit-card': '#8E24AA',
-};
+// Derived from CATEGORIES so every category (incl. owner bookkeeping keys) has a colour.
+export const CHART_COLORS_STATIC = Object.fromEntries(
+  Object.entries(CATEGORIES).map(([k, v]) => [k, v.color]),
+);
 
 /** @deprecated Use getChartColors() for theme-aware charts. */
 export const CHART_COLORS = CHART_COLORS_STATIC;

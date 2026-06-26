@@ -22,6 +22,7 @@ import {
   monthlyTrendData, budgetVariance, filterCostsByLocation,
   allTimeMonthlyTrendData, normalizeToMonthly, breakdownByCategory,
 } from '../utils/calculations.js';
+import { groupForCategory } from '../utils/constants.js';
 import {
   avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend,
@@ -268,7 +269,7 @@ export default function Dashboard() {
 
   const autoDebtService = useMemo(() =>
     usedCosts
-      .filter((c) => c.category === 'loan' || c.category === 'credit-card')
+      .filter((c) => groupForCategory(c.category) === 'debt')
       .reduce((sum, c) => sum + normalizeToMonthly(c), 0),
   [usedCosts]);
 

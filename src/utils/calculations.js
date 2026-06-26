@@ -1,4 +1,4 @@
-import { FREQUENCIES, MONTHS } from './constants.js';
+import { FREQUENCIES, MONTHS, COST_GROUP_KEYS, groupForCategory } from './constants.js';
 import { todayISO } from './formatters.js';
 
 /** Normalise a cost entry to its monthly EUR equivalent */
@@ -83,37 +83,27 @@ export function monthlyTrendData(costs, year = new Date().getFullYear()) {
   const all = MONTHS.map((month, i) => {
     const monthDate = new Date(year, i, 1);
     const entry = { month: `${month} ${year}`, _idx: i };
+    COST_GROUP_KEYS.forEach((g) => { entry[g] = 0; });
 
-    ['one-off', 'fixed', 'variable', 'investment', 'loan', 'credit-card'].forEach((cat) => {
-      let total = 0;
-      costs.forEach((c) => {
-        if (c.category !== cat) return;
-        const start = c.startDate ? new Date(c.startDate) : null;
-        const end = c.endDate ? new Date(c.endDate) : null;
-
-        if (c.frequency === 'one-time') {
-          if (start && start.getFullYear() === year && start.getMonth() === i) {
-            total += c.amount;
-          }
-        } else {
-          const activeFrom = start ? start <= new Date(year, i + 1, 0) : true;
-          const activeTo = end ? end >= monthDate : true;
-          if (activeFrom && activeTo) {
-            total += normalizeToMonthly(c);
-          }
-        }
-      });
-      entry[cat] = parseFloat(total.toFixed(2));
+    // Bucket every cost into its financial group (fixed/variable/investment/debt/transfer)
+    // so the trend total covers all categories, not a hardcoded subset.
+    costs.forEach((c) => {
+      const g = groupForCategory(c.category);
+      const start = c.startDate ? new Date(c.startDate) : null;
+      const end = c.endDate ? new Date(c.endDate) : null;
+      let contrib = 0;
+      if (c.frequency === 'one-time') {
+        if (start && start.getFullYear() === year && start.getMonth() === i) contrib = c.amount;
+      } else {
+        const activeFrom = start ? start <= new Date(year, i + 1, 0) : true;
+        const activeTo = end ? end >= monthDate : true;
+        if (activeFrom && activeTo) contrib = normalizeToMonthly(c);
+      }
+      entry[g] += contrib;
     });
 
-    entry.total =
-      (entry['one-off'] || 0) +
-      (entry['fixed'] || 0) +
-      (entry['variable'] || 0) +
-      (entry['investment'] || 0) +
-      (entry['loan'] || 0) +
-      (entry['credit-card'] || 0);
-
+    COST_GROUP_KEYS.forEach((g) => { entry[g] = parseFloat(entry[g].toFixed(2)); });
+    entry.total = parseFloat(COST_GROUP_KEYS.reduce((s, g) => s + entry[g], 0).toFixed(2));
     return entry;
   });
 
@@ -135,12 +125,13 @@ export function getCostStatus(cost) {
 export function projectedCostPerScooter(costs, newFleetSize, currentFleetSize) {
   if (!newFleetSize || newFleetSize === 0) return 0;
   const fixedMonthly = costs
-    .filter((c) => c.category === 'fixed' || c.category === 'investment')
+    .filter((c) => ['fixed', 'investment'].includes(groupForCategory(c.category)))
     .reduce((s, c) => s + normalizeToMonthly(c), 0);
   const variableMonthly = costs
-    .filter((c) => c.category === 'variable' || c.category === 'one-off')
+    .filter((c) => groupForCategory(c.category) === 'variable')
     .reduce((s, c) => s + normalizeToMonthly(c), 0);
   // Fixed costs stay constant; variable costs scale per scooter from current base
+  // (debt & transfer groups are excluded from the projection, as loans/transfers were before)
   const variablePerScooter = currentFleetSize > 0 ? variableMonthly / currentFleetSize : 0;
   return (fixedMonthly + variablePerScooter * newFleetSize) / newFleetSize;
 }
@@ -149,10 +140,10 @@ export function projectedCostPerScooter(costs, newFleetSize, currentFleetSize) {
 export function projectedCostPerScooterSimple(costs, currentFleetSize, newFleetSize) {
   if (!newFleetSize || newFleetSize === 0) return 0;
   const fixedTotal = costs
-    .filter((c) => ['fixed', 'investment'].includes(c.category))
+    .filter((c) => ['fixed', 'investment'].includes(groupForCategory(c.category)))
     .reduce((s, c) => s + normalizeToMonthly(c), 0);
   const variableTotal = costs
-    .filter((c) => ['variable', 'one-off'].includes(c.category))
+    .filter((c) => groupForCategory(c.category) === 'variable')
     .reduce((s, c) => s + normalizeToMonthly(c), 0);
   const variablePerScooter = currentFleetSize > 0 ? variableTotal / currentFleetSize : 0;
   return (fixedTotal + variablePerScooter * newFleetSize) / newFleetSize;
@@ -163,8 +154,6 @@ export function budgetVariance(actual, target) {
   if (!target || target === 0) return null;
   return ((actual - target) / target) * 100;
 }
-
-const ALL_CATS = ['one-off', 'fixed', 'variable', 'investment', 'loan', 'credit-card'];
 
 /**
  * Multi-year monthly trend data spanning from the earliest cost/revenue date to today.
@@ -213,24 +202,24 @@ export function allTimeMonthlyTrendData(costs, startYM = null) {
       _key: `${y}-${String(m + 1).padStart(2, '0')}`,
     };
 
-    ALL_CATS.forEach((cat) => {
-      let total = 0;
-      costs.forEach((c) => {
-        if (c.category !== cat) return;
-        const start = c.startDate ? new Date(c.startDate) : null;
-        const end   = c.endDate   ? new Date(c.endDate)   : null;
-        if (c.frequency === 'one-time') {
-          if (start && start.getFullYear() === y && start.getMonth() === m) total += c.amount;
-        } else {
-          const activeFrom = start ? start <= new Date(y, m + 1, 0) : true;
-          const activeTo   = end   ? end   >= monthDate              : true;
-          if (activeFrom && activeTo) total += normalizeToMonthly(c);
-        }
-      });
-      entry[cat] = parseFloat(total.toFixed(2));
+    COST_GROUP_KEYS.forEach((g) => { entry[g] = 0; });
+    costs.forEach((c) => {
+      const g = groupForCategory(c.category);
+      const start = c.startDate ? new Date(c.startDate) : null;
+      const end   = c.endDate   ? new Date(c.endDate)   : null;
+      let contrib = 0;
+      if (c.frequency === 'one-time') {
+        if (start && start.getFullYear() === y && start.getMonth() === m) contrib = c.amount;
+      } else {
+        const activeFrom = start ? start <= new Date(y, m + 1, 0) : true;
+        const activeTo   = end   ? end   >= monthDate              : true;
+        if (activeFrom && activeTo) contrib = normalizeToMonthly(c);
+      }
+      entry[g] += contrib;
     });
 
-    entry.total = ALL_CATS.reduce((s, k) => s + (entry[k] || 0), 0);
+    COST_GROUP_KEYS.forEach((g) => { entry[g] = parseFloat(entry[g].toFixed(2)); });
+    entry.total = parseFloat(COST_GROUP_KEYS.reduce((s, g) => s + entry[g], 0).toFixed(2));
     results.push(entry);
 
     m++;
