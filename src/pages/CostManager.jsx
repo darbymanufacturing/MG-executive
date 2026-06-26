@@ -115,7 +115,7 @@ export default function CostManager() {
   const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
   const { getSummary, getUpcoming, scopedCosts } = useMetrics();
   const locations = config.locations || [];
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(false); // module intro animation removed — only the opening Omni loader animates
   const [activeFilter, setActiveFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [search, setSearch] = useState('');

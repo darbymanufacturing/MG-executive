@@ -43,7 +43,7 @@ export default function Maintenance() {
 
   const [activeTab,   setActiveTab]   = useState('overview');
   const [city,        setCity]        = useState('');
-  const [showIntro,   setShowIntro]   = useState(true);
+  const [showIntro,   setShowIntro]   = useState(false); // module intro animation removed — only the opening Omni loader animates
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedDone,    setSeedDone]    = useState(false);
 

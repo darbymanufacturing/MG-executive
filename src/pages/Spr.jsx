@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { MapPin, Activity, Cloud, BarChart2, Clock, Trash2, Database } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
-import SprIntroOverlay from '../components/Spr/SprIntroOverlay.jsx';
 import ZoneManager from '../components/Spr/ZoneManager.jsx';
 import EventImportPanel from '../components/Spr/EventImportPanel.jsx';
 import WeatherPanel from '../components/Spr/WeatherPanel.jsx';
@@ -41,9 +40,6 @@ export default function Spr() {
 
   return (
     <div className={styles.page}>
-      {/* Techy zoom-in intro animation */}
-      <SprIntroOverlay />
-
       <Header
         title="SPR"
         subtitle="Spot Performance &amp; Rebalancing"

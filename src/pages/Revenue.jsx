@@ -23,7 +23,7 @@ export default function Revenue() {
   const { scopeByFleet } = useFleet(); // FF-3 — scope revenue to the active fleet
   const [clearConfirm, setClearConfirm] = useState(false);
   const [locationFilter, setLocationFilter] = useState('all');
-  const [showIntro, setShowIntro] = useState(!localStorage.getItem('omni_revenue_intro_seen'));
+  const [showIntro, setShowIntro] = useState(false); // module intro animation removed — only the opening Omni loader animates
 
   const filteredRevenue = useMemo(
     () => filterRevenueByLocation(scopeByFleet(revenueData), locationFilter),

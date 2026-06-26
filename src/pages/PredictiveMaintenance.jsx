@@ -13,7 +13,7 @@ import PmeIntroOverlay from '../components/PME/PmeIntroOverlay.jsx';
 import styles from './PredictiveMaintenance.module.css';
 
 export default function PredictiveMaintenance() {
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(false); // module intro animation removed — only the opening Omni loader animates
 
   return (
     <div className={styles.page}>
