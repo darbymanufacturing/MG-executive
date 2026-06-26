@@ -184,17 +184,27 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
   // (PulseStrip.jsx:106-120, the #603 basis). Computed independently of `period`.
   const mtdMonthStart = new Date(mtdY, mtdMonthIdx, 1);
   const mtdMonthEnd = new Date(mtdY, mtdMonthIdx + 1, 0);
-  const costsMTD = safeCosts.reduce((s, c) => {
+  // costsMTDByCategory: the SAME predicate + amounts as costsMTD, grouped by category, so
+  // Σ(values) === costsMTD exactly. Unlike costByCategory (a monthly run-rate that excludes
+  // one-time rows), this includes one-time costs dated this month — it's the real "what we
+  // paid this month" breakdown (ADR-0025; the bars must reconcile with the costsMTD header).
+  const mtdCostOf = (c) => {
     const start = c.startDate ? new Date(c.startDate) : null;
     const end = c.endDate ? new Date(c.endDate) : null;
     if (c.frequency === 'one-time') {
       return (start && start.getFullYear() === mtdY && start.getMonth() === mtdMonthIdx)
-        ? s + (c.amount || 0)
-        : s;
+        ? (c.amount || 0)
+        : 0;
     }
     const activeThisMonth = (start ? start <= mtdMonthEnd : true) && (end ? end >= mtdMonthStart : true);
-    return activeThisMonth ? s + normalizeToMonthly(c) : s;
-  }, 0);
+    return activeThisMonth ? normalizeToMonthly(c) : 0;
+  };
+  const costsMTD = safeCosts.reduce((s, c) => s + mtdCostOf(c), 0);
+  const costsMTDByCategory = safeCosts.reduce((acc, c) => {
+    const v = mtdCostOf(c);
+    if (v) acc[c.category] = (acc[c.category] || 0) + v;
+    return acc;
+  }, {});
 
   // ── P&L ─────────────────────────────────────────────────────────────────────
   const displayPnL = rev.operatingRevenue - displayTotal;
@@ -225,6 +235,7 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
     monthlyOpexExInvestment,
     revenueMTD,
     costsMTD,
+    costsMTDByCategory,
 
     // P&L
     displayPnL,

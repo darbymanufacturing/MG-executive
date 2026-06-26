@@ -236,3 +236,27 @@ describe('8. empty/zero guards', () => {
     expect(s.scooterCountTotal).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. costsMTDByCategory (ADR-0025) — the "what we paid this month" breakdown MUST
+//    sum to costsMTD (includes one-time dated this month), and MUST differ from the
+//    run-rate costByCategory for one-time costs (the live PaidPanel reconciliation bug).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('9. costsMTDByCategory reconciles to costsMTD and includes one-time', () => {
+  test('Σ(costsMTDByCategory) === costsMTD; one-time this month is included', () => {
+    const costs = [
+      { amount: 1000, frequency: 'monthly',   category: 'fixed',    startDate: '2026-01-01' }, // 1000 MTD
+      { amount: 300,  frequency: 'quarterly', category: 'variable', startDate: '2025-01-01' }, // 100 MTD
+      { amount: 200,  frequency: 'one-time',  category: 'one-off',  startDate: '2026-06-10' }, // 200 MTD (this month)
+      { amount: 5000, frequency: 'one-time',  category: 'one-off',  startDate: '2026-03-01' }, // excluded
+    ];
+    const s = financialSummary(costs, [], [], CONFIG, MONTH, OPTS);
+    const sum = Object.values(s.costsMTDByCategory).reduce((a, b) => a + b, 0);
+
+    expect(s.costsMTD).toBeCloseTo(1300);     // 1000 + 100 + 200
+    expect(sum).toBeCloseTo(s.costsMTD);      // bars reconcile to the header
+    expect(s.costsMTDByCategory['one-off']).toBeCloseTo(200); // one-time IS counted
+    // contrast: the run-rate breakdown excludes one-time (monthlyMultiplier 0)
+    expect(s.costByCategory['one-off'] || 0).toBeCloseTo(0);
+  });
+});

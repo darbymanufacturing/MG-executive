@@ -106,9 +106,11 @@ export function nextOccurrence(cost, { now = new Date() } = {}) {
     }
   } else if (stepDays) {
     const daysDiff = Math.floor((today - start) / MS_PER_DAY);
-    let n = Math.max(0, Math.ceil(daysDiff / stepDays));
-    occ = new Date(start.getTime() + n * stepDays * MS_PER_DAY);
-    if (occ < today) occ = new Date(start.getTime() + (n + 1) * stepDays * MS_PER_DAY);
+    const n = Math.max(0, Math.ceil(daysDiff / stepDays));
+    // Advance by CALENDAR days via the Date constructor (DST-safe). Fixed-ms stepping
+    // drifts an hour across a DST boundary and can land on the wrong calendar day.
+    occ = new Date(start.getFullYear(), start.getMonth(), start.getDate() + n * stepDays);
+    if (occ < today) occ = new Date(start.getFullYear(), start.getMonth(), start.getDate() + (n + 1) * stepDays);
   } else {
     return null; // unknown frequency
   }
@@ -137,7 +139,7 @@ function occurrencesInWindow(cost, from, to) {
         startDay,
       );
     } else if (stepDays) {
-      cursor = new Date(cursor.getTime() + stepDays * MS_PER_DAY);
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + stepDays); // calendar-day step (DST-safe)
     } else {
       break;
     }

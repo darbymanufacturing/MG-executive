@@ -98,6 +98,16 @@ describe('upcomingForCosts', () => {
     expect(items[0].isEstimate).toBe(true);
   });
 
+  it('counts daily occurrences across the full inclusive window (DST-safe calendar step)', () => {
+    // start in Jan (winter) viewed in Jun (summer): fixed-ms stepping would land at 01:00
+    // and drop the last day → 30; calendar-day stepping correctly yields 31 in any TZ.
+    const costs = [{ id: 'd', name: 'Charging', category: 'variable', amount: 10, frequency: 'daily', startDate: '2026-01-01' }];
+    const { items } = upcomingForCosts(costs, { horizonDays: 30, now: NOW });
+    expect(items[0].occurrenceCount).toBe(31); // 2026-06-26 .. 2026-07-26 inclusive
+    expect(items[0].horizonTotal).toBe(310);
+    expect(items[0].isEstimate).toBe(true);
+  });
+
   it('includes a future one-time inside the horizon, excludes one past/beyond', () => {
     const costs = [
       { id: 'a', name: 'Deposit', category: 'one-off', amount: 500, frequency: 'one-time', startDate: '2026-07-05' },

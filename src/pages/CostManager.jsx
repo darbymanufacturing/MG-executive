@@ -113,7 +113,7 @@ function PendingInvoiceBanner({ onConfirm }) {
 
 export default function CostManager() {
   const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
-  const { getSummary, getUpcoming } = useMetrics();
+  const { getSummary, getUpcoming, scopedCosts } = useMetrics();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -162,8 +162,8 @@ export default function CostManager() {
     [getUpcoming, locationFilter],
   );
   const commitmentCount = useMemo(
-    () => filterCostsByLocation(costs, locationFilter).filter((c) => isCommitment(c)).length,
-    [costs, locationFilter],
+    () => filterCostsByLocation(scopedCosts, locationFilter).filter((c) => isCommitment(c)).length,
+    [scopedCosts, locationFilter],
   );
 
   const toggleSort = (field) => {

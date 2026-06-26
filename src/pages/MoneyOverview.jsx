@@ -87,7 +87,7 @@ export default function MoneyOverview() {
           />
         </div>
 
-        <PaidPanel total={summary.costsMTD} byCategory={summary.costByCategory} label="this month" />
+        <PaidPanel total={summary.costsMTD} byCategory={summary.costsMTDByCategory} label="this month" />
 
         <HealthChips
           ebitdaMargin={health.ebitdaMargin}
