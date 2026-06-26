@@ -1,0 +1,123 @@
+.page {
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.section {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--fg-strong);
+  margin: 0 0 1rem;
+}
+
+/* ── By-type bars ── */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.barRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.barHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.barCount {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.barTotal {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--fg-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.barTrack {
+  height: 8px;
+  background: var(--bg-section);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  min-width: 2px;
+}
+
+.barSub {
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+}
+
+/* ── Chart ── */
+.chartWrap {
+  width: 100%;
+}
+
+/* ── Table ── */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.td {
+  padding: 0.5rem 0.75rem;
+  color: var(--fg-strong);
+  vertical-align: middle;
+}
+
+.right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .kpis { grid-template-columns: 1fr; }
+  .page { padding: 1rem; }
+}

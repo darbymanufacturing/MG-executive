@@ -61,9 +61,9 @@ describe('parseAlphaBankCsv — account feed', () => {
     expect(res.rows[2].cleanDesc).toBe('ΣΕΡΒΙΣ ΜΟΤΟ'); // genuine Greek preserved
   });
 
-  it('auto-categorizes and flags needs-attention rows', () => {
-    expect(res.rows[0].matched).toBe(false);            // ANTHROPIC — no rule
-    expect(res.rows[2]).toMatchObject({ category: 'variable', matched: true }); // ΣΕΡΒΙΣ
+  it('auto-categorizes rows via the built-in rules (ADR-0026 category keys)', () => {
+    expect(res.rows[0]).toMatchObject({ category: 'Operations & computing services', matched: true }); // ANTHROPIC
+    expect(res.rows[2]).toMatchObject({ category: 'Repairs & maintenance', matched: true });           // ΣΕΡΒΙΣ ΜΟΤΟ
   });
 
   it('uses the bank transaction id as the dedup key', () => {

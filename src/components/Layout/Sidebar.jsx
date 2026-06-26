@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Inbox, Activity, Bell, Flag, Wrench,
   Users, Receipt, Landmark, Settings, ChevronLeft, ChevronRight,
-  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, ClipboardList, Scale, Wallet, Banknote, HandCoins, PiggyBank,
+  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, ClipboardList, Scale, Wallet, Banknote, HandCoins, PiggyBank, Percent,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
@@ -171,6 +171,7 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
         <SidebarSection label="Finance" collapsed={collapsed}>
           <NavItem to="/money"      icon={PiggyBank}  label="Money"      collapsed={collapsed} />
           <NavItem to="/costs"      icon={Receipt}    label="Expenses"   collapsed={collapsed} />
+          <NavItem to="/taxes"      icon={Percent}    label="Taxes"      collapsed={collapsed} />
           <NavItem to="/bank-import" icon={Banknote}  label="Bank Import" collapsed={collapsed} />
           <NavItem to="/revenue"    icon={TrendingUp} label="Revenue"    collapsed={collapsed} />
           <NavItem to="/fleet-pnl"  icon={Scale}      label="Fleet P&L"  collapsed={collapsed} />

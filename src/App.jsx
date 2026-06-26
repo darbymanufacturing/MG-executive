@@ -35,6 +35,7 @@ import Issues from './pages/Issues.jsx';
 import IssueDetail from './pages/IssueDetail.jsx';
 import Dashboard from './pages/Dashboard.jsx';   /* becomes /pulse */
 import MoneyOverview from './pages/MoneyOverview.jsx';
+import Taxes from './pages/Taxes.jsx';
 import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
@@ -83,6 +84,7 @@ const ROUTE_TITLES = {
   '/pme':         'PME',
   '/pow':         'POW v3',
   '/money':       'Money',
+  '/taxes':       'Taxes',
   '/costs':       'Expenses',
   '/revenue':     'Revenue',
   '/investment':  'Investment',
@@ -306,6 +308,7 @@ function AppShell() {
             <Route path="/war-room"       element={<RouteErrorBoundary><WarRoomPage /></RouteErrorBoundary>} />
             <Route path="/investment"     element={<RouteErrorBoundary><Investment /></RouteErrorBoundary>} />
             <Route path="/money"          element={<RouteErrorBoundary><MoneyOverview /></RouteErrorBoundary>} />
+            <Route path="/taxes"          element={<RouteErrorBoundary><Taxes /></RouteErrorBoundary>} />
             <Route path="/costs"          element={<RouteErrorBoundary><CostManager /></RouteErrorBoundary>} />
             <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
             <Route path="/fleet-pnl"      element={<RouteErrorBoundary><FleetPnl /></RouteErrorBoundary>} />

@@ -18,14 +18,39 @@ import { categorizationText } from './normalizeGreekLatin.js';
 
 // The built-in rule set (was inline in bankTransactionMapper.js pre-FF-2).
 // In Phase B these seed the founder-editable `bankRules` collection.
+// Ordered specific→general; first match wins. Patterns run against raw + transliterated
+// text (categorizationText), so both genuine Greek (ΑΝΑΛΗΨΗ) and Latin-mangled-into-Greek
+// glyphs (SΤΑRLΙΝΚ→STARLINK) fire. Categories are the owner-bookkeeping keys (ADR-0026);
+// these are *defaults* — the bank-import review table lets the owner correct any row.
 export const DEFAULT_CATEGORY_RULES = [
-  { pattern: /SERVICE|REPAIR|ΣΕΡΒΙΣ|MAINTENANCE|ΣΥΝΤΗΡ/i, category: 'variable' },
-  { pattern: /ΔΕΗ|ΔΕΔΔΗΕ|PPC|ELECTRICITY|ΗΛΕΚΤΡ|ELECTR/i, category: 'fixed' },
-  { pattern: /ΜΙΣΘΩΜ|ΕΝΟΙΚΙ|RENT|LEASE|ΜΙΣΘ/i,            category: 'fixed' },
-  { pattern: /INSURANCE|ΑΣΦΑΛ/i,                            category: 'fixed' },
-  { pattern: /LOAN|ΔΑΝΕΙ|ANNUITY/i,                         category: 'loan' },
-  { pattern: /CREDIT.?CARD|ΠΙΣΤΩΤ/i,                        category: 'credit-card' },
-  { pattern: /FUEL|ΒΕΝΖ|PETROL|CHARGING|ΦΟΡΤ/i,            category: 'variable' },
+  // ── Loans: interest before principal ──
+  { pattern: /ΕΚΤΟΚΙΣΜ|ΤΟΚΟΙ|CREDIT ?PROTECTION|\bINTEREST\b/i,        category: 'Loan Interest' },
+  { pattern: /989004|ΔΟΣΗ ?ΔΑΝΕΙ|ΔΑΝΕΙ|\bLOAN\b|ANNUITY/i,            category: 'Bank loans' },
+  // ── Government taxes & statutory duties ──
+  { pattern: /ΕΚΤΕΛΩΝΙΣΜ|CUSTOMS|ΔΑΣΜ|ΤΕΛΩΝΕΙ/i,                       category: 'Customs' },
+  { pattern: /ΓΕΜΗ|\bGEMI\b/i,                                        category: 'ΓΕΜΗ' },
+  { pattern: /ΦΠΑ|\bVAT\b|ΒΕΒΟΦ/i,                                    category: 'VAT' }, // ΒΕΒΟΦ defaults to VAT; correct the registration/payroll ones in review
+  // ── Professional / admin ──
+  { pattern: /ΛΟΓΙΣΤ|ACCOUNT|WORKADU|ΔΙΚΗΓΟΡ|\bLEGAL\b/i,             category: 'Accounting and Legal services' },
+  { pattern: /ΕΝΤΠΛ|PAYROLL|ΜΙΣΘΟΔΟΣ/i,                               category: 'Payroll Fees' },
+  { pattern: /ΜΙΣΘΟΣ ?ΔΙΑΧ/i,                                         category: 'CEO' },
+  // ── Software / ops / app ──
+  { pattern: /OTORIDE/i,                                              category: 'App Development Fee' },
+  { pattern: /STARLINK|VODAFONE|COSMOTE|\bNOVA\b|\bWIND\b|ΤΗΛΕΦ|ΣΥΝΔΡΟΜ/i, category: 'SW subscriptions, Telco charges' },
+  { pattern: /ANTHROPIC|GOOGLE|OPENAI|TWILIO|PATREON|DOMAIN|\bAWS\b|VERCEL|SUPABASE|CLOUD|APPLE\.COM/i, category: 'Operations & computing services' },
+  // ── Logistics / utilities / rent ──
+  { pattern: /\bACS\b|\bELTA\b|ΕΛΤΑ|ΤΑΧΥΔΡΟΜ|COURIER|CARGO|ΜΕΤΑΦΟΡΙΚ/i, category: 'Logistics services' },
+  { pattern: /ΔΕΗ|ΔΕΔΔΗΕ|\bPPC\b|ELECTRICITY|ΗΛΕΚΤΡ|ELECTR|ZENITH|ΕΥΔΑΠ|\bΔΕΥΑ/i, category: 'Electricity Bill' },
+  { pattern: /ΕΝΟΙΚΙ|ΜΙΣΘΩΜ|\bRENT\b|LEASE|ΜΙΣΘ/i,                     category: 'Space rent' },
+  { pattern: /INSURANCE|ΑΣΦΑΛ|AM\.?XP|ΑΜ\.?ΧΡ/i,                       category: 'Insurance' },
+  // ── Variable operating ──
+  { pattern: /FUEL|ΒΕΝΖ|PETROL|ΚΑΥΣΙΜ|ΚΑFSΙΜ|SHELL|REVOIL|NOTOS|AVIN|\bEKO\b|CHARGING|ΦΟΡΤ/i, category: 'Fuel' },
+  { pattern: /SKROUTZ|BAMBULAB|JUMBO|\bIKEA\b|PRAKTIKER|LEROY|ΕΡΓΑΛΕΙ|\bTOOL/i, category: 'Equipment and Tools' },
+  { pattern: /SERVICE|REPAIR|ΣΕΡΒΙΣ|MAINTENANCE|ΣΥΝΤΗΡ|ΕΠΙΣΚΕΥ/i,     category: 'Repairs & maintenance' },
+  // ── Money movement & bank fees ──
+  { pattern: /ΑΝΑΛΗΨΗ|ΚΑΤΑΘΕΣΗ|ΠΛΗΡ ?ΔΙΑΧ|ΠΛΗΡΩΜΗ ?ΔΙΑΧ|REVOLUT|WITHDRAW|TRANSFER|ΕΜΒΑΣΜ|ΙΝSΤΑΝΤ ?ΤRΑΝS/i, category: 'Transfer, withdraw' },
+  { pattern: /ΕΞΟΔΑ ?ΕΝΤΟΛΗΣ|ΕΞΟΔΑ ?ΙΝSΤΑΝΤ|ΠΡΟΜΗΘΕΙΑ|ΠΡΟΜ\.|ΕΞΔ\.?ΤΗΡ|ΔΙΑΦΟΡΕΣ ?ΠΛΗΡΩΜΕΣ|\bFEE\b|CHARGE/i, category: 'Transaction Fees' },
+  { pattern: /CREDIT.?CARD|ΠΙΣΤΩΤ/i,                                  category: 'credit-card' },
 ];
 
 function ruleMatches(rule, haystack) {

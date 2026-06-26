@@ -70,17 +70,17 @@ export const CATEGORIES = {
   },
   'VAT': {
     label: 'VAT', fullLabel: 'VAT',
-    color: '#DC2626', textColor: '#FFFFFF', icon: 'Percent', group: 'variable',
+    color: '#DC2626', textColor: '#FFFFFF', icon: 'Percent', group: 'variable', isTax: true,
     description: 'Value-added tax remittances (ΒΕΒΟΦ)',
   },
   'ΓΕΜΗ': {
     label: 'ΓΕΜΗ', fullLabel: 'ΓΕΜΗ — Business Registry',
-    color: '#0891B2', textColor: '#FFFFFF', icon: 'Building2', group: 'fixed',
+    color: '#0891B2', textColor: '#FFFFFF', icon: 'Building2', group: 'fixed', isTax: true,
     description: 'General Commercial Registry (GEMI) fees',
   },
   'Company Registration Fees': {
     label: 'Company Registration', fullLabel: 'Company Registration Fees',
-    color: '#0E7490', textColor: '#FFFFFF', icon: 'Stamp', group: 'fixed',
+    color: '#0E7490', textColor: '#FFFFFF', icon: 'Stamp', group: 'fixed', isTax: true,
     description: 'Statutory company registration / filing fees',
   },
   'Payroll Fees': {
@@ -120,7 +120,7 @@ export const CATEGORIES = {
   },
   'Customs': {
     label: 'Customs', fullLabel: 'Customs & Duties',
-    color: '#B45309', textColor: '#FFFFFF', icon: 'Ship', group: 'variable',
+    color: '#B45309', textColor: '#FFFFFF', icon: 'Ship', group: 'variable', isTax: true,
     description: 'Import customs clearance and duties',
   },
   'Logistics services': {
@@ -251,6 +251,9 @@ export const CATEGORIES = {
 };
 
 export const CATEGORY_KEYS = Object.keys(CATEGORIES);
+
+// Government taxes & statutory duties — the categories surfaced on the dedicated /taxes view.
+export const TAX_CATEGORY_KEYS = CATEGORY_KEYS.filter((k) => CATEGORIES[k].isTax);
 
 // Category → financial group. Drives the projection split (fixed vs variable),
 // debt-service detection, and trend-chart stacking. Falls back to 'variable'.
