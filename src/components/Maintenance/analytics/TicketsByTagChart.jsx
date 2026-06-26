@@ -78,7 +78,7 @@ export default function TicketsByTagChart({ tickets }) {
           tickLine={false}
         />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-        <Bar dataKey="count" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+        <Bar isAnimationActive={false} dataKey="count" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

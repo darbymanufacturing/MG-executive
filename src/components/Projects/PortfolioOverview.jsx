@@ -99,7 +99,7 @@ export default function PortfolioOverview() {
           <div className={styles.donutWrap}>
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie
+                <Pie isAnimationActive={false}
                   data={healthData}
                   cx="50%"
                   cy="50%"
@@ -144,7 +144,7 @@ export default function PortfolioOverview() {
               <div style={{ height: 160 }}>
                 <ResponsiveContainer width="100%" height={160}>
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={false}
                       data={blockerData}
                       cx="50%"
                       cy="50%"
@@ -207,9 +207,9 @@ export default function PortfolioOverview() {
                   tickFormatter={(v) => v.length > 18 ? v.slice(0, 17) + '…' : v}
                 />
                 <Tooltip content={<SimpleTooltip />} />
-                <Bar dataKey="done"       name="Done"        stackId="a" fill={STATUS_CONFIG.onTrack.color} radius={[0,0,0,0]} />
-                <Bar dataKey="inProgress" name="In Progress" stackId="a" fill={STATUS_CONFIG.needsAttention.color} />
-                <Bar dataKey="notStarted" name="Not Started"  stackId="a" fill="var(--color-border)" radius={[0,2,2,0]} />
+                <Bar isAnimationActive={false} dataKey="done"       name="Done"        stackId="a" fill={STATUS_CONFIG.onTrack.color} radius={[0,0,0,0]} />
+                <Bar isAnimationActive={false} dataKey="inProgress" name="In Progress" stackId="a" fill={STATUS_CONFIG.needsAttention.color} />
+                <Bar isAnimationActive={false} dataKey="notStarted" name="Not Started"  stackId="a" fill="var(--color-border)" radius={[0,2,2,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

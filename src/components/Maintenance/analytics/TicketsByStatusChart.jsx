@@ -60,7 +60,7 @@ export default function TicketsByStatusChart({ tickets }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <PieChart>
-        <Pie
+        <Pie isAnimationActive={false}
           data={data}
           cx="50%"
           cy="45%"

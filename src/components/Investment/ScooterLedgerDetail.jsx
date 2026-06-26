@@ -85,8 +85,8 @@ export default function ScooterLedgerDetail({ row, onClose, hideClose = false, r
                 contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8 }}
               />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="revenue" fill="var(--color-primary)" radius={[3, 3, 0, 0]} name="Revenue" />
-              <Bar dataKey="repair"  fill="var(--color-warning)"  radius={[3, 3, 0, 0]} name="Repair" />
+              <Bar isAnimationActive={false} dataKey="revenue" fill="var(--color-primary)" radius={[3, 3, 0, 0]} name="Revenue" />
+              <Bar isAnimationActive={false} dataKey="repair"  fill="var(--color-warning)"  radius={[3, 3, 0, 0]} name="Repair" />
             </BarChart>
           </ResponsiveContainer>
         </div>

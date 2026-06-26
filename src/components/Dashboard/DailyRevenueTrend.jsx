@@ -108,7 +108,7 @@ export default function DailyRevenueTrend({ data }) {
           />
 
           {/* Profit/loss area (behind bars) */}
-          <Area
+          <Area isAnimationActive={false}
             type="monotone"
             dataKey="profit"
             stroke="none"
@@ -119,7 +119,7 @@ export default function DailyRevenueTrend({ data }) {
           />
 
           {/* Revenue bars — green if has data, dim if not */}
-          <Bar dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]} maxBarSize={18}>
+          <Bar isAnimationActive={false} dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]} maxBarSize={18}>
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
@@ -130,7 +130,7 @@ export default function DailyRevenueTrend({ data }) {
           </Bar>
 
           {/* Flat daily cost rate reference line */}
-          <Line
+          <Line isAnimationActive={false}
             type="monotone"
             dataKey="costRate"
             stroke={COLOR_COST}

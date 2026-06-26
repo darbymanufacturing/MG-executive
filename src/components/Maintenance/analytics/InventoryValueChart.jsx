@@ -86,7 +86,7 @@ export default function InventoryValueChart() {
           tickFormatter={(v) => `€${v}`}
         />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-        <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+        <Bar isAnimationActive={false} dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

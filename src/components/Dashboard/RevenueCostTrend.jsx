@@ -82,14 +82,14 @@ export default function RevenueCostTrend({ data, showForecast = false }) {
             }}
           />
           {/* Stacked cost bars */}
-          <Bar dataKey="one-off"     stackId="costs" fill={CHART_COLORS['one-off']}     name="One-Off"     radius={[0,0,0,0]} />
-          <Bar dataKey="investment"  stackId="costs" fill={CHART_COLORS['investment']}  name="Investment"  radius={[0,0,0,0]} />
-          <Bar dataKey="variable"    stackId="costs" fill={CHART_COLORS['variable']}    name="Variable"    radius={[0,0,0,0]} />
-          <Bar dataKey="loan"        stackId="costs" fill={CHART_COLORS['loan']}        name="Loan"        radius={[0,0,0,0]} />
-          <Bar dataKey="credit-card" stackId="costs" fill={CHART_COLORS['credit-card']} name="Credit Card" radius={[0,0,0,0]} />
-          <Bar dataKey="fixed"       stackId="costs" fill={CHART_COLORS['fixed']}       name="Fixed"       radius={[4,4,0,0]} />
+          <Bar isAnimationActive={false} dataKey="one-off"     stackId="costs" fill={CHART_COLORS['one-off']}     name="One-Off"     radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="investment"  stackId="costs" fill={CHART_COLORS['investment']}  name="Investment"  radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="variable"    stackId="costs" fill={CHART_COLORS['variable']}    name="Variable"    radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="loan"        stackId="costs" fill={CHART_COLORS['loan']}        name="Loan"        radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="credit-card" stackId="costs" fill={CHART_COLORS['credit-card']} name="Credit Card" radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="fixed"       stackId="costs" fill={CHART_COLORS['fixed']}       name="Fixed"       radius={[4,4,0,0]} />
           {/* Revenue line */}
-          <Line
+          <Line isAnimationActive={false}
             type="monotone"
             dataKey="revenue"
             stroke={REVENUE_CHART_COLORS.revenue}
@@ -99,7 +99,7 @@ export default function RevenueCostTrend({ data, showForecast = false }) {
             name="Revenue"
           />
           {/* Profit/loss area */}
-          <Area
+          <Area isAnimationActive={false}
             type="monotone"
             dataKey="profit"
             stroke="none"
@@ -109,7 +109,7 @@ export default function RevenueCostTrend({ data, showForecast = false }) {
           />
           {/* Forecast dashed lines (only when showForecast=true) */}
           {showForecast && (
-            <Line
+            <Line isAnimationActive={false}
               type="monotone"
               dataKey="forecastRevenue"
               stroke="#7dd3fc"
@@ -121,7 +121,7 @@ export default function RevenueCostTrend({ data, showForecast = false }) {
             />
           )}
           {showForecast && (
-            <Line
+            <Line isAnimationActive={false}
               type="monotone"
               dataKey="forecastCost"
               stroke="#f9a8d4"

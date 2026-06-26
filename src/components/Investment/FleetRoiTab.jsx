@@ -247,7 +247,7 @@ export default function FleetRoiTab() {
                 strokeDasharray="4 4"
               />
             )}
-            <Line
+            <Line isAnimationActive={false}
               type="monotone"
               dataKey="cumulative"
               stroke="var(--color-primary)"

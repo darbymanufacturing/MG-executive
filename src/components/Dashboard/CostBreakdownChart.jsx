@@ -41,7 +41,7 @@ export default function CostBreakdownChart({ breakdown }) {
     <div className={styles.chartWrap}>
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>
-          <Pie
+          <Pie isAnimationActive={false}
             data={data}
             cx="50%"
             cy="50%"

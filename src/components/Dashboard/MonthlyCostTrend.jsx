@@ -43,12 +43,12 @@ export default function MonthlyCostTrend({ data }) {
               <span style={{ color: '#ccc', fontSize: 12 }}>{CATEGORIES[value]?.label || value}</span>
             )}
           />
-          <Bar dataKey="one-off"     stackId="a" fill={CHART_COLORS['one-off']}     radius={[0,0,0,0]} />
-          <Bar dataKey="investment"  stackId="a" fill={CHART_COLORS['investment']}  radius={[0,0,0,0]} />
-          <Bar dataKey="variable"    stackId="a" fill={CHART_COLORS['variable']}    radius={[0,0,0,0]} />
-          <Bar dataKey="loan"        stackId="a" fill={CHART_COLORS['loan']}        radius={[0,0,0,0]} />
-          <Bar dataKey="credit-card" stackId="a" fill={CHART_COLORS['credit-card']} radius={[0,0,0,0]} />
-          <Bar dataKey="fixed"       stackId="a" fill={CHART_COLORS['fixed']}       radius={[4,4,0,0]} />
+          <Bar isAnimationActive={false} dataKey="one-off"     stackId="a" fill={CHART_COLORS['one-off']}     radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="investment"  stackId="a" fill={CHART_COLORS['investment']}  radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="variable"    stackId="a" fill={CHART_COLORS['variable']}    radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="loan"        stackId="a" fill={CHART_COLORS['loan']}        radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="credit-card" stackId="a" fill={CHART_COLORS['credit-card']} radius={[0,0,0,0]} />
+          <Bar isAnimationActive={false} dataKey="fixed"       stackId="a" fill={CHART_COLORS['fixed']}       radius={[4,4,0,0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

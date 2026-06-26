@@ -72,7 +72,7 @@ export default function MonthlyOverview() {
             <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#888' }} />
             <YAxis tick={{ fontSize: 10, fill: '#888' }} />
             <Tooltip {...TOOLTIP_STYLE} />
-            <Bar dataKey="trips" fill="#00C896" radius={[3, 3, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="trips" fill="#00C896" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -85,8 +85,8 @@ export default function MonthlyOverview() {
             <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#888' }} />
             <YAxis tick={{ fontSize: 10, fill: '#888' }} />
             <Tooltip {...TOOLTIP_STYLE} />
-            <Bar dataKey="overturns" fill="#E84545" radius={[3, 3, 0, 0]} name="Overturns" />
-            <Bar dataKey="repairs"   fill="#F5A623" radius={[3, 3, 0, 0]} name="Repairs" />
+            <Bar isAnimationActive={false} dataKey="overturns" fill="#E84545" radius={[3, 3, 0, 0]} name="Overturns" />
+            <Bar isAnimationActive={false} dataKey="repairs"   fill="#F5A623" radius={[3, 3, 0, 0]} name="Repairs" />
           </BarChart>
         </ResponsiveContainer>
       </div>

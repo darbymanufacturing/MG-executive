@@ -21,8 +21,8 @@ export default function LoanBalanceChart({ loan }) {
             tickFormatter={(v) => `€${Math.round(v / 1000)}k`}
           />
           <Tooltip formatter={(v, n) => [formatEUR(v), n === 'balance' ? 'Balance' : 'Interest']} />
-          <Bar dataKey="interest" name="interest" fill="var(--color-danger)" radius={[3, 3, 0, 0]} barSize={14} />
-          <Line type="monotone" dataKey="balance" name="balance" stroke="var(--accent)" strokeWidth={2} dot={false} />
+          <Bar isAnimationActive={false} dataKey="interest" name="interest" fill="var(--color-danger)" radius={[3, 3, 0, 0]} barSize={14} />
+          <Line isAnimationActive={false} type="monotone" dataKey="balance" name="balance" stroke="var(--accent)" strokeWidth={2} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

@@ -102,7 +102,7 @@ export default function RevenueLostChart({ tickets }) {
           tickFormatter={(v) => `€${v}`}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Area
+        <Area isAnimationActive={false}
           type="monotone"
           dataKey="revenueLost"
           stroke="url(#revGradient)"
