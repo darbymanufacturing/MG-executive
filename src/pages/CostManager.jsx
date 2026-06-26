@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin, Receipt, Check, X } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, ListChecks, FileUp, FileDown, FileText, MapPin, Receipt, Check, X, Repeat, CalendarClock } from 'lucide-react';
 import CostIntroOverlay from '../components/Costs/CostIntroOverlay.jsx';
 import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
@@ -7,10 +7,15 @@ import CostFormModal from '../components/Costs/CostFormModal.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CategoryBadge from '../components/Costs/CategoryBadge.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
+import KpiCard from '../components/Dashboard/KpiCard.jsx';
+import UpcomingPanel from '../components/Money/UpcomingPanel.jsx';
+import CommitmentsPanel from '../components/Money/CommitmentsPanel.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useMetrics } from '../context/MetricsContext.jsx';
 import { FREQUENCIES, CATEGORIES, CATEGORY_KEYS } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
 import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
+import { isCommitment } from '../utils/upcomingPayments.js';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { exportCostsCSV, downloadCostTemplate } from '../utils/exportData.js';
 import { parseCostsCSV } from '../utils/costCsvParser.js';
@@ -108,6 +113,7 @@ function PendingInvoiceBanner({ onConfirm }) {
 
 export default function CostManager() {
   const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
+  const { getSummary, getUpcoming } = useMetrics();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -144,6 +150,21 @@ export default function CostManager() {
     });
     return list;
   }, [costs, locationFilter, activeFilter, search, sortBy, sortDir]);
+
+  // ── Money lenses (ADR-0025) — all canonical, via the numbers hub (respects the
+  //    page's location filter). Pages never recompute totals inline (ADR-0024).
+  const moneySummary = useMemo(
+    () => getSummary({ mode: 'all' }, { location: locationFilter }),
+    [getSummary, locationFilter],
+  );
+  const upcoming = useMemo(
+    () => getUpcoming(30, { location: locationFilter }),
+    [getUpcoming, locationFilter],
+  );
+  const commitmentCount = useMemo(
+    () => filterCostsByLocation(costs, locationFilter).filter((c) => isCommitment(c)).length,
+    [costs, locationFilter],
+  );
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -233,8 +254,8 @@ export default function CostManager() {
     <div className={styles.page}>
       {showIntro && <CostIntroOverlay onDone={() => setShowIntro(false)} />}
       <Header
-        title="Cost Manager"
-        subtitle="Add, edit and remove all fleet cost items"
+        title="Expenses"
+        subtitle="What you've paid, what's coming, and your standing commitments"
         actions={
           <div className={styles.headerActions}>
             <input type="file" accept=".csv" ref={csvFileRef} style={{ display: 'none' }} onChange={handleCsvImport} />
@@ -264,6 +285,41 @@ export default function CostManager() {
             {csvMsg.text}
           </div>
         )}
+
+        {/* Money summary band — what we have / what's coming / what we paid */}
+        <div className={styles.moneyBand}>
+          <KpiCard
+            icon={Repeat}
+            label="Monthly commitments"
+            value={formatEUR(moneySummary.monthlyCostRate)}
+            sub={`${commitmentCount} active · ≈ ${formatEUR(moneySummary.annualTotal)}/yr`}
+          />
+          <KpiCard
+            icon={CalendarClock}
+            label="Due in 30 days"
+            value={formatEUR(upcoming.total)}
+            sub={`${upcoming.items.length} payment${upcoming.items.length !== 1 ? 's' : ''} coming`}
+          />
+          <KpiCard
+            icon={Receipt}
+            label="Paid this month"
+            value={formatEUR(moneySummary.costsMTD)}
+            sub="actuals month-to-date"
+          />
+        </div>
+
+        {/* What's coming + what we have */}
+        <div className={styles.moneyGrid}>
+          <UpcomingPanel upcoming={upcoming} />
+          <CommitmentsPanel
+            monthly={moneySummary.monthlyCostRate}
+            annual={moneySummary.annualTotal}
+            byCategory={moneySummary.costByCategory}
+            count={commitmentCount}
+          />
+        </div>
+
+        <h2 className={styles.sectionTitle}>Activity — all expenses</h2>
 
         {/* Filter + Search bar */}
         <div className={styles.toolbar}>

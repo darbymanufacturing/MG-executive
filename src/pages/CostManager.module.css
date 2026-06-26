@@ -141,6 +141,27 @@
 
 .content { padding: var(--space-6) var(--space-8); flex: 1; }
 
+/* Money summary band + section panels (ADR-0025 Expenses redesign) */
+.moneyBand {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.moneyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--fg-strong);
+  margin: 0 0 var(--space-3);
+}
+
 @media (max-width: 768px) {
   .content { padding: var(--space-4); }
   .headerActions { flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }

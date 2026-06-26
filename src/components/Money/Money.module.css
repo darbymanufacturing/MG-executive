@@ -1,0 +1,152 @@
+/* Shared primitives for the Money overview + Expenses "money" sections (ADR-0025).
+   Tokens only — never hardcode hex (variables.css). Works in light + dark. */
+
+.panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.panelIcon { color: var(--fg-muted); flex-shrink: 0; }
+.panelTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--fg-strong);
+}
+.panelMeta {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8125rem;
+}
+.rowLeft { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rowName {
+  color: var(--fg-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowDate { color: var(--fg-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rowVal { font-weight: 500; color: var(--fg-strong); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.estimate { color: var(--fg-muted); font-weight: 400; }
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 8px;
+  font-size: 0.8125rem;
+}
+.totalLabel { color: var(--fg-secondary); }
+.totalVal { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.big {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--fg-strong);
+  line-height: 1.1;
+}
+.bigUnit { font-size: 0.875rem; font-weight: 500; color: var(--fg-muted); }
+.sub { font-size: 0.75rem; color: var(--fg-muted); margin-top: 2px; }
+
+/* horizontal magnitude bars */
+.bar { display: flex; align-items: center; gap: 10px; }
+.barLabel { width: 92px; font-size: 0.8125rem; color: var(--fg-secondary); flex-shrink: 0; }
+.barTrack {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-section);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.barFill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); }
+.barVal { width: 72px; text-align: right; font-size: 0.8125rem; font-weight: 500; color: var(--fg-strong); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+.empty { font-size: 0.8125rem; color: var(--fg-muted); padding: 6px 0; }
+
+/* verdict banner */
+.verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+.verdict.green { background: var(--status-green-bg); border-color: var(--status-green); }
+.verdict.amber { background: var(--status-amber-bg); border-color: var(--status-amber); }
+.verdict.red   { background: var(--status-red-bg);   border-color: var(--status-red); }
+.verdict.muted { background: var(--bg-section); }
+
+.verdictLeft { display: flex; align-items: center; gap: 12px; }
+.verdictDot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.green .verdictDot { background: var(--status-green); }
+.amber .verdictDot { background: var(--status-amber); }
+.red .verdictDot   { background: var(--status-red); }
+.muted .verdictDot { background: var(--fg-muted); }
+
+.verdictTitle { font-family: var(--font-display); font-weight: 600; font-size: 1.125rem; }
+.green .verdictTitle { color: var(--status-green); }
+.amber .verdictTitle { color: var(--status-amber); }
+.red .verdictTitle   { color: var(--status-red); }
+.muted .verdictTitle { color: var(--fg-strong); }
+
+.verdictSub { font-size: 0.8125rem; color: var(--fg-secondary); margin-top: 2px; }
+.verdictRight { text-align: right; }
+.verdictNetLabel { font-size: 0.75rem; color: var(--fg-secondary); }
+.verdictNet { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.green .verdictNet { color: var(--status-green); }
+.amber .verdictNet { color: var(--status-amber); }
+.red .verdictNet   { color: var(--status-red); }
+.muted .verdictNet { color: var(--fg-strong); }
+
+/* health chips */
+.chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chipsLabel { font-size: 0.8125rem; color: var(--fg-secondary); }
+.chip { font-size: 0.75rem; padding: 4px 10px; border-radius: var(--radius-pill); white-space: nowrap; }
+.chip.green { background: var(--status-green-bg); color: var(--status-green); }
+.chip.amber { background: var(--status-amber-bg); color: var(--status-amber); }
+.chip.red   { background: var(--status-red-bg);   color: var(--status-red); }
+.chip.muted { background: var(--bg-section); color: var(--fg-muted); }
+
+/* show-the-math */
+.math { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elev); }
+.mathSummary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 16px;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mathSummary::-webkit-details-marker { display: none; }
+.mathBody { padding: 0 16px 14px; }
+.mathRow { padding: 8px 0; border-top: 1px solid var(--divider); font-size: 0.8125rem; }
+.mathName { font-weight: 600; color: var(--fg-strong); }
+.mathFormula { color: var(--fg-secondary); margin-top: 2px; }
+.mathValue { color: var(--fg-strong); font-weight: 500; font-variant-numeric: tabular-nums; }
+.mathInputs { font-size: 0.75rem; color: var(--fg-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider); }

@@ -34,6 +34,7 @@ import Home from './pages/Home.jsx';
 import Issues from './pages/Issues.jsx';
 import IssueDetail from './pages/IssueDetail.jsx';
 import Dashboard from './pages/Dashboard.jsx';   /* becomes /pulse */
+import MoneyOverview from './pages/MoneyOverview.jsx';
 import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
@@ -81,7 +82,8 @@ const ROUTE_TITLES = {
   '/scooters':    'Scooters',
   '/pme':         'PME',
   '/pow':         'POW v3',
-  '/costs':       'Costs',
+  '/money':       'Money',
+  '/costs':       'Expenses',
   '/revenue':     'Revenue',
   '/investment':  'Investment',
   '/fleet-pnl':   'Fleet P&L',
@@ -303,6 +305,7 @@ function AppShell() {
             <Route path="/projects/:id"   element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
             <Route path="/war-room"       element={<RouteErrorBoundary><WarRoomPage /></RouteErrorBoundary>} />
             <Route path="/investment"     element={<RouteErrorBoundary><Investment /></RouteErrorBoundary>} />
+            <Route path="/money"          element={<RouteErrorBoundary><MoneyOverview /></RouteErrorBoundary>} />
             <Route path="/costs"          element={<RouteErrorBoundary><CostManager /></RouteErrorBoundary>} />
             <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
             <Route path="/fleet-pnl"      element={<RouteErrorBoundary><FleetPnl /></RouteErrorBoundary>} />
