@@ -10,10 +10,14 @@ vi.mock('../../context/MaintenanceContext.jsx', () => ({ useMaintenance: vi.fn()
 vi.mock('../../context/FleetContext.jsx', () => ({ useFleet: vi.fn() }));
 vi.mock('../../context/MetricsContext.jsx', () => ({ useMetrics: vi.fn() }));
 vi.mock('./PulseStrip.module.css', () => ({ default: {} }));
+// react-router-dom — PulseStrip renders a <Link to="/money">; stub it to a passthrough so
+// the component can render in isolation without a Router (it always has one in the app).
+vi.mock('react-router-dom', () => ({ Link: ({ children }) => children }));
 // lucide-react stubs — must include every icon imported by transitive deps (Toast.jsx etc.)
 vi.mock('lucide-react', () => ({
   ArrowUp:       () => null,
   ArrowDown:     () => null,
+  ArrowRight:    () => null,
   Minus:         () => null,
   CheckCircle:   () => null,
   AlertCircle:   () => null,

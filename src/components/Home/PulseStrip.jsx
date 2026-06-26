@@ -3,7 +3,8 @@ import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
 import { useFleet } from '../../context/FleetContext.jsx';
 import { useMetrics } from '../../context/MetricsContext.jsx';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowUp, ArrowDown, Minus, ArrowRight } from 'lucide-react';
 import { normalizeToMonthly } from '../../utils/calculations.js';
 import styles from './PulseStrip.module.css';
 
@@ -207,7 +208,15 @@ export default function PulseStrip() {
 
   return (
     <div className={styles.pulseSection}>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>Today's Pulse</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
+        <div className="eyebrow">Today's Pulse</div>
+        <Link
+          to="/money"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8125rem', fontWeight: 500, color: 'var(--accent)', textDecoration: 'none' }}
+        >
+          Money overview <ArrowRight size={13} />
+        </Link>
+      </div>
       <div className={styles.grid}>
         {tiles.map((t, i) => <KPITile key={i} {...t} />)}
       </div>

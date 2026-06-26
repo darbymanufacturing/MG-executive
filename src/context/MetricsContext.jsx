@@ -25,12 +25,6 @@ import { upcomingForCosts } from '../utils/upcomingPayments.js';
  */
 const MetricsContext = createContext(null);
 
-const MTD_PERIOD = (() => {
-  const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  return { mode: 'month', monthKey, months: 1 };
-})();
-
 const ALL_PERIOD = { mode: 'all', months: 1 };
 
 export function MetricsProvider({ children }) {
@@ -51,6 +45,22 @@ export function MetricsProvider({ children }) {
       : { mode: 'fleet', label: activeFleet?.name ?? 'Unknown fleet', fleetId: activeFleet?._docId ?? null }
   ), [isAllFleets, activeFleet]);
 
+  // A clock that ticks at most once per calendar day (keyed on the local date), so period
+  // boundaries + the forward-looking window advance across midnight / month-end without
+  // churning memos on every render. Threaded into financialSummary (options.now) AND
+  // upcomingForCosts so the whole hub shares one stable "today" (ADR-0024/0025).
+  const t = new Date();
+  const todayKey = `${t.getFullYear()}-${t.getMonth()}-${t.getDate()}`;
+  const now = useMemo(() => {
+    const [y, m, d] = todayKey.split('-').map(Number);
+    return new Date(y, m, d);
+  }, [todayKey]);
+  const mtdPeriod = useMemo(() => ({
+    mode: 'month',
+    monthKey: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    months: 1,
+  }), [now]);
+
   // ── getSummary ──────────────────────────────────────────────────────────────
   // Pure: filter by location, then defer to financialSummary. Its identity is stable
   // across renders with the same scoped inputs/config, so consumers can list it in their
@@ -66,22 +76,14 @@ export function MetricsProvider({ children }) {
       scopedScooters,
       config,
       period,
-      opts.options ?? {},
+      { ...(opts.options ?? {}), now },
     );
-  }, [scopedCosts, scopedRevenue, scopedScooters, config]);
+  }, [scopedCosts, scopedRevenue, scopedScooters, config, now]);
 
   // ── getUpcoming ───────────────────────────────────────────────────────────────
   // Forward-looking payment calendar (ADR-0025). Mirrors getSummary's location-scoping
   // so the Money overview + Expenses page read ONE canonical "what's coming" — the
   // derivation lives in upcomingForCosts (pure), the scoping lives here (the hub).
-  // `now` ticks at most once per calendar day (keyed on the local date) so the window
-  // advances across midnight without churning on every render.
-  const t = new Date();
-  const todayKey = `${t.getFullYear()}-${t.getMonth()}-${t.getDate()}`;
-  const now = useMemo(() => {
-    const [y, m, d] = todayKey.split('-').map(Number);
-    return new Date(y, m, d);
-  }, [todayKey]);
   const getUpcoming = useMemo(() => (days = 30, opts = {}) => {
     const location = opts.location ?? null;
     const costsForCalc = filterCostsByLocation(scopedCosts, location);
@@ -89,7 +91,7 @@ export function MetricsProvider({ children }) {
   }, [scopedCosts, now]);
 
   // Pre-baked views the lighter consumers (PulseStrip) read directly.
-  const mtd = useMemo(() => getSummary(MTD_PERIOD), [getSummary]);
+  const mtd = useMemo(() => getSummary(mtdPeriod), [getSummary, mtdPeriod]);
   const allTime = useMemo(() => getSummary(ALL_PERIOD), [getSummary]);
   const upcoming30 = useMemo(() => getUpcoming(30), [getUpcoming]);
 
