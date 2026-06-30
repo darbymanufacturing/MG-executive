@@ -83,7 +83,7 @@ export default function UpcomingPanel({ upcoming, handled, onMark, title = "What
 
       {hasHandled && (
         <div className={styles.handled}>
-          <div className={styles.handledHead}>Handled this month</div>
+          <div className={styles.handledHead}>Handled</div>
           {committed.length > 0 && (
             <div className={styles.handledChipRow}>
               <span className={styles.chipCommitted}>Committed · {committed.length}</span>
@@ -101,6 +101,7 @@ export default function UpcomingPanel({ upcoming, handled, onMark, title = "What
               <div key={`${h.id}-${h.status}`} className={styles.handledRow}>
                 <span className={`${styles.dot} ${h.status === 'paid' ? styles.dotPaid : styles.dotCommitted}`} aria-hidden="true" />
                 <span className={styles.handledName}>{h.name}</span>
+                {h.monthLabel && <span className={styles.handledMonth}>{h.monthLabel}</span>}
                 <span className={styles.handledAmt}>{formatEUR(h.amount)}</span>
                 {onMark && (
                   <button

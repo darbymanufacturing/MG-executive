@@ -12,7 +12,13 @@
  *   - one-time cost   → an ACTUAL record ("what we paid"); a future-dated one is "coming".
  * "coming" is always PROJECTED and kept separate from actuals (never summed together).
  */
-import { FREQUENCIES } from './constants.js';
+import { FREQUENCIES, MONTHS } from './constants.js';
+
+/** 'YYYY-MM' → short month label, e.g. 'Jul' (for the handled-ledger rows). */
+function monthShort(periodKey) {
+  const m = Number(periodKey.split('-')[1]);
+  return MONTHS[m - 1] ?? periodKey;
+}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -249,28 +255,37 @@ export function frequencyLabel(frequency) {
 }
 
 /**
- * The owner's settlement ledger for the CURRENT month (ADR-0027): every cost whose
- * settlement for this month is 'committed' or 'paid', grouped + totalled. Powers the
- * "Handled this month" view + the committed/paid chips. Pure.
+ * The owner's settlement ledger over the forecast window (ADR-0027): every cost
+ * occurrence ticked 'committed'/'paid' whose month is between the current month and
+ * the horizon end, grouped + totalled. Window-scoped (not strictly the calendar
+ * month) so an item ticked near month-end — whose next charge is early next month —
+ * still appears under "Handled" with its month label, instead of vanishing. Pure.
  */
-export function settledThisMonth(costs, { now = new Date() } = {}) {
-  const period = periodKeyOf(atMidnight(now));
+export function settledThisMonth(costs, { now = new Date(), horizonDays = 30 } = {}) {
+  const today = atMidnight(now);
+  const period = periodKeyOf(today);
+  const endPeriod = periodKeyOf(new Date(today.getTime() + horizonDays * MS_PER_DAY));
   const committed = [];
   const paid = [];
   for (const cost of (Array.isArray(costs) ? costs : [])) {
-    const s = cost?.settlements?.[period];
-    const status = !s ? null : (typeof s === 'string' ? s : s.status);
-    if (status !== 'committed' && status !== 'paid') continue;
-    const entry = {
-      id: cost.id,
-      name: cost.name,
-      category: cost.category,
-      amount: Number(cost.amount) || 0,
-      period,
-      status,
-      at: (s && typeof s === 'object') ? (s.at ?? null) : null,
-    };
-    (status === 'committed' ? committed : paid).push(entry);
+    const map = cost?.settlements;
+    if (!map || typeof map !== 'object') continue;
+    for (const [p, s] of Object.entries(map)) {
+      if (p < period || p > endPeriod) continue; // current month → horizon only ('YYYY-MM' sorts lexically)
+      const status = typeof s === 'string' ? s : s?.status;
+      if (status !== 'committed' && status !== 'paid') continue;
+      const entry = {
+        id: cost.id,
+        name: cost.name,
+        category: cost.category,
+        amount: Number(cost.amount) || 0,
+        period: p,
+        monthLabel: monthShort(p),
+        status,
+        at: (s && typeof s === 'object') ? (s.at ?? null) : null,
+      };
+      (status === 'committed' ? committed : paid).push(entry);
+    }
   }
   const committedTotal = committed.reduce((sum, e) => sum + e.amount, 0);
   const paidTotal = paid.reduce((sum, e) => sum + e.amount, 0);

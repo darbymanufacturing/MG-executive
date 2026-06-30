@@ -190,4 +190,18 @@ describe('settlement ledger (ADR-0027)', () => {
     expect(res.paidTotal).toBe(200);
     expect(res.committedTotal).toBe(40);
   });
+
+  it('settledThisMonth includes near-future months in the window (month-end case)', () => {
+    // Late June: an item ticked now lands in July → must still show under "Handled".
+    const julyCommit = {
+      id: 'jl', name: 'Rent', category: 'Space rent', frequency: 'monthly', amount: 155,
+      settlements: { '2026-07': { status: 'committed', at: '2026-06-26T00:00:00Z' } },
+    };
+    const res = settledThisMonth([julyCommit], { now: NOW, horizonDays: 30 }); // window [2026-06, 2026-07]
+    expect(res.committed).toHaveLength(1);
+    expect(res.committed[0].monthLabel).toBe('Jul');
+    // beyond the horizon (August) is excluded
+    const augCommit = { ...julyCommit, id: 'au', settlements: { '2026-08': { status: 'committed', at: 'x' } } };
+    expect(settledThisMonth([augCommit], { now: NOW, horizonDays: 30 }).committed).toHaveLength(0);
+  });
 });
