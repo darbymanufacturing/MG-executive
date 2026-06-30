@@ -150,3 +150,36 @@
 .mathFormula { color: var(--fg-secondary); margin-top: 2px; }
 .mathValue { color: var(--fg-strong); font-weight: 500; font-variant-numeric: tabular-nums; }
 .mathInputs { font-size: 0.75rem; color: var(--fg-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider); }
+
+/* ── settlement ledger (ADR-0027): tick committed / paid + "handled this month" ── */
+.rowRight { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.actions { display: flex; align-items: center; gap: 4px; }
+.markBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-section); color: var(--fg-muted); cursor: pointer;
+}
+.markBtn:hover { background: var(--status-amber-bg); color: var(--status-amber); border-color: var(--status-amber); }
+.markPaid:hover { background: var(--status-green-bg); color: var(--status-green); border-color: var(--status-green); }
+
+.handled { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.handledHead { font-size: 0.7rem; font-weight: 600; color: var(--fg-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.handledChipRow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.chipCommitted { font-size: 0.7rem; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--status-amber-bg); color: var(--status-amber); }
+.chipPaid { font-size: 0.7rem; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--status-green-bg); color: var(--status-green); }
+.handledTot { font-size: 0.8125rem; font-weight: 600; color: var(--fg-strong); font-variant-numeric: tabular-nums; }
+.handledList { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.handledRow { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dotCommitted { background: var(--status-amber); }
+.dotPaid { background: var(--status-green); }
+.handledName { color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.handledAmt { color: var(--fg-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.undoBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; flex-shrink: 0;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--fg-muted); cursor: pointer;
+}
+.undoBtn:hover { background: var(--bg-section); color: var(--fg-strong); }

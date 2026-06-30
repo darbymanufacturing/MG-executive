@@ -21,8 +21,8 @@ import styles from './MoneyOverview.module.css';
  * nothing is computed inline beyond presentational derivations (ADR-0024 preserved).
  */
 export default function MoneyOverview() {
-  const { mtd, upcoming30, scopedCosts, scopedRevenue } = useMetrics();
-  const { config } = useCosts();
+  const { mtd, upcoming30, handledThisMonth, scopedCosts, scopedRevenue } = useMetrics();
+  const { config, setCostSettlement } = useCosts();
 
   const summary = mtd;
   const fin = config?.financial;
@@ -78,7 +78,7 @@ export default function MoneyOverview() {
         </div>
 
         <div className={styles.grid2}>
-          <UpcomingPanel upcoming={upcoming30} />
+          <UpcomingPanel upcoming={upcoming30} handled={handledThisMonth} onMark={setCostSettlement} />
           <CommitmentsPanel
             monthly={summary.monthlyCostRate}
             annual={summary.annualTotal}

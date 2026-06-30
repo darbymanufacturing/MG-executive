@@ -90,6 +90,28 @@ export function CostProvider({ children }) {
     await orgDelete(COSTS_COL, cost._docId, { rethrow: true, errorMessage: 'Failed to delete cost' });
   }, [costs]);
 
+  // ADR-0027 — mark/clear an upcoming payment's settlement for a given month.
+  // status: 'committed' | 'paid' to set, or null to undo (back to "to pay").
+  // Stores a per-month map on the cost: settlements = { 'YYYY-MM': { status, at } }.
+  const setCostSettlement = useCallback(async (id, period, status) => {
+    const cost = costs.find((c) => c.id === id);
+    if (!cost?._docId || !period) return;
+    const settlements = { ...(cost.settlements || {}) };
+    if (status === 'committed' || status === 'paid') {
+      settlements[period] = { status, at: new Date().toISOString() };
+    } else {
+      delete settlements[period]; // undo → un-settled
+    }
+    // Pass the COMPLETE map; orgUpdate shallow-merges `data || patch`, so this
+    // replaces the settlements field wholesale (deletions included) without clobber.
+    await orgUpdate(
+      COSTS_COL,
+      cost._docId,
+      { settlements, id, updatedAt: new Date().toISOString() },
+      { rethrow: true, errorMessage: 'Failed to update payment status' },
+    );
+  }, [costs]);
+
   const getCostById = useCallback((id) => costs.find((c) => c.id === id), [costs]);
 
   // ── Bulk (multi-edit) ─────────────────────────────────────────────────────────
@@ -316,6 +338,7 @@ export function CostProvider({ children }) {
         addCost,
         updateCost,
         deleteCost,
+        setCostSettlement,
         bulkUpdateCosts,
         bulkDeleteCosts,
         getCostById,

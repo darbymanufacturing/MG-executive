@@ -119,30 +119,68 @@ export function nextOccurrence(cost, { now = new Date() } = {}) {
   return occ;
 }
 
-/** Count + sum occurrences of a recurring cost within [from, to] (inclusive). */
+/** The next occurrence date strictly after `occ` (one step), or null for unknown freq. */
+function stepOccurrence(cost, occ) {
+  const stepMonths = STEP_MONTHS[cost.frequency];
+  const stepDays = STEP_DAYS[cost.frequency];
+  if (stepMonths) {
+    const startDay = parseISODate(cost.startDate).getDate();
+    return monthAnchoredDate(occ.getFullYear(), occ.getMonth() + stepMonths, startDay);
+  }
+  if (stepDays) {
+    return new Date(occ.getFullYear(), occ.getMonth(), occ.getDate() + stepDays); // calendar-day step (DST-safe)
+  }
+  return null;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Settlement ledger (ADR-0027) — let the owner tick an upcoming payment as
+ * "committed" (earmarked, will leave the account) or "paid" (already debited this
+ * month), per-occurrence. Stored on the cost as `settlements: { 'YYYY-MM': { status, at } }`
+ * keyed by the occurrence's calendar month. Settled occurrences drop out of "what's
+ * coming" (and the recurring forecast advances to the next un-settled month).
+ * ─────────────────────────────────────────────────────────────────────────────*/
+
+/** 'YYYY-MM' month key for a Date — the per-occurrence settlement key. */
+export function periodKeyOf(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Settlement status ('committed' | 'paid') for the occurrence in `date`'s month, or null. */
+export function settlementStatusFor(cost, date) {
+  const s = cost?.settlements?.[periodKeyOf(date)];
+  if (!s) return null;
+  return typeof s === 'string' ? s : (s.status ?? null);
+}
+
+/**
+ * Like nextOccurrence, but skips occurrences the owner has already settled
+ * (committed/paid) — so the forecast shows the next month you still owe.
+ */
+export function nextUnsettledOccurrence(cost, { now = new Date() } = {}) {
+  const end = parseISODate(cost?.endDate);
+  let occ = nextOccurrence(cost, { now });
+  for (let guard = 0; occ && settlementStatusFor(cost, occ) && guard < 400; guard++) {
+    if (!isRecurring(cost)) return null;        // settled one-time → nothing upcoming
+    occ = stepOccurrence(cost, occ);
+    if (occ && end && occ > end) return null;
+  }
+  return occ;
+}
+
+/** Count + sum the UN-settled occurrences of a recurring cost within [from, to]. */
 function occurrencesInWindow(cost, from, to) {
   const amount = Number(cost.amount) || 0;
   const end = parseISODate(cost.endDate);
   const hardEnd = end && end < to ? end : to;
-  const stepMonths = STEP_MONTHS[cost.frequency];
-  const stepDays = STEP_DAYS[cost.frequency];
 
   let count = 0;
   let cursor = nextOccurrence(cost, { now: from });
   for (let guard = 0; cursor && cursor <= hardEnd && guard < 400; guard++) {
-    count++;
-    if (stepMonths) {
-      const startDay = parseISODate(cost.startDate).getDate();
-      cursor = monthAnchoredDate(
-        cursor.getFullYear(),
-        cursor.getMonth() + stepMonths,
-        startDay,
-      );
-    } else if (stepDays) {
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + stepDays); // calendar-day step (DST-safe)
-    } else {
-      break;
-    }
+    if (!settlementStatusFor(cost, cursor)) count++; // settled occurrences don't count toward "due"
+    const nextCursor = stepOccurrence(cost, cursor);
+    if (!nextCursor) break;
+    cursor = nextCursor;
   }
   return { count, total: count * amount };
 }
@@ -166,7 +204,7 @@ export function upcomingForCosts(costs, { horizonDays = 30, now = new Date() } =
   for (const cost of safeCosts) {
     const amount = Number(cost.amount) || 0;
     if (amount <= 0) continue;
-    const next = nextOccurrence(cost, { now });
+    const next = nextUnsettledOccurrence(cost, { now });
     if (!next || next > horizonEnd) continue;
 
     let horizonTotal = amount;
@@ -186,6 +224,7 @@ export function upcomingForCosts(costs, { horizonDays = 30, now = new Date() } =
       category: cost.category,
       frequency: cost.frequency,
       nextDue: next,
+      period: periodKeyOf(next),   // settlement key for the tick action
       amountNext: amount,
       horizonTotal,
       isEstimate,
@@ -207,4 +246,33 @@ export function upcomingForCosts(costs, { horizonDays = 30, now = new Date() } =
 /** Label for the configured frequency (e.g. 'Monthly'), falling back to the raw key. */
 export function frequencyLabel(frequency) {
   return FREQUENCIES[frequency]?.label ?? frequency ?? '';
+}
+
+/**
+ * The owner's settlement ledger for the CURRENT month (ADR-0027): every cost whose
+ * settlement for this month is 'committed' or 'paid', grouped + totalled. Powers the
+ * "Handled this month" view + the committed/paid chips. Pure.
+ */
+export function settledThisMonth(costs, { now = new Date() } = {}) {
+  const period = periodKeyOf(atMidnight(now));
+  const committed = [];
+  const paid = [];
+  for (const cost of (Array.isArray(costs) ? costs : [])) {
+    const s = cost?.settlements?.[period];
+    const status = !s ? null : (typeof s === 'string' ? s : s.status);
+    if (status !== 'committed' && status !== 'paid') continue;
+    const entry = {
+      id: cost.id,
+      name: cost.name,
+      category: cost.category,
+      amount: Number(cost.amount) || 0,
+      period,
+      status,
+      at: (s && typeof s === 'object') ? (s.at ?? null) : null,
+    };
+    (status === 'committed' ? committed : paid).push(entry);
+  }
+  const committedTotal = committed.reduce((sum, e) => sum + e.amount, 0);
+  const paidTotal = paid.reduce((sum, e) => sum + e.amount, 0);
+  return { period, committed, paid, committedTotal, paidTotal };
 }

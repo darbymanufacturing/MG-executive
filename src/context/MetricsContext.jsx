@@ -6,7 +6,7 @@ import { useFleet } from './FleetContext.jsx';
 import { financialSummary } from '../utils/financialSummary.js';
 import { filterCostsByLocation } from '../utils/calculations.js';
 import { filterRevenueByLocation } from '../utils/revenueCalculations.js';
-import { upcomingForCosts } from '../utils/upcomingPayments.js';
+import { upcomingForCosts, settledThisMonth } from '../utils/upcomingPayments.js';
 
 /**
  * MetricsContext — the numbers hub (W5, ADR-0024).
@@ -90,17 +90,29 @@ export function MetricsProvider({ children }) {
     return upcomingForCosts(costsForCalc, { horizonDays: days, now });
   }, [scopedCosts, now]);
 
+  // ── getHandled ────────────────────────────────────────────────────────────────
+  // The owner's settlement ledger for the current month (ADR-0027): what's been
+  // committed / paid. Same fleet+location scoping as getUpcoming.
+  const getHandled = useMemo(() => (opts = {}) => {
+    const location = opts.location ?? null;
+    const costsForCalc = filterCostsByLocation(scopedCosts, location);
+    return settledThisMonth(costsForCalc, { now });
+  }, [scopedCosts, now]);
+
   // Pre-baked views the lighter consumers (PulseStrip) read directly.
   const mtd = useMemo(() => getSummary(mtdPeriod), [getSummary, mtdPeriod]);
   const allTime = useMemo(() => getSummary(ALL_PERIOD), [getSummary]);
   const upcoming30 = useMemo(() => getUpcoming(30), [getUpcoming]);
+  const handledThisMonth = useMemo(() => getHandled(), [getHandled]);
 
   const value = useMemo(() => ({
     getSummary,
     getUpcoming,
+    getHandled,
     mtd,
     allTime,
     upcoming30,
+    handledThisMonth,
     fleetScope,
     isAllFleets,
     activeFleet,
@@ -108,7 +120,7 @@ export function MetricsProvider({ children }) {
     // arrays from already-fleet-scoped data, matching the hub's own scope (#638).
     scopedCosts,
     scopedRevenue,
-  }), [getSummary, getUpcoming, mtd, allTime, upcoming30, fleetScope, isAllFleets, activeFleet, scopedCosts, scopedRevenue]);
+  }), [getSummary, getUpcoming, getHandled, mtd, allTime, upcoming30, handledThisMonth, fleetScope, isAllFleets, activeFleet, scopedCosts, scopedRevenue]);
 
   return <MetricsContext.Provider value={value}>{children}</MetricsContext.Provider>;
 }

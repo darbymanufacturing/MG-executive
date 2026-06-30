@@ -6,6 +6,10 @@ import {
   isActualCost,
   isCommitment,
   frequencyLabel,
+  nextUnsettledOccurrence,
+  settledThisMonth,
+  settlementStatusFor,
+  periodKeyOf,
 } from '../upcomingPayments.js';
 
 const NOW = new Date(2026, 5, 26); // 2026-06-26 (local midnight)
@@ -136,5 +140,54 @@ describe('upcomingForCosts', () => {
     ];
     const { items } = upcomingForCosts(costs, { horizonDays: 30, now: NOW });
     expect(items).toHaveLength(0);
+  });
+});
+
+describe('settlement ledger (ADR-0027)', () => {
+  // Due on the 28th → next occurrence (from June 26) is June 28, still ahead of "today".
+  const rent28 = {
+    id: 'r28', name: 'Rent', category: 'Space rent', frequency: 'monthly',
+    amount: 200, startDate: '2026-01-28',
+    settlements: { '2026-06': { status: 'paid', at: '2026-06-02T00:00:00Z' } },
+  };
+  const starlink = {
+    id: 'sl', name: 'Starlink', category: 'SW subscriptions, Telco charges', frequency: 'monthly',
+    amount: 40, startDate: '2026-01-28',
+    settlements: { '2026-06': { status: 'committed', at: '2026-06-01T00:00:00Z' } },
+  };
+  const loan = {
+    id: 'ln', name: 'Loan', category: 'Bank loans', frequency: 'monthly',
+    amount: 400, startDate: '2026-01-28', // unsettled
+  };
+
+  it('periodKeyOf + settlementStatusFor read the occurrence month', () => {
+    expect(periodKeyOf(new Date(2026, 5, 28))).toBe('2026-06');
+    expect(settlementStatusFor(rent28, new Date(2026, 5, 28))).toBe('paid');   // June
+    expect(settlementStatusFor(rent28, new Date(2026, 6, 28))).toBe(null);     // July (none)
+  });
+
+  it('nextUnsettledOccurrence skips a settled month', () => {
+    expect(iso(nextOccurrence(rent28, { now: NOW }))).toBe('2026-06-28');           // raw next = this month
+    expect(iso(nextUnsettledOccurrence(rent28, { now: NOW }))).toBe('2026-07-28');  // June paid → advance
+    expect(iso(nextUnsettledOccurrence(loan, { now: NOW }))).toBe('2026-06-28');    // unsettled → unchanged
+  });
+
+  it('upcomingForCosts drops settled occurrences from the total', () => {
+    const ctrl = { ...rent28, id: 'ctrl', settlements: undefined };
+    const settled = upcomingForCosts([rent28], { horizonDays: 35, now: NOW });   // window → 2026-07-31
+    const control = upcomingForCosts([ctrl], { horizonDays: 35, now: NOW });
+    expect(control.items[0].horizonTotal).toBe(400);                  // June 28 + July 28
+    expect(settled.items[0].horizonTotal).toBe(200);                 // June excluded → July only
+    expect(iso(settled.items[0].nextDue)).toBe('2026-07-28');
+    expect(settled.items[0].period).toBe('2026-07');
+  });
+
+  it('settledThisMonth groups committed + paid for the current month', () => {
+    const res = settledThisMonth([rent28, starlink, loan], { now: NOW });
+    expect(res.period).toBe('2026-06');
+    expect(res.paid.map((p) => p.id)).toEqual(['r28']);
+    expect(res.committed.map((c) => c.id)).toEqual(['sl']);
+    expect(res.paidTotal).toBe(200);
+    expect(res.committedTotal).toBe(40);
   });
 });

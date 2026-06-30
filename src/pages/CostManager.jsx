@@ -109,8 +109,8 @@ function PendingInvoiceBanner({ onConfirm }) {
 }
 
 export default function CostManager() {
-  const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
-  const { getSummary, getUpcoming, scopedCosts } = useMetrics();
+  const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, setCostSettlement, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
+  const { getSummary, getUpcoming, getHandled, scopedCosts } = useMetrics();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(false); // module intro animation removed — only the opening Omni loader animates
   const [activeFilter, setActiveFilter] = useState('all');
@@ -157,6 +157,10 @@ export default function CostManager() {
   const upcoming = useMemo(
     () => getUpcoming(30, { location: locationFilter }),
     [getUpcoming, locationFilter],
+  );
+  const handled = useMemo(
+    () => getHandled({ location: locationFilter }),
+    [getHandled, locationFilter],
   );
   const commitmentCount = useMemo(
     () => filterCostsByLocation(scopedCosts, locationFilter).filter((c) => isCommitment(c)).length,
@@ -307,7 +311,7 @@ export default function CostManager() {
 
         {/* What's coming + what we have */}
         <div className={styles.moneyGrid}>
-          <UpcomingPanel upcoming={upcoming} />
+          <UpcomingPanel upcoming={upcoming} handled={handled} onMark={setCostSettlement} />
           <CommitmentsPanel
             monthly={moneySummary.monthlyCostRate}
             annual={moneySummary.annualTotal}
