@@ -56,7 +56,6 @@ export default function PrivacyPolicy() {
           <li><strong>Google Firebase</strong> — authentication.</li>
           <li><strong>Vercel</strong> — application hosting.</li>
           <li><strong>Cloudinary</strong> — image (repair-photo) storage and delivery.</li>
-          <li><strong>Mapbox</strong> — map rendering.</li>
           <li><strong>Resend</strong> — transactional email.</li>
           <li><strong>Anthropic</strong> — AI features (e.g. the daily brief). Operational summaries may be processed to generate insights; we do not use your data to train third-party models.</li>
           <li><strong>Sentry</strong> — error monitoring.</li>

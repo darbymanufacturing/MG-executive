@@ -48,7 +48,6 @@ import Onboarding from './pages/Onboarding.jsx';
 import Spr from './pages/Spr.jsx';
 import Maintenance from './pages/Maintenance.jsx';
 import Projects from './pages/Projects.jsx';
-import WarRoomPage from './pages/WarRoom.jsx';
 import PredictiveMaintenance from './pages/PredictiveMaintenance.jsx';
 import Investment from './pages/Investment.jsx';
 import Pow from './pages/Pow.jsx';
@@ -79,7 +78,6 @@ const ROUTE_TITLES = {
   '/projects':    'Projects',
   '/crew':        'Crew',
   '/contractors': 'Contractors',
-  '/war-room':    'War Room',
   '/scooters':    'Scooters',
   '/pme':         'PME',
   '/pow':         'POW v3',
@@ -241,13 +239,6 @@ function AppShell() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  /* Preload Mapbox after a short idle — Phase 1.6a decoupled this from CostContext.loading
-     so the shell doesn't gate on data loading any more. Each page handles its own
-     loading skeleton (Phase 1.5 adoption). */
-  useEffect(() => {
-    const t = setTimeout(() => { import('mapbox-gl').catch(() => {}); }, 2000);
-    return () => clearTimeout(t);
-  }, []);
 
   /* Redirect crew to /crew shell */
   // #185 — 'staff' intentionally stays in the admin shell (full ops access); only technician/crew/contractor go to /crew
@@ -305,7 +296,6 @@ function AppShell() {
             <Route path="/notifications"  element={<RouteErrorBoundary><Notifications /></RouteErrorBoundary>} />
             <Route path="/projects"       element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
             <Route path="/projects/:id"   element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />
-            <Route path="/war-room"       element={<RouteErrorBoundary><WarRoomPage /></RouteErrorBoundary>} />
             <Route path="/investment"     element={<RouteErrorBoundary><Investment /></RouteErrorBoundary>} />
             <Route path="/money"          element={<RouteErrorBoundary><MoneyOverview /></RouteErrorBoundary>} />
             <Route path="/taxes"          element={<RouteErrorBoundary><Taxes /></RouteErrorBoundary>} />

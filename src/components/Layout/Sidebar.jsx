@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Inbox, Activity, Bell, Flag, Wrench,
   Users, Receipt, Landmark, Settings, ChevronLeft, ChevronRight,
-  LogOut, Radar, Crosshair, Bike, TrendingUp, Zap, ClipboardList, Scale, Wallet, Banknote, HandCoins, PiggyBank, Percent,
+  LogOut, Radar, Bike, TrendingUp, Zap, ClipboardList, Scale, Wallet, Banknote, HandCoins, PiggyBank, Percent,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
@@ -161,7 +161,6 @@ export default function Sidebar({ open, onClose, collapsed = false, onCollapse }
           <NavItem to="/maintenance" icon={Wrench}        label="Tickets"   badge={displayActiveCount > 0 ? displayActiveCount : undefined} collapsed={collapsed} />
           <NavItem to="/projects"    icon={ClipboardList} label="Projects"  collapsed={collapsed} />
           <NavItem to="/contractors" icon={Users}         label="Contractors" collapsed={collapsed} />
-          <NavItem to="/war-room"    icon={Crosshair}     label="War Room"  collapsed={collapsed} />
           <NavItem to="/scooters"    icon={Bike}          label="Scooters"  collapsed={collapsed} />
           <NavItem to="/pme"         icon={Activity}      label="PME"       collapsed={collapsed} />
           <NavItem to="/pow"         icon={Zap}           label="POW v3"    collapsed={collapsed} />
