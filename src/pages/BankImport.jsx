@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, SlidersHorizontal } from 'lucide-react';
 import { BankRulesProvider } from '../context/BankRulesContext.jsx';
 import BankImportPanel from '../components/Bank/BankImportPanel.jsx';
+import BankDataStatus from '../components/Bank/BankDataStatus.jsx';
 import BankReviewTable from '../components/Bank/BankReviewTable.jsx';
 import LoanImportReview from '../components/Bank/LoanImportReview.jsx';
 import RulesManager from '../components/Bank/RulesManager.jsx';
@@ -49,7 +50,11 @@ export default function BankImport() {
           ) : parsed ? (
             <BankReviewTable result={parsed} onBack={() => setParsed(null)} />
           ) : (
-            <BankImportPanel onParsed={setParsed} onParsedLoan={setParsedLoan} />
+            <>
+              {/* How current the imported bank history is + what to export next */}
+              <BankDataStatus />
+              <BankImportPanel onParsed={setParsed} onParsedLoan={setParsedLoan} />
+            </>
           )
         ) : (
           <RulesManager />

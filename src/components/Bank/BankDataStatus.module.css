@@ -1,0 +1,115 @@
+/* "Your bank data" status panel (FF-2). Tokens only — never hardcode hex. */
+
+.panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.headIcon { color: var(--fg-muted); flex-shrink: 0; }
+.headTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--fg-strong);
+}
+.headMeta {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+/* ── latest transaction hero ── */
+.latest {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.latestLeft { min-width: 0; }
+.latestLabel { font-size: 0.75rem; color: var(--fg-secondary); }
+.latestDate {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--fg-strong);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.range { font-size: 0.75rem; color: var(--fg-muted); margin-top: 2px; }
+
+.badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.green { background: var(--status-green-bg); color: var(--status-green); }
+.amber { background: var(--status-amber-bg); color: var(--status-amber); }
+.red   { background: var(--status-red-bg);   color: var(--status-red); }
+.muted { background: var(--bg-section);      color: var(--fg-muted); }
+
+/* ── next-export hint ── */
+.nextExport {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--accent-tint);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--fg-secondary);
+  line-height: 1.4;
+}
+.nextIcon { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.nextExport strong { color: var(--fg-strong); }
+
+/* ── recent uploads ── */
+.uploads {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.uploadsHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--divider);
+}
+.uploadRow:last-child { border-bottom: none; }
+.uploadWhen { color: var(--fg-strong); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uploadCount { color: var(--fg-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.uploadRange { color: var(--fg-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.uploadTotal { color: var(--fg-secondary); font-variant-numeric: tabular-nums; flex-shrink: 0; min-width: 68px; text-align: right; }
+
+.moreNote { font-size: 0.72rem; color: var(--fg-muted); margin-top: 6px; }
+
+.empty { font-size: 0.8125rem; color: var(--fg-muted); margin: 0; }
+
+@media (max-width: 640px) {
+  .uploadRange { display: none; }
+}
