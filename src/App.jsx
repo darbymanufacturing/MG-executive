@@ -33,7 +33,8 @@ import OmniLoading from './components/Shared/OmniLoading.jsx';
 import Home from './pages/Home.jsx';
 import Issues from './pages/Issues.jsx';
 import IssueDetail from './pages/IssueDetail.jsx';
-import Dashboard from './pages/Dashboard.jsx';   /* becomes /pulse */
+import Dashboard from './pages/Dashboard.jsx';   /* the classic dashboard — /pulse/classic */
+import Planner from './pages/Planner.jsx';       /* Excel-replica Financial Planner — the main /pulse view */
 import MoneyOverview from './pages/MoneyOverview.jsx';
 import Taxes from './pages/Taxes.jsx';
 import CostManager from './pages/CostManager.jsx';
@@ -73,6 +74,7 @@ const ROUTE_TITLES = {
   '/':            'Inbox',
   '/issues':      'Issues',
   '/pulse':       'Pulse',
+  '/pulse/classic': 'Pulse (classic)',
   '/notifications':'Notifications',
   '/maintenance': 'Tickets',
   '/projects':    'Projects',
@@ -291,7 +293,8 @@ function AppShell() {
             <Route path="/"               element={<RouteErrorBoundary><Home /></RouteErrorBoundary>} />
             <Route path="/issues"         element={<RouteErrorBoundary><Issues /></RouteErrorBoundary>} />
             <Route path="/issues/:id"     element={<RouteErrorBoundary><IssueDetail /></RouteErrorBoundary>} />
-            <Route path="/pulse"          element={<RouteErrorBoundary><Dashboard /></RouteErrorBoundary>} />
+            <Route path="/pulse"          element={<RouteErrorBoundary><Planner /></RouteErrorBoundary>} />
+            <Route path="/pulse/classic"  element={<RouteErrorBoundary><Dashboard /></RouteErrorBoundary>} />
             {/* /brief intentionally removed — it duplicated Home; the brief is surfaced at the top of / (#576) */}
             <Route path="/notifications"  element={<RouteErrorBoundary><Notifications /></RouteErrorBoundary>} />
             <Route path="/projects"       element={<RouteErrorBoundary><Projects /></RouteErrorBoundary>} />

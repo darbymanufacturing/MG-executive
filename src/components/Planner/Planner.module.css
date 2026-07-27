@@ -1,0 +1,351 @@
+/* Financial Planner — shared styles for YearGrid / YearlyPanel / MonthSheet.
+   Colors reference the --pl-* custom properties defined at the page root
+   (src/pages/Planner.module.css) — CSS custom properties cascade through the
+   DOM regardless of module boundaries, so they're available here unmodified. */
+
+/* ===== Year grid (per 6-month band) ===== */
+.yearGridWrap {
+  background: var(--pl-white, #FFFFFF);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.yearGrid {
+  display: grid;
+  /* label | month | (chip | month) x5 — fixed 6-months-per-band layout */
+  grid-template-columns: 170px minmax(100px, 1fr) repeat(5, 30px minmax(100px, 1fr));
+  min-width: 760px;
+}
+
+/* Lets a .map() wrapper group multiple grid cells without breaking column flow —
+   the wrapper itself is removed from layout and its children become direct
+   grid items of .yearGrid. */
+.contentsWrap {
+  display: contents;
+}
+
+.cell {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--pl-row-bg, #F3F3F3);
+  display: flex;
+  align-items: center;
+}
+
+.cornerCell {
+  background: var(--pl-black, #000000);
+}
+
+.rowLabel {
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #000;
+  background: var(--pl-header-bg, #CCCCCC);
+}
+
+.valueCell {
+  justify-content: flex-end;
+  font-size: 13px;
+  color: #000;
+  background: var(--pl-row-bg, #F3F3F3);
+}
+
+.chipHeaderCell {
+  background: var(--pl-black, #000000);
+}
+
+.monthPill {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: var(--pl-black, #000000);
+  color: var(--pl-white, #FFFFFF);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+.monthPill:hover {
+  opacity: 0.85;
+}
+.monthPill:focus-visible {
+  outline: 2px solid var(--accent, #A0521D);
+  outline-offset: -2px;
+}
+
+.trendCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pl-row-bg, #F3F3F3);
+  border-bottom: 1px solid var(--pl-row-bg, #F3F3F3);
+}
+
+.trendChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--pl-chip-bg, #D9EAD3);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+.trendUp { color: var(--pl-up, #38761D); }
+.trendDown { color: var(--pl-down, #CC0000); }
+.trendStable { color: var(--pl-stable, #666666); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: #333;
+  border-top: 1px solid var(--border, #E2E8F0);
+}
+.legendTitle {
+  font-weight: 700;
+}
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===== Yearly summary panel (right column) ===== */
+.yearlyPanel {
+  background: var(--pl-white, #FFFFFF);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  align-self: start;
+}
+
+.blackPill {
+  background: var(--pl-black, #000000);
+  color: var(--pl-white, #FFFFFF);
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 10px 12px;
+}
+
+.summaryBody {
+  padding: 10px 14px 14px;
+}
+
+.summaryPanelMonth {
+  background: var(--pl-white, #FFFFFF);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  margin-top: 16px;
+  max-width: 420px;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pl-row-bg, #F3F3F3);
+}
+.summaryRow:last-child {
+  border-bottom: none;
+}
+
+.summaryLabel {
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #000;
+}
+.labelRevenue { color: var(--pl-green, #6AA84F); }
+.labelExpenses { color: var(--pl-red, #CC4125); }
+
+.summaryValue {
+  font-size: 12px;
+  font-weight: 600;
+  color: #000;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.greyValue {
+  background: var(--pl-row-bg, #F3F3F3);
+}
+
+.openingInput {
+  width: 130px;
+  text-align: right;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #000;
+  background: var(--pl-row-bg, #F3F3F3);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.openingInput:focus {
+  outline: 2px solid var(--accent, #A0521D);
+  outline-offset: 1px;
+}
+
+/* ===== Month sheet ===== */
+.monthSheet {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  border: 1px solid var(--border, #E2E8F0);
+  background: var(--bg-elev, #FFFFFF);
+  color: var(--fg-strong, #0F172A);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 12px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.backBtn:hover {
+  background: var(--bg-hover, #F1F5F9);
+}
+
+.monthTitle {
+  font-weight: 700;
+  font-size: 24px;
+  margin: 0 0 16px;
+  color: #000;
+}
+
+.emptyNotice {
+  color: var(--fg-muted, #64748B);
+  font-size: 14px;
+}
+
+.sheetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.sectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionPill {
+  color: var(--pl-white, #FFFFFF);
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px) var(--radius-sm, 6px) 0 0;
+}
+.pillGreen { background: var(--pl-green, #6AA84F); }
+.pillRed { background: var(--pl-red, #CC4125); }
+
+.table {
+  background: var(--pl-white, #FFFFFF);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+}
+
+.subPill {
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 6px 10px;
+}
+.subGreen { background: var(--pl-green-sub, #93C47D); }
+.subSoftware { background: var(--pl-software, #DD7E6B); }
+.subStaff { background: var(--pl-staff, #EA9999); }
+.subOthers { background: var(--pl-others, #F9CB9C); }
+.subGrey { background: var(--pl-row-bg, #F3F3F3); }
+
+.itemAmountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--pl-header-bg, #CCCCCC);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #000;
+  padding: 6px 10px;
+}
+
+.rowsScroll {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--pl-row-bg, #F3F3F3);
+  border-bottom: 1px solid var(--pl-white, #FFFFFF);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #000;
+}
+
+.emptyRow {
+  color: var(--fg-muted, #64748B);
+  font-style: italic;
+}
+
+.itemName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.estMarker {
+  color: var(--fg-muted, #64748B);
+  font-size: 11px;
+}
+
+.itemAmount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.totalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--pl-black, #000000);
+  color: var(--pl-white, #FFFFFF);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  padding: 7px 10px;
+}

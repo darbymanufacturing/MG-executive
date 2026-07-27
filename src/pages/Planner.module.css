@@ -1,0 +1,122 @@
+/* Financial Planner page — a deliberate Excel replica of "Financial Planner
+   2022 Recoin Digital.xlsx". The --pl-* custom properties below are the exact
+   palette pulled cell-by-cell from that workbook; they are intentionally
+   hardcoded (not mapped to the app's theme tokens) so the page reads the same
+   in light or dark mode, just like the source spreadsheet. Do not swap these
+   for var(--accent)/var(--status-*) etc. — see the Financial Planner UI spec. */
+.page {
+  --pl-green: #6AA84F;
+  --pl-green-sub: #93C47D;
+  --pl-red: #CC4125;
+  --pl-software: #DD7E6B;
+  --pl-staff: #EA9999;
+  --pl-others: #F9CB9C;
+  --pl-header-bg: #CCCCCC;
+  --pl-row-bg: #F3F3F3;
+  --pl-black: #000000;
+  --pl-white: #FFFFFF;
+  --pl-chip-bg: #D9EAD3;
+  --pl-up: #38761D;
+  --pl-down: #CC0000;
+  --pl-stable: #666666;
+  --pl-font: 'Comfortaa', var(--font-display), cursive;
+
+  background: var(--bg-page);
+  min-height: 100%;
+  padding: var(--space-6);
+  font-family: var(--pl-font);
+  color: #000;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wordmark {
+  font-family: 'Poppins', var(--font-display), sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--fg-strong);
+  text-transform: lowercase;
+}
+
+.title {
+  flex: 1;
+  min-width: 200px;
+  text-align: center;
+  font-family: var(--pl-font);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--fg-strong);
+  margin: 0;
+}
+
+.yearSwitcher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.yearBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-strong);
+  cursor: pointer;
+}
+.yearBtn:hover {
+  background: var(--bg-hover);
+}
+.yearBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.yearLabel {
+  font-weight: 700;
+  font-size: 16px;
+  min-width: 3.5ch;
+  text-align: center;
+  color: var(--fg-strong);
+}
+
+.yearView {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.gridScroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* Below 1200px the year-view grids scroll horizontally inside their own
+   container — the page body itself never scrolls sideways. */
+@media (max-width: 1200px) {
+  .yearView {
+    grid-template-columns: 1fr;
+  }
+  .gridScroll {
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+  }
+}
