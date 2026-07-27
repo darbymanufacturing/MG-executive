@@ -27,6 +27,7 @@ import deleteAccount from './_delete-account.js';
 import deleteUser from './_delete-user.js';
 import hoppRefresh from './_hopp-refresh.js';
 import invoiceParse from './_invoice-parse.js';
+import mcp from './_mcp.js';
 import syncClaim from './_sync-claim.js';
 
 // URL path segment (after /api/) → handler. Keys MUST match the old filenames so
@@ -46,6 +47,7 @@ const ROUTES = {
   'delete-user': deleteUser,
   'hopp-refresh': hoppRefresh,
   'invoice-parse': invoiceParse,
+  'mcp': mcp,
   'signup': signup,
   'sync-claim': syncClaim,
 };
