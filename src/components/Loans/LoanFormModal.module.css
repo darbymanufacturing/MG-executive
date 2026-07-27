@@ -1,0 +1,86 @@
+.form { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--fg-strong);
+}
+
+.optional { font-weight: 400; color: var(--color-text-muted); }
+
+.input, .textarea {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--fg-strong);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: 10px 12px;
+  transition: border-color var(--transition-fast);
+  outline: none;
+  width: 100%;
+}
+
+.input:focus, .textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.textarea { resize: vertical; min-height: 60px; }
+
+.inputError { border-color: var(--status-red) !important; }
+
+.error { font-size: var(--text-xs); color: var(--status-red); }
+
+.typeToggle {
+  display: flex;
+  gap: var(--space-2);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.typeBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.typeBtn:hover { color: var(--fg-strong); }
+
+.typeActive {
+  background: var(--accent);
+  color: var(--color-white);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 600px) {
+  .row { grid-template-columns: 1fr; }
+  .actions { flex-direction: column-reverse; }
+  .actions > * { width: 100%; }
+}
