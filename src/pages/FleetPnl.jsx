@@ -144,6 +144,15 @@ export default function FleetPnl() {
                     <div className={styles.line}><span>Costs</span><span className={styles.lineNeg}>−{formatEUR(fc)}</span></div>
                     <div className={styles.line}><span>Maintenance</span><span className={styles.lineNeg}>−{formatEUR(maintenance)}</span></div>
                   </div>
+
+                  {/* Revenue + maintenance attribute BY CITY — a fleet with no cities
+                      silently shows €0 for both (owner-reported 2026-07-27). Surface it. */}
+                  {!(fleet.cities?.length) && (
+                    <div className={styles.noCitiesWarn}>
+                      ⚠ No cities configured — revenue &amp; maintenance can&rsquo;t be attributed to
+                      this fleet. Add its cities via the fleet switcher → Manage fleets.
+                    </div>
+                  )}
                 </div>
               );
             })}

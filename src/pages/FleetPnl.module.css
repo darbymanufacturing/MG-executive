@@ -79,3 +79,14 @@
 }
 .overhead svg { color: var(--fg-muted); flex-shrink: 0; margin-top: 1px; }
 .overhead strong { color: var(--fg-strong); }
+
+/* Fleet has no cities → revenue/maintenance can't attribute (silent-zero guard) */
+.noCitiesWarn {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--status-amber-bg);
+  color: var(--status-amber);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
