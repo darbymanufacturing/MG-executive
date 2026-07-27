@@ -31,6 +31,16 @@ export default function FleetPnl() {
 
   const cityKey = (c) => String(c ?? '').toLowerCase();
 
+  const companyWideCosts = useMemo(
+    () => (costs ?? []).filter((c) => !c.fleetId).reduce((s, c) => s + (Number(c.amount) || 0), 0),
+    [costs],
+  );
+
+  // Company-wide (untagged) costs are split EVENLY across the fleets — each fleet
+  // carries companyWide / fleetCount as its "shared overhead" line (owner decision
+  // 2026-07-27; previously overhead sat outside every fleet's P&L).
+  const overheadShare = fleets.length > 0 ? companyWideCosts / fleets.length : 0;
+
   const rows = useMemo(() => {
     return fleets.map((f) => {
       const cities = new Set((f.cities ?? []).map(cityKey));
@@ -41,19 +51,14 @@ export default function FleetPnl() {
       const maintenance = (tickets ?? [])
         .filter((t) => inFleet(t.city))
         .reduce((s, t) => s + (Number(t.totalCost) || 0), 0);
-      const fleetCosts = (costs ?? [])
+      const directCosts = (costs ?? [])
         .filter((c) => c.fleetId === f._docId)
         .reduce((s, c) => s + (Number(c.amount) || 0), 0);
-      const profit = revenue - fleetCosts - maintenance;
+      const profit = revenue - directCosts - overheadShare - maintenance;
       const margin = revenue > 0 ? (profit / revenue) * 100 : null;
-      return { fleet: f, revenue, maintenance, costs: fleetCosts, profit, margin };
+      return { fleet: f, revenue, maintenance, costs: directCosts, overheadShare, profit, margin };
     });
-  }, [fleets, revenueData, costs, tickets]);
-
-  const companyWideCosts = useMemo(
-    () => (costs ?? []).filter((c) => !c.fleetId).reduce((s, c) => s + (Number(c.amount) || 0), 0),
-    [costs],
-  );
+  }, [fleets, revenueData, costs, tickets, overheadShare]);
 
   const totals = useMemo(() => {
     const rev = rows.reduce((s, r) => s + r.revenue, 0);
@@ -112,7 +117,7 @@ export default function FleetPnl() {
 
           {/* Per-fleet scoreboard */}
           <div className={styles.grid}>
-            {rows.map(({ fleet, revenue, maintenance, costs: fc, profit, margin }) => {
+            {rows.map(({ fleet, revenue, maintenance, costs: fc, overheadShare: share, profit, margin }) => {
               const pos = profit >= 0;
               const barPct = Math.round((Math.abs(profit) / maxAbs) * 100);
               return (
@@ -141,7 +146,8 @@ export default function FleetPnl() {
 
                   <div className={styles.lines}>
                     <div className={styles.line}><span>Revenue</span><span className={styles.lineVal}>{formatEUR(revenue)}</span></div>
-                    <div className={styles.line}><span>Costs</span><span className={styles.lineNeg}>−{formatEUR(fc)}</span></div>
+                    <div className={styles.line}><span>Costs (direct)</span><span className={styles.lineNeg}>−{formatEUR(fc)}</span></div>
+                    <div className={styles.line}><span>Shared overhead</span><span className={styles.lineNeg}>−{formatEUR(share)}</span></div>
                     <div className={styles.line}><span>Maintenance</span><span className={styles.lineNeg}>−{formatEUR(maintenance)}</span></div>
                   </div>
 
@@ -158,12 +164,14 @@ export default function FleetPnl() {
             })}
           </div>
 
-          {/* Company-wide overhead note */}
+          {/* Company-wide overhead note — split evenly across fleets */}
           <div className={styles.overhead}>
             <Building2 size={15} />
             <span>
-              <strong>{formatEUR(companyWideCosts)}</strong> in company-wide costs aren&rsquo;t assigned to a fleet.
-              Tag a cost to a fleet from the cost form (&ldquo;Applies to&rdquo;) to fold it into that fleet&rsquo;s P&L.
+              <strong>{formatEUR(companyWideCosts)}</strong> in company-wide costs are split evenly across
+              the {fleets.length} fleet{fleets.length === 1 ? '' : 's'} as &ldquo;shared overhead&rdquo;
+              ({formatEUR(overheadShare)} each). Tag a cost to a fleet from the cost form
+              (&ldquo;Applies to&rdquo;) to assign it directly instead.
             </span>
           </div>
         </div>
