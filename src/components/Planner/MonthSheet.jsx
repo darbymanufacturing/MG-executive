@@ -55,6 +55,7 @@ function SectionTable({ subLabel, subClassName, items, totalLabel, total, onEdit
                 <span className={styles.itemName}>
                   {item?.name ?? item?.label ?? 'Item'}
                   {item?.isEstimate ? <span className={styles.estMarker}> · est</span> : null}
+                  {item?.isProjection ? <span className={styles.estMarker}> · planned</span> : null}
                 </span>
                 <span className={styles.itemAmount}>{formatEUR(Number(item?.amount) || 0)}</span>
               </Row>

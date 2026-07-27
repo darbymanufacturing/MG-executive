@@ -4,9 +4,14 @@ import {
   PLANNER_METRIC_LABELS,
   plannerYears,
   buildPlannerModel,
+  chainedOpenings,
 } from '../financialPlanner.js';
 
 const NOW = new Date(2026, 5, 26); // 2026-06-26
+// For recurring-expansion fixtures: with the cash-view rule (recurring costs
+// only project from the current month forward), pin "now" to Jan 1 so a full
+// 2026 year of recurring occurrences is in the projection window.
+const JAN1 = new Date(2026, 0, 1);
 
 describe('constants', () => {
   it('PLANNER_METRICS is the exact 7 metrics in order', () => {
@@ -58,11 +63,11 @@ describe('buildPlannerModel — category bucketing', () => {
     { date: '2026-01-20', location: 'Athens', totalPaidRevenue: 200 },
   ];
 
-  const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 0, now: NOW });
+  const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 0, now: JAN1 });
   const jan = model.months[0];
 
   it('CEO → dividends (not an expense); Transfer → excluded entirely', () => {
-    expect(jan.dividendItems).toEqual([{ id: 'ceo', label: 'Owner draw', amount: 800 }]);
+    expect(jan.dividendItems).toEqual([{ id: 'ceo', label: 'Owner draw', amount: 800, isProjection: true }]);
     expect(jan.summary.dividends).toBe(800);
     // Transfer must not appear anywhere: not in any expense group, not in totals.
     const allExpenseLabels = [...jan.expenseGroups.software, ...jan.expenseGroups.staff, ...jan.expenseGroups.others]
@@ -71,9 +76,9 @@ describe('buildPlannerModel — category bucketing', () => {
   });
 
   it('routes software / staff / others buckets correctly', () => {
-    expect(jan.expenseGroups.software).toEqual([{ id: 'sw', label: 'Starlink', amount: 40 }]);
-    expect(jan.expenseGroups.staff).toEqual([{ id: 'st', label: 'Mechanic', amount: 1000 }]);
-    expect(jan.expenseGroups.others).toEqual([{ id: 'oth', label: 'Rent', amount: 500 }]);
+    expect(jan.expenseGroups.software).toEqual([{ id: 'sw', label: 'Starlink', amount: 40, isProjection: true }]);
+    expect(jan.expenseGroups.staff).toEqual([{ id: 'st', label: 'Mechanic', amount: 1000, isProjection: true }]);
+    expect(jan.expenseGroups.others).toEqual([{ id: 'oth', label: 'Rent', amount: 500, isProjection: true }]);
     expect(jan.totals).toEqual({ revenue: 1700, software: 40, staff: 1000, others: 500, expenses: 1540 });
   });
 
@@ -106,7 +111,7 @@ describe('buildPlannerModel — recurring expansion (monthly/quarterly + endDate
     { id: 'ins', name: 'Insurance', category: 'Insurance', amount: 300, frequency: 'quarterly', startDate: '2026-01-01' },
     { id: 'sub', name: 'Short sub', category: 'Consumables', amount: 50, frequency: 'monthly', startDate: '2026-01-01', endDate: '2026-03-15' },
   ];
-  const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: NOW });
+  const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: JAN1 });
 
   it('monthly recurs every month with no end', () => {
     model.months.forEach((m) => {
@@ -143,7 +148,7 @@ describe('buildPlannerModel — weekly/daily estimates', () => {
     { id: 'fuel', name: 'Fuel', category: 'Fuel', amount: 100, frequency: 'weekly', startDate: '2026-01-01' },
     { id: 'parts', name: 'Parts', category: 'Parts', amount: 5, frequency: 'daily', startDate: '2026-01-01' },
   ];
-  const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: NOW });
+  const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: JAN1 });
 
   it('weekly is estimated as amount × 52/12 per active month, flagged isEstimate', () => {
     const jan = model.months[0].expenseGroups.others.find((i) => i.label === 'Fuel');
@@ -166,7 +171,7 @@ describe('buildPlannerModel — multi-item aggregation (expenses not merged)', (
       { id: 'a', name: 'Contractor', category: 'Contractors', amount: 300, frequency: 'monthly', startDate: '2026-01-01' },
       { id: 'b', name: 'Contractor', category: 'Contractors', amount: 250, frequency: 'monthly', startDate: '2026-01-01' },
     ];
-    const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: NOW });
+    const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: JAN1 });
     expect(model.months[0].expenseGroups.staff).toHaveLength(2);
     expect(model.months[0].totals.staff).toBe(550);
   });
@@ -179,7 +184,7 @@ describe('buildPlannerModel — opening balance chaining + yearly totals', () =>
     location: 'Athens',
     totalPaidRevenue: 1000,
   }));
-  const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 500, now: NOW });
+  const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 500, now: JAN1 });
 
   it('January opens on the year opening-balance input', () => {
     expect(model.months[0].summary.opening).toBe(500);
@@ -245,8 +250,8 @@ describe('buildPlannerModel — skips invalid rows', () => {
       { location: 'Athens', totalPaidRevenue: 500 }, // missing date
       { date: '2026-01-05', location: 'Athens', totalPaidRevenue: 200 },
     ];
-    const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 0, now: NOW });
-    expect(model.months[0].expenseGroups.others).toEqual([{ id: 'good', label: 'Good', amount: 100 }]);
+    const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 0, now: JAN1 });
+    expect(model.months[0].expenseGroups.others).toEqual([{ id: 'good', label: 'Good', amount: 100, isProjection: true }]);
     expect(model.months[0].revenueItems).toEqual([{ label: 'Athens', amount: 200 }]);
   });
 });
@@ -274,3 +279,70 @@ describe('buildPlannerModel — empty inputs', () => {
     expect(model.year).toBe(2026);
   });
 });
+
+describe('buildPlannerModel — cash-view rules (past vs projection)', () => {
+  const costs = [
+    { id: 'rec', name: 'Rent', category: 'Space rent', amount: 500, frequency: 'monthly', startDate: '2026-01-01' },
+    { id: 'act', name: 'STARLINK INTERNET', category: 'SW subscriptions, Telco charges', amount: 40, frequency: 'one-time', startDate: '2026-02-10' },
+    { id: 'int1', name: 'Interest — Loan ••2501', category: 'loan', amount: 172.77, frequency: 'one-time', startDate: '2026-02-11' },
+    { id: 'debit', name: '989004292542501', category: 'Bank loans', amount: 791.15, frequency: 'one-time', startDate: '2026-02-11' },
+  ];
+  const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: NOW }); // now = 2026-06-26
+
+  it('recurring costs are suppressed in past months (their actuals cover them)', () => {
+    for (let i = 0; i < 5; i += 1) { // Jan–May < June
+      expect(model.months[i].expenseGroups.others.some((x) => x.label === 'Rent')).toBe(false);
+    }
+  });
+
+  it('recurring costs project from the current month forward, flagged isProjection', () => {
+    for (let i = 5; i < 12; i += 1) { // Jun–Dec >= June
+      const item = model.months[i].expenseGroups.others.find((x) => x.label === 'Rent');
+      expect(item).toBeTruthy();
+      expect(item.isProjection).toBe(true);
+    }
+  });
+
+  it('dated one-time actuals still count in their past month', () => {
+    const feb = model.months[1];
+    expect(feb.expenseGroups.software.some((x) => x.label === 'STARLINK INTERNET')).toBe(true);
+  });
+
+  it('loans-module "Interest — Loan" rows are excluded (the account debit carries the cash)', () => {
+    const feb = model.months[1];
+    const others = feb.expenseGroups.others.map((x) => x.label);
+    expect(others).toContain('989004292542501');
+    expect(others.some((l) => l.startsWith('Interest'))).toBe(false);
+    expect(feb.totals.expenses).toBe(831.15); // 40 + 791.15 — interest row NOT double-counted
+  });
+});
+
+describe('chainedOpenings — Jan opens on prev Dec closing', () => {
+  const costs = [
+    { id: 'c25', name: 'Cost 2025', category: 'Space rent', amount: 400, frequency: 'one-time', startDate: '2025-03-10' },
+    { id: 'c26', name: 'Cost 2026', category: 'Space rent', amount: 100, frequency: 'one-time', startDate: '2026-02-10' },
+  ];
+  const revenue = [
+    { date: '2025-05-15', location: 'Athens', totalPaidRevenue: 1000 },
+    { date: '2026-01-15', location: 'Athens', totalPaidRevenue: 300 },
+  ];
+
+  it('earliest year takes the manual seed; later years derive from the chain', () => {
+    const chain = chainedOpenings({ costs, revenue, openings: { 2025: 2000 }, now: NOW });
+    expect(chain[2025]).toEqual({ opening: 2000, derived: false });
+    // 2025 closing = 2000 + (1000 − 400) = 2600 → 2026 January opening
+    expect(chain[2026]).toEqual({ opening: 2600, derived: true });
+  });
+
+  it('an explicit manual value for a later year is ignored — the chain wins', () => {
+    const chain = chainedOpenings({ costs, revenue, openings: { 2025: 2000, 2026: 99999 }, now: NOW });
+    expect(chain[2026].opening).toBe(2600);
+  });
+
+  it('feeding the chained opening into the model makes Jan open on prev Dec closing', () => {
+    const chain = chainedOpenings({ costs, revenue, openings: { 2025: 2000 }, now: NOW });
+    const m2026 = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: chain[2026].opening, now: NOW });
+    expect(m2026.months[0].summary.opening).toBe(2600);
+  });
+});
+

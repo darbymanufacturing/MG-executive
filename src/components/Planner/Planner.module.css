@@ -394,3 +394,17 @@
 .addBtn:hover {
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* Chained opening balance (year N opens on Dec N−1 closing) — read-only display */
+.derivedOpening {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.derivedNote {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--fg-muted, #64748B);
+}

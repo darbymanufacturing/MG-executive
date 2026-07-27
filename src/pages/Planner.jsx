@@ -7,7 +7,7 @@ import MonthSheet from '../components/Planner/MonthSheet.jsx';
 import CostFormModal from '../components/Costs/CostFormModal.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
-import { buildPlannerModel, plannerYears } from '../utils/financialPlanner.js';
+import { buildPlannerModel, plannerYears, chainedOpenings } from '../utils/financialPlanner.js';
 import styles from './Planner.module.css';
 
 // "+ Add" in a month-sheet bucket prefills the cost form with a category that
@@ -67,7 +67,16 @@ export default function Planner() {
     setSelectedMonth(null);
   }, [years]);
 
-  const openingBalance = Number(config?.plannerOpening?.[year]) || 0;
+  // Each year's January opens on the previous December's closing (CASH-VIEW §3);
+  // only the earliest data year is seeded by the manual config.plannerOpening input.
+  const openings = useMemo(() => chainedOpenings({
+    costs: scopedCosts,
+    revenue: scopedRevenue,
+    openings: config?.plannerOpening,
+  }), [scopedCosts, scopedRevenue, config?.plannerOpening]);
+
+  const openingBalance = openings[year]?.opening ?? (Number(config?.plannerOpening?.[year]) || 0);
+  const openingDerived = openings[year]?.derived ?? false;
 
   const model = useMemo(() => buildPlannerModel({
     costs: scopedCosts,
@@ -149,6 +158,7 @@ export default function Planner() {
             year={year}
             openingBalance={openingBalance}
             onCommitOpening={handleCommitOpening}
+            openingDerived={openingDerived}
           />
         </div>
       ) : (

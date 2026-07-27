@@ -108,6 +108,11 @@
 /* ============================================================
    LIGHT THEME (default)
    ============================================================ */
+/* Also scoped to :root — App.jsx mirrors data-theme onto <html>, and PORTALLED
+   surfaces (Modal renders into document.body, outside .omni-app) need the theme
+   tokens to resolve; without this they fall back to transparent/unset. */
+:root[data-theme="light"],
+:root:not([data-theme]),
 .omni-app[data-theme="light"],
 .omni-app:not([data-theme]) {
   --bg-page:     var(--xs-white);
@@ -167,6 +172,7 @@
 /* ============================================================
    DARK THEME
    ============================================================ */
+:root[data-theme="dark"],
 .omni-app[data-theme="dark"] {
   --bg-page:     #0A0E14;
   --bg-canvas:   #060810;

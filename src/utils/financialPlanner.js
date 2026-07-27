@@ -58,6 +58,25 @@
  *                              (estimate). "Active" = M between startMonth
  *                              and endDate month (inclusive), no endDate = open-ended.
  *     weekly/daily items are flagged `isEstimate: true`.
+ *
+ * CASH-VIEW RULES (added after the owner's "the expenses aren't right" review —
+ * past months were double/triple-counted):
+ *   1. RECURRING costs expand ONLY from the current calendar month forward
+ *      (flagged `isProjection: true`). Past months show dated one-time rows
+ *      (bank/wallet/manual actuals) ONLY — the recurring commitments' reality
+ *      is already captured there (e.g. the "Starlink Corinth €40/mo" commitment
+ *      duplicated the imported "STARLINK INTERNET" bank debits, the 20k/40k
+ *      loan commitments duplicated the imported 989004* debits). Self-healing:
+ *      as each month's bank CSV is imported, that month rolls into the past and
+ *      switches from projection to actuals.
+ *   2. Loans-module interest rows ("Interest — Loan ••XXXX") are EXCLUDED. The
+ *      planner is a CASH view: the account-feed debit rows (989004… / ΔΟΣΗ
+ *      ΔΑΝΕΙΟΥ, category 'Bank loans') already carry the full cash payment;
+ *      the interest rows are the P&L split of the same payment and would count
+ *      it twice. (The Expenses/Loans modules keep them — P&L view.)
+ *   3. `chainedOpenings()` — each year's January opens on the previous
+ *      December's closing; only the EARLIEST data year takes the manual
+ *      opening-balance input.
  */
 
 const MONTH_NAMES = [
@@ -116,12 +135,21 @@ function bucketForCategory(category) {
   return 'others';
 }
 
+// Loans-module interest rows — see CASH-VIEW RULES §2 in the header. Tolerates
+// both the em-dash the loans writer uses and a plain hyphen.
+const LOAN_INTEREST_RE = /^Interest\s+[—-]\s+Loan/;
+
 /**
  * Determine whether `cost` has an occurrence in year/monthIdx (0-indexed month),
  * and if so, its EUR amount for that occurrence.
  * Returns null when the cost does not occur in that month.
+ *
+ * `nowKey` (absolute month index of "today") gates the CASH-VIEW rule: dated
+ * one-time rows count in their month regardless of past/future, but RECURRING
+ * costs only project into months >= the current month (isProjection: true) —
+ * past months are covered by their imported actuals.
  */
-function expandCostForMonth(cost, year, monthIdx) {
+function expandCostForMonth(cost, year, monthIdx, nowKey) {
   if (!cost || !isValidDateStr(cost.startDate)) return null;
 
   const startKey = absMonth(cost.startDate);
@@ -138,20 +166,23 @@ function expandCostForMonth(cost, year, monthIdx) {
   const freq = cost.frequency;
 
   if (freq === 'one-time') {
-    return diff === 0 ? { amount, isEstimate: false } : null;
+    return diff === 0 ? { amount, isEstimate: false, isProjection: false } : null;
   }
+
+  // Recurring: projections only, from the current month forward (CASH-VIEW §1).
+  if (typeof nowKey === 'number' && targetKey < nowKey) return null;
 
   if (freq === 'monthly' || freq === 'quarterly' || freq === 'annual' || freq === 'yearly') {
     const step = freq === 'monthly' ? 1 : freq === 'quarterly' ? 3 : 12;
-    return diff % step === 0 ? { amount, isEstimate: false } : null;
+    return diff % step === 0 ? { amount, isEstimate: false, isProjection: true } : null;
   }
 
   if (freq === 'weekly') {
-    return { amount: amount * (52 / 12), isEstimate: true };
+    return { amount: amount * (52 / 12), isEstimate: true, isProjection: true };
   }
 
   if (freq === 'daily') {
-    return { amount: amount * daysInMonth(year, monthIdx), isEstimate: true };
+    return { amount: amount * daysInMonth(year, monthIdx), isEstimate: true, isProjection: true };
   }
 
   // Unknown frequency — no occurrence.
@@ -194,6 +225,8 @@ export function plannerYears(costs, revenue, now = new Date()) {
  */
 export function buildPlannerModel({ costs = [], revenue = [], year, openingBalance = 0, now = new Date() }) {
   const targetYear = year || now.getFullYear();
+  // Absolute month index of "today" — the past/future boundary for CASH-VIEW §1.
+  const nowKey = now.getFullYear() * 12 + now.getMonth();
 
   const months = [];
   let runningOpening = round2(openingBalance);
@@ -221,13 +254,17 @@ export function buildPlannerModel({ costs = [], revenue = [], year, openingBalan
       if (!cost) return;
       const bucket = bucketForCategory(cost.category);
       if (bucket === 'excluded') return;
+      // CASH-VIEW §2: skip loans-module interest rows — the account-feed debit
+      // rows already carry the full cash payment for the same instalment.
+      if (typeof cost.name === 'string' && LOAN_INTEREST_RE.test(cost.name)) return;
 
-      const occ = expandCostForMonth(cost, targetYear, monthIdx);
+      const occ = expandCostForMonth(cost, targetYear, monthIdx, nowKey);
       if (!occ) return;
 
       // Carry the cost's business id so the UI can open the row in the cost editor.
       const item = { id: cost.id ?? null, label: cost.name, amount: round2(occ.amount) };
       if (occ.isEstimate) item.isEstimate = true;
+      if (occ.isProjection) item.isProjection = true;
 
       if (bucket === 'dividend') dividendItems.push(item);
       else expenseGroups[bucket].push(item);
@@ -299,4 +336,30 @@ export function buildPlannerModel({ costs = [], revenue = [], year, openingBalan
   });
 
   return { year: targetYear, months, yearly, trends };
+}
+
+/**
+ * CASH-VIEW §3 — chain opening balances across years: each year's January opens
+ * on the previous December's closing. Only the EARLIEST data year is seeded by
+ * the manual opening-balance input (`openings[firstYear]`); explicit values for
+ * later years are ignored — the chain wins.
+ *
+ * @param {{costs?:Array, revenue?:Array, openings?:Object, now?:Date}} args
+ * @returns {{ [year:number]: { opening:number, derived:boolean } }}
+ *   derived=false only for the earliest year (editable); true = chained.
+ */
+export function chainedOpenings({ costs = [], revenue = [], openings = {}, now = new Date() } = {}) {
+  const years = plannerYears(costs, revenue, now);
+  const result = {};
+  let carry = 0;
+  years.forEach((y, i) => {
+    const derived = i > 0;
+    const opening = derived ? carry : (Number(openings?.[y]) || 0);
+    result[y] = { opening: round2(opening), derived };
+    // A year absent from `years` has no transactions, so its closing would equal
+    // its opening — the carry crosses data gaps unchanged.
+    const model = buildPlannerModel({ costs, revenue, year: y, openingBalance: opening, now });
+    carry = model.yearly.closing;
+  });
+  return result;
 }

@@ -10,11 +10,12 @@ const LABEL_CLASS = {
 
 /**
  * Right-column "YEARLY SUMMARY" card — the 7 planner metrics stacked. OPENING
- * BALANCE is the one editable cell in the whole page (the Excel template's manual
- * input cell); it commits to CostContext config.plannerOpening on blur/Enter.
- * CLOSING BALANCE is computed (opening + retained) and rendered read-only.
+ * BALANCE is the Excel template's manual input cell — but only for the EARLIEST
+ * data year: later years chain from the previous December's closing
+ * (openingDerived, CASH-VIEW §3) and render read-only with a "= DEC Y−1
+ * CLOSING" note. CLOSING BALANCE is computed (opening + retained), read-only.
  */
-export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpening }) {
+export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpening, openingDerived = false }) {
   // Reset the in-progress draft whenever the committed value or selected year
   // changes — done during render (React's documented "adjusting state" pattern,
   // https://react.dev/learn/you-might-not-need-an-effect) rather than in a
@@ -47,17 +48,26 @@ export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpen
               {PLANNER_METRIC_LABELS[metricKey]}
             </span>
             {metricKey === 'opening' ? (
-              <input
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                className={styles.openingInput}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commit}
-                onKeyDown={handleKeyDown}
-                aria-label="Opening balance"
-              />
+              openingDerived ? (
+                <span className={styles.derivedOpening}>
+                  <span className={`${styles.summaryValue} ${styles.greyValue}`}>
+                    {formatEUR(openingBalance ?? 0)}
+                  </span>
+                  <span className={styles.derivedNote}>= DEC {year - 1} CLOSING</span>
+                </span>
+              ) : (
+                <input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  className={styles.openingInput}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={commit}
+                  onKeyDown={handleKeyDown}
+                  aria-label="Opening balance"
+                />
+              )
             ) : (
               <span
                 className={`${styles.summaryValue} ${metricKey === 'closing' ? styles.greyValue : ''}`}
