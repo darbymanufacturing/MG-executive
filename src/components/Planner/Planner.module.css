@@ -233,7 +233,9 @@
   font-weight: 700;
   font-size: 24px;
   margin: 0 0 16px;
-  color: #000;
+  /* Sits on the app page background (not a white planner card), so it must be
+     theme-aware — hardcoded #000 was invisible on the dark theme. */
+  color: var(--fg-strong, #0F172A);
 }
 
 .emptyNotice {
