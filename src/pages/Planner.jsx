@@ -4,10 +4,20 @@ import AsterismMark from '../components/Shared/AsterismMark.jsx';
 import YearGrid from '../components/Planner/YearGrid.jsx';
 import YearlyPanel from '../components/Planner/YearlyPanel.jsx';
 import MonthSheet from '../components/Planner/MonthSheet.jsx';
+import CostFormModal from '../components/Costs/CostFormModal.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { buildPlannerModel, plannerYears } from '../utils/financialPlanner.js';
 import styles from './Planner.module.css';
+
+// "+ Add" in a month-sheet bucket prefills the cost form with a category that
+// belongs to that bucket (changeable in the form). Mirrors the engine's mapping.
+const BUCKET_DEFAULT_CATEGORY = {
+  software: 'SW subscriptions, Telco charges',
+  staff: 'Employees',
+  others: 'Other admin expenses',
+  dividends: 'CEO',
+};
 
 /**
  * Financial Planner — an Excel replica of "Financial Planner 2022 Recoin
@@ -19,12 +29,15 @@ import styles from './Planner.module.css';
  */
 export default function Planner() {
   const { scopedCosts, scopedRevenue } = useMetrics();
-  const { config, updateConfig } = useCosts();
+  const { config, updateConfig, addCost, updateCost, getCostById } = useCosts();
 
+  // Years present in the data (recomputes when the async data lands). The
+  // original call passed NO arguments, so this was always [currentYear] and the
+  // switcher had nothing to switch to (reviewer finding, HIGH).
   const years = useMemo(() => {
-    const list = plannerYears?.() ?? [];
+    const list = plannerYears(scopedCosts, scopedRevenue);
     return Array.isArray(list) && list.length ? list : [new Date().getFullYear()];
-  }, []);
+  }, [scopedCosts, scopedRevenue]);
 
   const currentCalendarYear = new Date().getFullYear();
   const initialYear = years.includes(currentCalendarYear)
@@ -33,6 +46,8 @@ export default function Planner() {
 
   const [year, setYear] = useState(initialYear);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  // Cost editor modal: { mode:'edit', cost } | { mode:'add', prefill } | null
+  const [modal, setModal] = useState(null);
 
   const goPrevYear = useCallback(() => {
     setYear((y) => {
@@ -65,6 +80,30 @@ export default function Planner() {
     const num = Number(value) || 0;
     updateConfig({ plannerOpening: { ...(config?.plannerOpening || {}), [year]: num } });
   }, [updateConfig, config, year]);
+
+  // ── Editing (Excel-style): click an expense/dividend row → cost editor;
+  //    "+ Add" in a bucket → prefilled create. Writes go through the normal
+  //    cost write path, and the planner model recomputes live.
+  const handleEditItem = useCallback((costId) => {
+    const cost = getCostById(costId);
+    if (cost) setModal({ mode: 'edit', cost });
+  }, [getCostById]);
+
+  const handleAddItem = useCallback((bucket, monthKey) => {
+    setModal({
+      mode: 'add',
+      prefill: {
+        category: BUCKET_DEFAULT_CATEGORY[bucket] || 'Other admin expenses',
+        frequency: 'one-time',
+        startDate: `${monthKey}-01`,
+      },
+    });
+  }, []);
+
+  const handleModalSave = useCallback((data) => {
+    if (modal?.mode === 'edit' && modal.cost?.id) updateCost(modal.cost.id, data);
+    else addCost(data);
+  }, [modal, updateCost, addCost]);
 
   const months = model?.months ?? [];
   const trends = model?.trends ?? {};
@@ -113,8 +152,21 @@ export default function Planner() {
           />
         </div>
       ) : (
-        <MonthSheet month={months[selectedMonth]} onBack={() => setSelectedMonth(null)} />
+        <MonthSheet
+          month={months[selectedMonth]}
+          onBack={() => setSelectedMonth(null)}
+          onEditItem={handleEditItem}
+          onAddItem={handleAddItem}
+        />
       )}
+
+      <CostFormModal
+        isOpen={!!modal}
+        onClose={() => setModal(null)}
+        onSave={handleModalSave}
+        initialData={modal?.mode === 'edit' ? modal.cost : modal?.prefill ?? null}
+        locations={config?.locations || []}
+      />
     </div>
   );
 }

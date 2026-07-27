@@ -225,7 +225,8 @@ export function buildPlannerModel({ costs = [], revenue = [], year, openingBalan
       const occ = expandCostForMonth(cost, targetYear, monthIdx);
       if (!occ) return;
 
-      const item = { label: cost.name, amount: round2(occ.amount) };
+      // Carry the cost's business id so the UI can open the row in the cost editor.
+      const item = { id: cost.id ?? null, label: cost.name, amount: round2(occ.amount) };
       if (occ.isEstimate) item.isEstimate = true;
 
       if (bucket === 'dividend') dividendItems.push(item);

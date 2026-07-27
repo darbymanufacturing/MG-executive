@@ -12,12 +12,26 @@ const LABEL_CLASS = {
 
 // One ITEM/AMOUNT mini-table: colored sub-header pill, grey header row, striped
 // body rows (scrolling past ~420px), black TOTAL row. Shared by every table on
-// the sheet (revenue, software, staff, others, dividends).
-function SectionTable({ subLabel, subClassName, items, totalLabel, total }) {
+// the sheet (revenue, software, staff, others, dividends). Like the Excel sheet,
+// rows are editable: pass onEditItem to make rows (with a cost id) open the cost
+// editor, and onAdd to show a "+ Add" control in the sub-header pill.
+function SectionTable({ subLabel, subClassName, items, totalLabel, total, onEditItem, onAdd }) {
   const list = items || [];
   return (
     <div className={styles.table}>
-      <div className={`${styles.subPill} ${subClassName}`}>{subLabel}</div>
+      <div className={`${styles.subPill} ${subClassName}`}>
+        <span>{subLabel}</span>
+        {onAdd && (
+          <button
+            type="button"
+            className={styles.addBtn}
+            onClick={onAdd}
+            aria-label={`Add ${subLabel} item`}
+          >
+            + Add
+          </button>
+        )}
+      </div>
       <div className={styles.itemAmountHeader}>
         <span>ITEM</span>
         <span>AMOUNT</span>
@@ -29,15 +43,23 @@ function SectionTable({ subLabel, subClassName, items, totalLabel, total }) {
             <span className={styles.itemAmount} />
           </div>
         ) : (
-          list.map((item, idx) => (
-            <div key={item?.id ?? item?.name ?? idx} className={styles.row}>
-              <span className={styles.itemName}>
-                {item?.name ?? item?.label ?? 'Item'}
-                {item?.isEstimate ? <span className={styles.estMarker}> · est</span> : null}
-              </span>
-              <span className={styles.itemAmount}>{formatEUR(Number(item?.amount) || 0)}</span>
-            </div>
-          ))
+          list.map((item, idx) => {
+            const editable = !!(onEditItem && item?.id);
+            const Row = editable ? 'button' : 'div';
+            return (
+              <Row
+                key={item?.id ?? item?.name ?? item?.label ?? idx}
+                {...(editable ? { type: 'button', onClick: () => onEditItem(item.id), title: 'Edit this entry' } : {})}
+                className={`${styles.row} ${editable ? styles.rowEditable : ''}`}
+              >
+                <span className={styles.itemName}>
+                  {item?.name ?? item?.label ?? 'Item'}
+                  {item?.isEstimate ? <span className={styles.estMarker}> · est</span> : null}
+                </span>
+                <span className={styles.itemAmount}>{formatEUR(Number(item?.amount) || 0)}</span>
+              </Row>
+            );
+          })
         )}
       </div>
       <div className={styles.totalRow}>
@@ -49,10 +71,12 @@ function SectionTable({ subLabel, subClassName, items, totalLabel, total }) {
 }
 
 /**
- * Single-month sheet — the Excel replica's month tab. Read-only (no per-month
- * opening-balance input; that lives only on the Yearly Summary panel).
+ * Single-month sheet — the Excel replica's month tab. Expense/dividend rows are
+ * editable (click → cost editor) and each bucket has "+ Add", like typing into
+ * the spreadsheet; revenue is synced from trip data, so it stays read-only.
+ * The per-month opening balance lives only on the Yearly Summary panel.
  */
-export default function MonthSheet({ month, onBack }) {
+export default function MonthSheet({ month, onBack, onEditItem, onAddItem }) {
   if (!month) {
     return (
       <div className={styles.monthSheet}>
@@ -112,6 +136,8 @@ export default function MonthSheet({ month, onBack }) {
             items={software}
             totalLabel="TOTAL SOFTWARE"
             total={softwareTotal}
+            onEditItem={onEditItem}
+            onAdd={onAddItem ? () => onAddItem('software', month.key) : undefined}
           />
           <SectionTable
             subLabel="STAFF"
@@ -119,6 +145,8 @@ export default function MonthSheet({ month, onBack }) {
             items={staff}
             totalLabel="TOTAL STAFF"
             total={staffTotal}
+            onEditItem={onEditItem}
+            onAdd={onAddItem ? () => onAddItem('staff', month.key) : undefined}
           />
           <SectionTable
             subLabel="OTHERS"
@@ -126,6 +154,8 @@ export default function MonthSheet({ month, onBack }) {
             items={others}
             totalLabel="TOTAL OTHERS"
             total={othersTotal}
+            onEditItem={onEditItem}
+            onAdd={onAddItem ? () => onAddItem('others', month.key) : undefined}
           />
         </section>
       </div>
@@ -150,13 +180,15 @@ export default function MonthSheet({ month, onBack }) {
         </div>
       </div>
 
-      {hasDividends && (
+      {(hasDividends || onAddItem) && (
         <SectionTable
           subLabel="DIVIDENDS (owner draw)"
           subClassName={styles.subGrey}
           items={dividendItems}
           totalLabel="TOTAL DIVIDENDS"
           total={dividendsTotal}
+          onEditItem={onEditItem}
+          onAdd={onAddItem ? () => onAddItem('dividends', month.key) : undefined}
         />
       )}
     </div>

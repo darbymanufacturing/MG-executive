@@ -22,21 +22,24 @@ function TrendChip({ value }) {
 /**
  * One 6-month band of the Yearly Summary grid (band 0 = Jan–Jun, band 1 = Jul–Dec).
  * Layout is a single CSS grid: a label column, then 6 month columns with a narrow
- * trend-chip column inserted before every month column except the band's first
- * (see .yearGrid column template in Planner.module.css — fixed at 6 months/band).
+ * trend-chip column before every month except JANUARY. Band 1 has a LEADING chip
+ * column too — in the workbook, July carries a chip comparing July vs June
+ * (YEAR SUMMARY!E19), so only the very first month of the year lacks one.
  */
 export default function YearGrid({ months, trends, band, onSelectMonth }) {
   const start = band === 1 ? 6 : 0;
   const slice = (months || []).slice(start, start + 6);
+  // Chip before month i? Every month except the year's first (January).
+  const hasChipBefore = (i) => i > 0 || band === 1;
 
   return (
     <div className={styles.yearGridWrap}>
-      <div className={styles.yearGrid}>
+      <div className={`${styles.yearGrid} ${band === 1 ? styles.yearGridLeadingChip : ''}`}>
         {/* header row */}
         <div className={`${styles.cell} ${styles.cornerCell}`} />
         {slice.map((m, i) => (
           <div key={`h-${m?.key ?? i}`} className={styles.contentsWrap}>
-            {i > 0 && <div className={`${styles.cell} ${styles.chipHeaderCell}`} />}
+            {hasChipBefore(i) && <div className={`${styles.cell} ${styles.chipHeaderCell}`} />}
             <button
               type="button"
               className={styles.monthPill}
@@ -58,7 +61,7 @@ export default function YearGrid({ months, trends, band, onSelectMonth }) {
               const trendValue = trends?.[metricKey]?.[monthIndex];
               return (
                 <div key={`${metricKey}-${m?.key ?? i}`} className={styles.contentsWrap}>
-                  {i > 0 && <TrendChip value={trendValue} />}
+                  {hasChipBefore(i) && <TrendChip value={trendValue} />}
                   <div className={`${styles.cell} ${styles.valueCell}`}>
                     {formatEUR(m?.summary?.[metricKey] ?? 0)}
                   </div>

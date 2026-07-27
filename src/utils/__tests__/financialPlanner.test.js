@@ -62,7 +62,7 @@ describe('buildPlannerModel — category bucketing', () => {
   const jan = model.months[0];
 
   it('CEO → dividends (not an expense); Transfer → excluded entirely', () => {
-    expect(jan.dividendItems).toEqual([{ label: 'Owner draw', amount: 800 }]);
+    expect(jan.dividendItems).toEqual([{ id: 'ceo', label: 'Owner draw', amount: 800 }]);
     expect(jan.summary.dividends).toBe(800);
     // Transfer must not appear anywhere: not in any expense group, not in totals.
     const allExpenseLabels = [...jan.expenseGroups.software, ...jan.expenseGroups.staff, ...jan.expenseGroups.others]
@@ -71,9 +71,9 @@ describe('buildPlannerModel — category bucketing', () => {
   });
 
   it('routes software / staff / others buckets correctly', () => {
-    expect(jan.expenseGroups.software).toEqual([{ label: 'Starlink', amount: 40 }]);
-    expect(jan.expenseGroups.staff).toEqual([{ label: 'Mechanic', amount: 1000 }]);
-    expect(jan.expenseGroups.others).toEqual([{ label: 'Rent', amount: 500 }]);
+    expect(jan.expenseGroups.software).toEqual([{ id: 'sw', label: 'Starlink', amount: 40 }]);
+    expect(jan.expenseGroups.staff).toEqual([{ id: 'st', label: 'Mechanic', amount: 1000 }]);
+    expect(jan.expenseGroups.others).toEqual([{ id: 'oth', label: 'Rent', amount: 500 }]);
     expect(jan.totals).toEqual({ revenue: 1700, software: 40, staff: 1000, others: 500, expenses: 1540 });
   });
 
@@ -132,7 +132,7 @@ describe('buildPlannerModel — one-time cost', () => {
   it('counts only in its startDate month', () => {
     const costs = [{ id: 'capex', name: 'New scooter', category: 'Machines and Vehicles', amount: 2000, frequency: 'one-time', startDate: '2026-03-10' }];
     const model = buildPlannerModel({ costs, revenue: [], year: 2026, openingBalance: 0, now: NOW });
-    expect(model.months[2].expenseGroups.others).toEqual([{ label: 'New scooter', amount: 2000 }]);
+    expect(model.months[2].expenseGroups.others).toEqual([{ id: 'capex', label: 'New scooter', amount: 2000 }]);
     expect(model.months[1].expenseGroups.others).toEqual([]);
     expect(model.months[3].expenseGroups.others).toEqual([]);
   });
@@ -246,7 +246,7 @@ describe('buildPlannerModel — skips invalid rows', () => {
       { date: '2026-01-05', location: 'Athens', totalPaidRevenue: 200 },
     ];
     const model = buildPlannerModel({ costs, revenue, year: 2026, openingBalance: 0, now: NOW });
-    expect(model.months[0].expenseGroups.others).toEqual([{ label: 'Good', amount: 100 }]);
+    expect(model.months[0].expenseGroups.others).toEqual([{ id: 'good', label: 'Good', amount: 100 }]);
     expect(model.months[0].revenueItems).toEqual([{ label: 'Athens', amount: 200 }]);
   });
 });

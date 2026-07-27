@@ -1,9 +1,11 @@
 /* Financial Planner page — a deliberate Excel replica of "Financial Planner
    2022 Recoin Digital.xlsx". The --pl-* custom properties below are the exact
-   palette pulled cell-by-cell from that workbook; they are intentionally
-   hardcoded (not mapped to the app's theme tokens) so the page reads the same
-   in light or dark mode, just like the source spreadsheet. Do not swap these
-   for var(--accent)/var(--status-*) etc. — see the Financial Planner UI spec. */
+   palette pulled cell-by-cell from that workbook (light theme = the workbook's
+   own look); they are intentionally hardcoded, not mapped to brand tokens.
+   Do not swap these for var(--accent)/var(--status-*) etc. — see ADR-0028.
+   The dark-theme block below remaps only the NEUTRAL surfaces (sheet white,
+   row/header greys, text) so the planner follows the app's dark mode while the
+   template's accent colors (green/red/peach pills) stay identical. */
 .page {
   --pl-green: #6AA84F;
   --pl-green-sub: #93C47D;
@@ -13,8 +15,11 @@
   --pl-others: #F9CB9C;
   --pl-header-bg: #CCCCCC;
   --pl-row-bg: #F3F3F3;
+  --pl-row-hover: #E8E8E8;
   --pl-black: #000000;
   --pl-white: #FFFFFF;
+  --pl-text: #000000;
+  --pl-pill-text: #FFFFFF; /* text on black/colored pills — constant across themes */
   --pl-chip-bg: #D9EAD3;
   --pl-up: #38761D;
   --pl-down: #CC0000;
@@ -25,7 +30,21 @@
   min-height: 100%;
   padding: var(--space-6);
   font-family: var(--pl-font);
-  color: #000;
+  color: var(--pl-text);
+}
+
+/* Dark mode: neutral surfaces follow the app theme; accents stay Excel-exact. */
+:global(.omni-app[data-theme="dark"]) .page {
+  --pl-white: var(--bg-elev, #1E293B);   /* sheet cards */
+  --pl-row-bg: #253044;                  /* striped rows / grey cells */
+  --pl-row-hover: #2E3B53;
+  --pl-header-bg: #38455C;               /* ITEM / AMOUNT headers */
+  --pl-black: #0B0F17;                   /* pills read as near-black panels */
+  --pl-text: var(--fg-strong, #E2E8F0);
+  --pl-chip-bg: rgba(106, 168, 79, 0.22);
+  --pl-up: #7BC96A;
+  --pl-down: #F28B82;
+  --pl-stable: #9AA4B2;
 }
 
 .header {

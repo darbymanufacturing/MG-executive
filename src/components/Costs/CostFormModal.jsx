@@ -34,7 +34,9 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const isEdit = !!initialData;
+  // Edit mode only when the initial data is an EXISTING cost (has an id) — a
+  // partial prefill (e.g. the Planner's "+ Add" with category/date preset) is a create.
+  const isEdit = !!initialData?.id;
   const { fleets, activeFleet } = useFleet(); // FF-3 — per-cost fleet scope
 
   useEffect(() => {
