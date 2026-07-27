@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import Modal from '../Shared/Modal.jsx';
 import Button from '../Shared/Button.jsx';
-import { CATEGORIES, FREQUENCIES, CATEGORY_KEYS, FREQUENCY_KEYS } from '../../utils/constants.js';
-import { formatEUR, todayISO } from '../../utils/formatters.js';
+import { CATEGORIES, FREQUENCIES, CATEGORY_KEYS, FREQUENCY_KEYS, DEFAULT_CONFIG } from '../../utils/constants.js';
+import { formatEUR, formatPercent, todayISO } from '../../utils/formatters.js';
 import { normalizeToMonthly } from '../../utils/calculations.js';
 import { validate } from '../../utils/validateForm.js';
 import { costSchema } from '../../utils/schemas/costSchema.js';
 import { useFleet } from '../../context/FleetContext.jsx';
+import { useCosts } from '../../context/CostContext.jsx';
+import { vatSplit } from '../../utils/vat.js';
 import styles from './CostFormModal.module.css';
 
 const EMPTY = {
@@ -19,6 +21,7 @@ const EMPTY = {
   notes: '',
   location: '',
   fleetId: '', // FF-3 — which fleet's P&L this cost hits ('' = company-wide overhead)
+  vatIncluded: true, // Greek receipts are gross-of-VAT by default (owner ask, VAT-awareness)
   // Loan-specific
   lenderName: '',
   principalAmount: '',
@@ -38,17 +41,29 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
   // partial prefill (e.g. the Planner's "+ Add" with category/date preset) is a create.
   const isEdit = !!initialData?.id;
   const { fleets, activeFleet } = useFleet(); // FF-3 — per-cost fleet scope
+  const { config } = useCosts();
+  // Guard: config.financial can be absent (fresh org before CostContext seeds
+  // defaults) — fall back to DEFAULT_CONFIG's rate rather than assuming 0.24 inline.
+  const vatRate = config?.financial?.vatRate ?? DEFAULT_CONFIG.financial.vatRate;
 
   useEffect(() => {
     if (isOpen) {
       // New costs default their fleet scope to the active fleet (else company-wide).
       setForm(initialData
-        ? { ...EMPTY, ...initialData, endDate: initialData.endDate || '' }
+        ? {
+            ...EMPTY,
+            ...initialData,
+            endDate: initialData.endDate || '',
+            // #VAT-awareness — old costs saved before this feature never wrote
+            // `vatIncluded`; those must rehydrate UNCHECKED (breakdown hidden until
+            // toggled), not fall through to EMPTY's "new cost" default of checked.
+            vatIncluded: initialData.vatIncluded ?? !isEdit,
+          }
         : { ...EMPTY, fleetId: activeFleet?._docId ?? '' });
       setErrors({});
       setSaving(false);
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, isEdit]);
 
   // #564 — derive which locations are valid for the currently-selected fleet.
   // When a fleet is chosen, only its configured cities are valid location options;
@@ -84,9 +99,17 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setSaving(true);
     try {
+      const amountNum = parseFloat(form.amount);
+      // #VAT-awareness — `amount` always stays the cash paid (what the user typed);
+      // vatAmount is an additive, derived-at-save-time field so it never drifts from
+      // the current amount/toggle even if the user edits amount right before saving.
+      const vatIncluded = !!form.vatIncluded;
+      const vatAmount = vatIncluded ? vatSplit(amountNum, vatRate).vat : 0;
       await onSave({
         ...form,
-        amount:         parseFloat(form.amount),
+        amount:         amountNum,
+        vatIncluded,
+        vatAmount,
         endDate:        form.endDate        || null,
         location:       form.location       || null,
         fleetId:        form.fleetId        || null,
@@ -109,6 +132,13 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
 
   const preview = form.amount && !isNaN(Number(form.amount))
     ? normalizeToMonthly({ amount: Number(form.amount), frequency: form.frequency })
+    : null;
+
+  // Live net/VAT breakdown shown under the amount field. Only rendered when the
+  // toggle is checked AND the amount typed so far is a real number — an unchecked
+  // toggle (or old costs that default to unchecked, #VAT-awareness) shows nothing.
+  const vatPreview = form.vatIncluded && form.amount && !isNaN(Number(form.amount))
+    ? vatSplit(Number(form.amount), vatRate)
     : null;
 
   return (
@@ -208,6 +238,23 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               max="999999999"
             />
           </div>
+
+          {/* #VAT-awareness — Greek receipts are gross-of-VAT by default; toggle off
+              for amounts already ex-VAT (e.g. a B2B net invoice). */}
+          <label className={styles.vatToggle}>
+            <input
+              type="checkbox"
+              checked={form.vatIncluded}
+              onChange={(e) => setForm((f) => ({ ...f, vatIncluded: e.target.checked }))}
+            />
+            <span>Amount includes VAT ({formatPercent(vatRate * 100)})</span>
+          </label>
+          {vatPreview && (
+            <span className={styles.vatBreakdown}>
+              net {formatEUR(vatPreview.net)} · VAT {formatEUR(vatPreview.vat)}
+            </span>
+          )}
+
           {preview !== null && (
             <span className={styles.preview}>
               ≈ {formatEUR(preview)}/month

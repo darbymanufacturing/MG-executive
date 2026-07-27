@@ -1,20 +1,73 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import { parseRevenueCSV } from '../../utils/csvParser.js';
 import { useRevenue } from '../../context/RevenueContext.jsx';
-import { formatEUR, formatDate } from '../../utils/formatters.js';
+import { useCosts } from '../../context/CostContext.jsx';
+import { DEFAULT_CONFIG } from '../../utils/constants.js';
+import { stripVat } from '../../utils/vat.js';
+import { formatEUR, formatDate, formatPercent } from '../../utils/formatters.js';
 import styles from './CsvImportPanel.module.css';
+
+// Monetary fields on a parsed revenue row that are eligible for VAT stripping when
+// the source CSV reports gross (VAT-included) amounts. Deliberately EXCLUDES:
+// - `totalVat` / `refundedVat` — already-computed VAT figures from the export, not
+//   gross amounts to strip VAT out of;
+// - `vatRate` — metadata (the export's own rate), not a monetary amount;
+// - trip counts, durations, distance, unique users/vehicles — non-monetary.
+const VAT_ADJUSTABLE_FIELDS = [
+  'totalRawIncome',
+  'totalFreeTripWorth',
+  'totalRawRefunds',
+  'unpaidUserRevenue',
+  'userDebtRefunds',
+  'unpaidOrgRevenue',
+  'orgDebtRefunds',
+  'totalPaidDebt',
+  'averagePayment',
+  'averageWorth',
+  'totalPaidRevenue',
+  'totalPaidRefunds',
+];
+
+/** Returns a copy of `row` with every VAT-adjustable monetary field stripped of VAT. */
+function stripVatFromRow(row, rate) {
+  const adjusted = { ...row };
+  VAT_ADJUSTABLE_FIELDS.forEach((field) => {
+    if (typeof row[field] === 'number') {
+      adjusted[field] = stripVat(row[field], rate);
+    }
+  });
+  return adjusted;
+}
 
 export default function CsvImportPanel({ locations }) {
   const { revenueData, importRevenueDays } = useRevenue();
+  // App convention (DEFAULT_CONFIG comment, src/utils/constants.js): revenue is
+  // stored EX-VAT. Guard for config.financial being absent (fresh org before
+  // CostContext seeds defaults).
+  const { config } = useCosts();
+  const vatRate = config?.financial?.vatRate ?? DEFAULT_CONFIG.financial.vatRate;
   const fileRef   = useRef();
   const [parsed,          setParsed]          = useState(null);   // { rows, errors, total }
   const [status,          setStatus]          = useState(null);   // { type, text }
   const [loading,         setLoading]         = useState(false);
   const [dragging,        setDragging]        = useState(false);
   const [selectedLocation, setSelectedLocation] = useState('');
+  // Pre-import question (owner ask, VAT-awareness): default = amounts already
+  // exclude VAT, so unchecked imports the CSV's own figures unchanged.
+  const [amountsIncludeVat, setAmountsIncludeVat] = useState(false);
+
+  // Single point where the VAT division is applied — both the preview table and
+  // the actual commit (handleImport) read from this same memoized array, so the
+  // adjustment is computed exactly once and never double-applied.
+  const displayRows = useMemo(() => {
+    if (!parsed?.rows?.length) return [];
+    return amountsIncludeVat
+      ? parsed.rows.map((r) => stripVatFromRow(r, vatRate))
+      : parsed.rows;
+  }, [parsed, amountsIncludeVat, vatRate]);
 
   const existingDates = new Set(
     revenueData
@@ -50,7 +103,9 @@ export default function CsvImportPanel({ locations }) {
     if (!parsed?.rows?.length) return;
     setLoading(true);
     try {
-      const rows = parsed.rows.map((r) => ({ ...r, location: selectedLocation || null }));
+      // displayRows already carries the VAT adjustment (if any) — see the useMemo
+      // above. Do NOT re-apply stripVat here, that would double-strip.
+      const rows = displayRows.map((r) => ({ ...r, location: selectedLocation || null }));
       await importRevenueDays(rows);
       const newCount     = parsed.rows.filter((r) => !existingDates.has(r.date)).length;
       const updateCount  = parsed.rows.length - newCount;
@@ -105,6 +160,22 @@ export default function CsvImportPanel({ locations }) {
       {/* Preview */}
       {parsed && parsed.rows.length > 0 && (
         <>
+          {/* Pre-import VAT question (owner ask, VAT-awareness). Revenue is stored
+              EX-VAT by app convention — default unchecked imports the CSV unchanged. */}
+          <label className={styles.vatToggle}>
+            <input
+              type="checkbox"
+              checked={amountsIncludeVat}
+              onChange={(e) => setAmountsIncludeVat(e.target.checked)}
+            />
+            <span>Do these amounts include VAT ({formatPercent(vatRate * 100)})?</span>
+          </label>
+          {amountsIncludeVat && (
+            <p className={styles.vatNote}>
+              Amounts will be stored net of {formatPercent(vatRate * 100)} VAT.
+            </p>
+          )}
+
           <div className={styles.summary}>
             <CheckCircle size={14} className={styles.summaryIcon} />
             <span>
@@ -130,7 +201,7 @@ export default function CsvImportPanel({ locations }) {
                 </tr>
               </thead>
               <tbody>
-                {parsed.rows.slice(0, 10).map((r) => (
+                {displayRows.slice(0, 10).map((r) => (
                   <tr key={r.date} className={existingDates.has(r.date) ? styles.updateRow : ''}>
                     <td>{formatDate(r.date)}</td>
                     <td>{r.totalTrips}</td>

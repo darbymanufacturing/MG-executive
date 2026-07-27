@@ -57,6 +57,29 @@
   font-style: italic;
 }
 
+/* VAT-awareness toggle + live net/VAT breakdown (Costs + Revenue features) */
+.vatToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.vatToggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vatBreakdown {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
 .sectionDivider {
   font-size: var(--text-xs);
   font-weight: 700;
