@@ -102,6 +102,7 @@
 .new    { color: var(--color-success); }
 .update { color: var(--color-warning); }
 .err    { color: var(--color-danger); }
+.warn   { color: var(--color-warning); }
 
 /* Preview table */
 .previewWrap {

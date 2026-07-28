@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Eye, EyeOff, ChevronUp, ChevronDown, Calendar, List, Columns, Zap, ClipboardList } from 'lucide-react';
 import { PowProvider, usePow } from '../context/PowContext.jsx';
 import PowBoard from '../components/Pow/PowBoard.jsx';
@@ -25,6 +26,7 @@ function getWeekRange(weekNumber) {
 }
 
 function PowInner() {
+  const { t } = useTranslation();
   const {
     categories, allTodoTasks, powTasks, doneTasks,
     currentWeek, showDone, setShowDone,
@@ -40,7 +42,7 @@ function PowInner() {
     return (
       <div className={styles.loadingState}>
         <div className={styles.spinner} />
-        <p>Φόρτωση tasks…</p>
+        <p>{t('pow.loadingTasks')}</p>
       </div>
     );
   }
@@ -133,8 +135,8 @@ function PowInner() {
         {weekTasks.length === 0 ? (
           <EmptyState
             icon={Zap}
-            title="Δεν υπάρχουν tasks αυτή την εβδομάδα"
-            description="Πρόσθεσε tasks στο To Do και κάνε τα assign για να εμφανιστούν εδώ."
+            title={t('pow.weekEmptyTitle')}
+            description={t('pow.weekEmptyDesc')}
           />
         ) : (
           <div className={styles.taskGrid}>
@@ -159,7 +161,7 @@ function PowInner() {
           <button
             className={`${styles.catTab} ${activeCatFilter === 'all' ? styles.catTabActive : ''}`}
             onClick={() => setActiveCatFilter('all')}
-          >Όλα</button>
+          >{t('pow.all')}</button>
           {categories.map(cat => (
             <button
               key={cat.id}
@@ -172,11 +174,11 @@ function PowInner() {
         {filteredTodoTasks.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
-            title="Δεν υπάρχουν tasks"
-            description="Δημιούργησε ένα νέο task για να ξεκινήσεις."
+            title={t('pow.todoEmptyTitle')}
+            description={t('pow.todoEmptyDesc')}
             action={
               <button className={styles.addBtnSmall} onClick={() => setAddingTask(true)}>
-                <Plus size={13}/> Πρόσθεσε task
+                <Plus size={13}/> {t('pow.addTask')}
               </button>
             }
           />

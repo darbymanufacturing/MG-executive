@@ -6,6 +6,7 @@
 
 .summaryBar {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-6);
   padding: var(--space-4) var(--space-8);
   background: var(--color-surface);
@@ -160,7 +161,10 @@
 }
 
 @media (max-width: 768px) {
-  .summaryBar  { padding: var(--space-4); gap: var(--space-4); }
+  .summaryBar  { padding: var(--space-4); gap: var(--space-3) var(--space-4); }
+  .summaryItem { flex: 1 0 26%; }
+  .summaryVal  { font-size: var(--text-lg, 18px); }
   .toolbar     { padding: var(--space-4); }
   .tableWrap   { padding: var(--space-4); }
+  .search      { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

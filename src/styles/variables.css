@@ -77,6 +77,9 @@
   --sidebar-width:           232px;
   --sidebar-width-collapsed: 64px;
   --topbar-height:           64px;
+  --topbar-height-mobile:    56px;
+  --safe-top:                env(safe-area-inset-top, 0px);
+  --safe-bottom:             env(safe-area-inset-bottom, 0px);
 
   /* Font sizes (legacy compat) */
   --text-xs:   0.75rem;

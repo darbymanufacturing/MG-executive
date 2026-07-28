@@ -182,7 +182,8 @@ export default function CsvImportPanel({ locations }) {
               <strong>{parsed.total}</strong> days parsed
               {newCount > 0 && <> · <strong className={styles.new}>{newCount} new</strong></>}
               {updateCount > 0 && <> · <strong className={styles.update}>{updateCount} will update</strong></>}
-              {parsed.errors.length > 0 && <> · <strong className={styles.err}>{parsed.errors.length} skipped</strong></>}
+              {parsed.skipped > 0 && <> · <strong className={styles.err}>{parsed.skipped} skipped</strong></>}
+              {parsed.errors.length > 0 && <> · <strong className={styles.warn}>{parsed.errors.length} warning{parsed.errors.length === 1 ? '' : 's'}</strong></>}
             </span>
           </div>
 

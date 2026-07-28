@@ -51,7 +51,7 @@ export default function Taxes() {
         <EmptyState
           icon={Percent}
           title="No tax payments recorded yet"
-          message="VAT, ΓΕΜΗ, Company Registration and Customs costs will appear here once categorised."
+          description="VAT, ΓΕΜΗ, Company Registration and Customs costs will appear here once categorised."
         />
       ) : (
         <>

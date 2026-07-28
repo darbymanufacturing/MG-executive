@@ -5,6 +5,7 @@
   flex-direction: column;
   gap: var(--space-7);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── Top bar ─────────────────────────────────────────────────────────────── */

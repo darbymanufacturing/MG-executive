@@ -204,3 +204,7 @@
 @media (max-width: 600px) {
   .grid2, .grid3 { grid-template-columns: 1fr; }
 }
+
+@media (max-width: 768px) {
+  .field input, .field select, .field textarea { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

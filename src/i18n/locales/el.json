@@ -6,5 +6,33 @@
     "delete": "Διαγραφή",
     "confirm": "Επιβεβαίωση",
     "loading": "Φόρτωση…"
+  },
+  "pow": {
+    "loadingTasks": "Φόρτωση tasks…",
+    "weekEmptyTitle": "Δεν υπάρχουν tasks αυτή την εβδομάδα",
+    "weekEmptyDesc": "Πρόσθεσε tasks στο To Do και κάνε τα assign για να εμφανιστούν εδώ.",
+    "all": "Όλα",
+    "todoEmptyTitle": "Δεν υπάρχουν tasks",
+    "todoEmptyDesc": "Δημιούργησε ένα νέο task για να ξεκινήσεις.",
+    "addTask": "Πρόσθεσε task",
+    "unassign": "Αφαίρεση {{person}}",
+    "assignTo": "Assign σε {{person}}",
+    "changeSteps": "Άλλαξε steps για {{person}}",
+    "hideSteps": "Κρύψε steps",
+    "showSteps": "Δες steps ({{count}})",
+    "title": "Τίτλος",
+    "titlePlaceholder": "π.χ. Φτιάξε login flow",
+    "category": "Κατηγορία",
+    "description": "Περιγραφή",
+    "descriptionPlaceholder": "Σύντομη περιγραφή...",
+    "addStep": "Προσθήκη step",
+    "cancel": "Άκυρο",
+    "saving": "Αποθήκευση...",
+    "save": "Αποθήκευση",
+    "add": "Προσθήκη",
+    "assignFromTodo": "Assign tasks από το To Do List",
+    "categoryNamePlaceholder": "Όνομα κατηγορίας...",
+    "newCategory": "Νέα Κατηγορία",
+    "pickSteps": "Επέλεξε ποια steps θα εμφανιστούν στο POW board:"
   }
 }

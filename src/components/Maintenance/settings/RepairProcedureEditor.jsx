@@ -7,6 +7,7 @@ import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import Button from '../../Shared/Button.jsx';
 import Modal from '../../Shared/Modal.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './RepairProcedureEditor.module.css';
 
 const TICKET_CATEGORIES = {
@@ -450,11 +451,11 @@ export default function RepairProcedureEditor() {
       {loading ? (
         <p className={styles.loadingMsg}>Loading procedures…</p>
       ) : procedures.length === 0 ? (
-        <div className={styles.empty}>
-          <BookOpen size={36} className={styles.emptyIcon} />
-          <p className={styles.emptyTitle}>No repair procedures yet</p>
-          <p className={styles.emptyDesc}>Create your first SOP — technicians will follow these step-by-step during repairs.</p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="No repair procedures yet"
+          description="Create your first SOP — technicians will follow these step-by-step during repairs."
+        />
       ) : (
         <div className={styles.list}>
           {procedures.map((proc) => (

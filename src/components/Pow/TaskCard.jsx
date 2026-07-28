@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import { getSteps } from './StepsList.jsx';
@@ -15,6 +16,7 @@ const ASSIGNEE_COLORS = {
  * If null, show all assignees and all steps.
  */
 export default function TaskCard({ task, assigneeContext = null }) {
+  const { t } = useTranslation();
   const { markDone, markBacklog, deleteTask } = usePow();
   const [expanded, setExpanded] = useState(false);
   const [editing,  setEditing]  = useState(false);
@@ -77,7 +79,7 @@ export default function TaskCard({ task, assigneeContext = null }) {
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-              {expanded ? 'Κρύψε steps' : `Δες steps (${visibleSteps.length})`}
+              {expanded ? t('pow.hideSteps') : t('pow.showSteps', { count: visibleSteps.length })}
             </button>
             {expanded && (
               <div className={styles.stepsList}>

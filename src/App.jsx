@@ -68,6 +68,7 @@ import './styles/globals.css';
 import styles from './App.module.css';
 import { safeStorage } from './utils/safeStorage.js';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
+import useIsMobile from './hooks/useIsMobile.js';
 
 /* ─── Route title map ─── */
 const ROUTE_TITLES = {
@@ -207,6 +208,7 @@ function AppShell() {
   const [devMode] = useLocalStorage('omni.devMode', false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isMobile = useIsMobile();
   const [captureOpen, setCaptureOpen] = useState(false);
   const [_notificationsOpen, setNotificationsOpen] = useState(false);
   const rootRef = useRef(null);
@@ -268,7 +270,7 @@ function AppShell() {
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        collapsed={sidebarCollapsed}
+        collapsed={sidebarCollapsed && !isMobile}
         onCollapse={setSidebarCollapsed}
       />
 

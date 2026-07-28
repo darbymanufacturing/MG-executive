@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, Circle, Pencil, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import StepsList, { getSteps } from './StepsList.jsx';
@@ -14,6 +15,7 @@ const ASSIGNEE_COLORS = {
 };
 
 export default function TodoTaskCard({ task }) {
+  const { t } = useTranslation();
   const { categories, markDone, markBacklog, deleteTask, toggleAssignee, toggleStep } = usePow();
   const [expanded,       setExpanded]       = useState(false);
   const [editing,        setEditing]        = useState(false);
@@ -97,7 +99,7 @@ export default function TodoTaskCard({ task }) {
                   className={`${styles.assignToggle} ${isAssigned ? styles.assignToggleActive : ''}`}
                   style={isAssigned ? { '--ac': ASSIGNEE_COLORS[person] } : {}}
                   onClick={() => isAssigned ? handleRemove(person) : setAssigningFor(person)}
-                  title={isAssigned ? `Αφαίρεση ${person}` : `Assign σε ${person}`}
+                  title={isAssigned ? t('pow.unassign', { person }) : t('pow.assignTo', { person })}
                 >
                   {person}
                 </button>
@@ -109,7 +111,7 @@ export default function TodoTaskCard({ task }) {
                 key={`edit-${person}`}
                 className={styles.editStepsBtn}
                 onClick={() => setAssigningFor(person)}
-                title={`Άλλαξε steps για ${person}`}
+                title={t('pow.changeSteps', { person })}
               >
                 ✎ steps {person}
               </button>
@@ -122,7 +124,7 @@ export default function TodoTaskCard({ task }) {
           <>
             <button className={styles.expandBtn} onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-              {expanded ? 'Κρύψε steps' : `Δες steps (${getSteps(task).length})`}
+              {expanded ? t('pow.hideSteps') : t('pow.showSteps', { count: getSteps(task).length })}
             </button>
             {expanded && (
               <StepsList

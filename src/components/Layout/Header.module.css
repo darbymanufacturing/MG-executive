@@ -62,7 +62,7 @@
     gap: var(--space-3);
     flex-wrap: wrap;
     /* Sticky header sits below the mobile top bar */
-    top: 56px;
+    top: calc(var(--topbar-height-mobile) + var(--safe-top));
   }
   .title { font-size: var(--text-xl); }
   .subtitle { display: none; }

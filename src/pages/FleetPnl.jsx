@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Scale, Building2 } from 'lucide-react';
 import Header from '../components/Layout/Header.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useFleet } from '../context/FleetContext.jsx';
 import { useRevenue } from '../context/RevenueContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
@@ -60,14 +61,25 @@ export default function FleetPnl() {
     });
   }, [fleets, revenueData, costs, tickets, overheadShare]);
 
+  // #596 — the company strip is the WHOLE company, all-time; it must not depend on
+  // fleet attribution. Costs already included the untagged overhead bucket while
+  // revenue/maintenance counted only city-attributed rows, so fleets with no cities
+  // made the headline read "Revenue €0" while /revenue showed €65k. Sum the raw
+  // collections here; the per-fleet cards below stay attribution-based.
   const totals = useMemo(() => {
-    const rev = rows.reduce((s, r) => s + r.revenue, 0);
-    const maint = rows.reduce((s, r) => s + r.maintenance, 0);
-    const fleetCosts = rows.reduce((s, r) => s + r.costs, 0);
-    const allCosts = fleetCosts + companyWideCosts;
+    const rev = (revenueData ?? []).reduce((s, r) => s + (Number(r.totalPaidRevenue) || 0), 0);
+    const maint = (tickets ?? []).reduce((s, t) => s + (Number(t.totalCost) || 0), 0);
+    const allCosts = (costs ?? []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
     const profit = rev - allCosts - maint;
     return { rev, maint, allCosts, profit, margin: rev > 0 ? (profit / rev) * 100 : null };
-  }, [rows, companyWideCosts]);
+  }, [revenueData, tickets, costs]);
+
+  // Revenue no fleet claims (its city is on no fleet) — counted in the company total,
+  // in no fleet card. Surface it so the gap is never silent.
+  const unattributedRevenue = useMemo(
+    () => totals.rev - rows.reduce((s, r) => s + r.revenue, 0),
+    [totals, rows],
+  );
 
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.profit)));
 
@@ -79,14 +91,11 @@ export default function FleetPnl() {
       />
 
       {fleets.length === 0 ? (
-        <div className={styles.empty}>
-          <Scale size={40} className={styles.emptyIcon} />
-          <p className={styles.emptyTitle}>No fleets to compare yet</p>
-          <p className={styles.emptyDesc}>
-            Create your fleets from the fleet switcher (top bar → Manage fleets), then come back to
-            see each one&rsquo;s profitability side by side.
-          </p>
-        </div>
+        <EmptyState
+          icon={Scale}
+          title="No fleets to compare yet"
+          description="Create your fleets from the fleet switcher (top bar → Manage fleets), then come back to see each one’s profitability side by side."
+        />
       ) : (
         <div className={styles.content}>
           {/* Company total strip */}
@@ -174,6 +183,17 @@ export default function FleetPnl() {
               (&ldquo;Applies to&rdquo;) to assign it directly instead.
             </span>
           </div>
+
+          {unattributedRevenue > 0.005 && (
+            <div className={styles.overhead}>
+              <Building2 size={15} />
+              <span>
+                <strong>{formatEUR(unattributedRevenue)}</strong> of revenue isn&rsquo;t attributed to any
+                fleet — its city isn&rsquo;t listed on one. It counts in the company total above but in no
+                fleet card. Add the city via the fleet switcher &rarr; Manage fleets.
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

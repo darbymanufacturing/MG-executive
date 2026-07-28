@@ -1,4 +1,4 @@
-.page { display: flex; flex-direction: column; min-height: 100vh; }
+.page { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 
 .headerActions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
@@ -168,7 +168,6 @@
   .toolbar { flex-direction: column; align-items: stretch; }
   .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: var(--space-1); }
   .searchWrap { width: 100%; }
-  .search { width: 100%; }
   /* Hide Frequency (3), Monthly Equiv. (5), Start date (6) */
   .table th:nth-child(3), .table td:nth-child(3),
   .table th:nth-child(5), .table td:nth-child(5),
@@ -306,3 +305,11 @@
   padding: var(--space-4) 0;
 }
 .count { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+/* #664 — iOS Safari force-zooms any focused control under 16px. Must live at the
+   END of the file: the mobile block above sits BEFORE the base `.search` rule, so
+   an override up there loses the same-specificity tie on source order. (The
+   `width: 100%` was dead for that same reason — it belongs here too.) */
+@media (max-width: 768px) {
+  .search { width: 100%; font-size: var(--text-base); }
+}

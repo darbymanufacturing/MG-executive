@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import styles from './TaskModal.module.css';
 
 export default function TaskModal({ task, onClose }) {
+  const { t } = useTranslation();
   const { categories, addTask, updateTask } = usePow();
   const isEdit = Boolean(task?.id);
   const containerRef = useRef(null);
@@ -83,18 +85,18 @@ export default function TaskModal({ task, onClose }) {
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <label className={styles.label}>
-            Τίτλος <span className={styles.required}>*</span>
+            {t('pow.title')} <span className={styles.required}>*</span>
             <input
               className={styles.input}
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="π.χ. Φτιάξε login flow"
+              placeholder={t('pow.titlePlaceholder')}
               autoFocus
             />
           </label>
 
           <label className={styles.label}>
-            Κατηγορία
+            {t('pow.category')}
             <div className={styles.selectWrap}>
               <select className={styles.select} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -104,12 +106,12 @@ export default function TaskModal({ task, onClose }) {
           </label>
 
           <label className={styles.label}>
-            Περιγραφή
+            {t('pow.description')}
             <input
               className={styles.input}
               value={description}
               onChange={e => setDesc(e.target.value)}
-              placeholder="Σύντομη περιγραφή..."
+              placeholder={t('pow.descriptionPlaceholder')}
             />
           </label>
 
@@ -117,7 +119,7 @@ export default function TaskModal({ task, onClose }) {
             <div className={styles.stepsHeader}>
               <span className={styles.stepsLabel}>Steps</span>
               <button type="button" className={styles.addStepBtn} onClick={addStep}>
-                <Plus size={13}/> Προσθήκη step
+                <Plus size={13}/> {t('pow.addStep')}
               </button>
             </div>
             <div className={styles.stepsList}>
@@ -145,9 +147,9 @@ export default function TaskModal({ task, onClose }) {
           {error && <p className={styles.error}>{error}</p>}
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={onClose}>Άκυρο</button>
+            <button type="button" className={styles.cancelBtn} onClick={onClose}>{t('pow.cancel')}</button>
             <button type="submit" className={styles.submitBtn} disabled={saving}>
-              {saving ? 'Αποθήκευση...' : isEdit ? 'Αποθήκευση' : 'Προσθήκη'}
+              {saving ? t('pow.saving') : isEdit ? t('pow.save') : t('pow.add')}
             </button>
           </div>
         </form>

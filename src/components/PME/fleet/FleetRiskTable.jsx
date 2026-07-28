@@ -52,44 +52,46 @@ export default function FleetRiskTable({ onSelectScooter }) {
         </div>
       </div>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Scooter ID</th>
-            <th>City</th>
-            <th>Risk</th>
-            <th>Score</th>
-            <th>Overturn ×</th>
-            <th>Repairs (30d)</th>
-            <th>Days since svc</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((row, i) => (
-            <tr
-              key={row.scooterId}
-              className={`${styles.row} ${row.risk === 'high' ? styles.rowHigh : ''}`}
-              onClick={() => onSelectScooter?.(row.scooterId)}
-              style={{ cursor: onSelectScooter ? 'pointer' : 'default' }}
-            >
-              <td className={styles.rank}>{i + 1}</td>
-              <td className={styles.scooterId}>{row.scooterId}</td>
-              <td>{row.city || '—'}</td>
-              <td><RiskBadge risk={row.risk} compact /></td>
-              <td className={styles.score}>{(row.score * 100).toFixed(0)}</td>
-              {/* #265 — use CSS tokens instead of hardcoded hex colors */}
-              <td style={{ color: row.overturnRatio > 2 ? 'var(--color-danger)' : 'inherit' }}>
-                {row.overturnRatio.toFixed(1)}×
-              </td>
-              <td style={{ color: row.recentRepairs > 0 ? 'var(--color-warning)' : 'inherit' }}>
-                {row.recentRepairs}
-              </td>
-              <td>{row.daysSinceService > 0 ? Math.round(row.daysSinceService) : '—'}</td>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Scooter ID</th>
+              <th>City</th>
+              <th>Risk</th>
+              <th>Score</th>
+              <th>Overturn ×</th>
+              <th>Repairs (30d)</th>
+              <th>Days since svc</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visible.map((row, i) => (
+              <tr
+                key={row.scooterId}
+                className={`${styles.row} ${row.risk === 'high' ? styles.rowHigh : ''}`}
+                onClick={() => onSelectScooter?.(row.scooterId)}
+                style={{ cursor: onSelectScooter ? 'pointer' : 'default' }}
+              >
+                <td className={styles.rank}>{i + 1}</td>
+                <td className={styles.scooterId}>{row.scooterId}</td>
+                <td>{row.city || '—'}</td>
+                <td><RiskBadge risk={row.risk} compact /></td>
+                <td className={styles.score}>{(row.score * 100).toFixed(0)}</td>
+                {/* #265 — use CSS tokens instead of hardcoded hex colors */}
+                <td style={{ color: row.overturnRatio > 2 ? 'var(--color-danger)' : 'inherit' }}>
+                  {row.overturnRatio.toFixed(1)}×
+                </td>
+                <td style={{ color: row.recentRepairs > 0 ? 'var(--color-warning)' : 'inherit' }}>
+                  {row.recentRepairs}
+                </td>
+                <td>{row.daysSinceService > 0 ? Math.round(row.daysSinceService) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {filtered.length > 10 && (
         <button className={styles.showMore} onClick={() => setShowAll((v) => !v)}>

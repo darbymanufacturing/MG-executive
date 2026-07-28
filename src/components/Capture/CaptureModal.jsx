@@ -371,7 +371,7 @@ export default function CaptureModal({ open, onClose }) {
               <button className="btn btn-ghost btn-sm" onClick={() => setMode('invoice')}>
                 <Camera size={14} />Invoice
               </button>
-              <div style={{ flex: 1 }} />
+              <div className={styles.footerSpacer} />
               {stage === 'confirmed' ? (
                 <>
                   <Link to={`/issues/${createdId}`} className="btn btn-outline btn-sm" onClick={onClose}>

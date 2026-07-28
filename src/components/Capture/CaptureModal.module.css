@@ -128,6 +128,7 @@
 /* Footer */
 .footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
@@ -138,6 +139,7 @@
   color: var(--fg-muted);
   margin-right: 6px;
 }
+.footerSpacer { flex: 1; }
 
 /* KV pair */
 .kv {
@@ -242,4 +244,7 @@
   .overlay { padding: 8vh 12px 12px; }
   .confirmedGrid { grid-template-columns: 1fr; }
   .headerSub { display: none; }
+  .footerSpacer { display: none; }
+  .footer > * { min-height: 40px; }
+  .textarea { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

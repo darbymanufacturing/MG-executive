@@ -1,8 +1,31 @@
 # WIP — hopp-sync v2 rebuild
 
+> ⛔ **SUPERSEDED (2026-06-10) — DO NOT ACT ON THE "NOT DONE / Phase 4" SECTIONS BELOW.**
+> Validated truth: `North-Star.md` Pass 8 · `wip/agent-update-2026-06-10.md` · memory
+> `project-cleanup-week-2026-06`. Reconcile against those, not this note.
+>
+> - **Hopp Phase-4 cutover is COMPLETE** (commit `6b306bd`): new `/api/hopp-refresh`
+>   proxy; `useHoppSync` reads Supabase **`hopp_sync_runs`** (not Firestore `syncLogs`);
+>   the legacy Vercel cron + `hopp-mcp-client.js` are **DELETED**; ENV `HOPP_MCP_URL` →
+>   **`HOPP_SYNC_URL`**. The old `hopp-mcp.vercel.app` is retired. Phase 0/3/4 below = done/moot.
+> - **The Oracle VM worker is INTENTIONALLY STOPPED** (Kostas, 2026-06-10): no auto Hopp
+>   sync; the Refresh button returns **504 by design — do NOT "fix" it.** Worker revival /
+>   retime / token re-bootstrap are **Kostas's deferred ops**, not an agent's to start.
+>   Don't re-bootstrap Hopp tokens or revive the worker unless he explicitly asks.
+> - This session's hopp-sync commits (rollup per-trip-city + 2 AM-Athens + paid-only
+>   `61e0639`; Node 22 `050b277`; auth circuit-breaker + 30-min token keepalive) live in the
+>   local `hopp-sync` repo but are **NOT running** (VM down).
+> - ⚠️ **Observed this session (NOT Validator-confirmed):** the worker bootstraps from
+>   Kostas's *browser* Hopp login, so they share one rotating token chain — his active
+>   dashboard use invalidates the worker's token within ~45 min. If the worker is ever
+>   revived, it needs its **own Hopp credential** (API key / 2nd operator login) to be
+>   stable. (A stale `.mcp.json` at the repo root points at the stopped worker endpoint.)
+>
+> Everything below is **HISTORICAL (2026-06-03)**, kept for reference only.
+
 **Role:** hopp-sync architect / Omni integration
-**Session ended:** 2026-06-03
-**Status:** Phase 1–3 built and compiling; Phases 0 + 4 remain
+**Session ended:** 2026-06-03 · **Superseded:** 2026-06-10 (see banner)
+**Status (HISTORICAL):** Phase 1–3 built and compiling; Phases 0 + 4 then remained — now DONE/moot per banner
 
 ---
 

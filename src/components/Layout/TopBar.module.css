@@ -142,7 +142,9 @@
 /* ─── Mobile ─── */
 @media (max-width: 768px) {
   .topbar {
-    padding: 0 16px;
+    height: calc(var(--topbar-height-mobile) + var(--safe-top));
+    padding: var(--safe-top) 12px 0;
+    gap: 8px;
     position: fixed;
     top: 0;
     left: 0;
@@ -154,6 +156,8 @@
   }
   .captureBar {
     max-width: none;
+    min-width: 0;
+    flex: 1 1 120px;
   }
   .captureRight {
     display: none;
@@ -163,5 +167,24 @@
   }
   .divider {
     display: none;
+  }
+  /* #673 — sync is automatic (hopp-sync worker); reclaim the button on mobile.
+     Descendant selector (.topbar .refreshBtn) is (0,2,0) — needed to beat
+     globals.css `.btn { display: inline-flex; }` (0,1,0), which is emitted
+     LATER in the bundle and would otherwise win the tie and keep the button
+     visible. See #673 post-mortem. */
+  .topbar .refreshBtn {
+    display: none;
+  }
+  .actions {
+    gap: 4px;
+  }
+  /* #677 — 44px minimum touch targets for the chrome icon buttons.
+     Overrides the global .btn-sm (globals.css:104) inside the top bar only. */
+  .actions > button {
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
   }
 }

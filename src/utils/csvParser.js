@@ -67,16 +67,24 @@ const EXPECTED_HEADERS = [
   'Total paid refunds',
 ];
 
+// Columns Hopp has added to the trip-analytics export over time. Captured when
+// present, ignored when absent — so a newer 26-column export and an older
+// 25-column export both import cleanly, and the next added column needs only a
+// one-line addition here. (#683)
+const OPTIONAL_HEADERS = [
+  'Total reserved trip minutes',
+];
+
 /**
  * Parse a full CSV string into an array of revenue day objects.
- * Returns { rows: [...], errors: [...], total: n }
+ * Returns { rows: [...], errors: [...], total: n, skipped: n }
  */
 export function parseRevenueCSV(csvText) {
   // Strip UTF-8 BOM (0xFEFF) so "Date" header is recognised on Windows exports (#533)
   if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
   const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) {
-    return { rows: [], errors: ['File appears to be empty or has no data rows.'], total: 0 };
+    return { rows: [], errors: ['File appears to be empty or has no data rows.'], total: 0, skipped: 0 };
   }
 
   // Validate header
@@ -87,24 +95,30 @@ export function parseRevenueCSV(csvText) {
       rows: [],
       errors: [`Unrecognised CSV format. Missing columns: ${missing.join(', ')}`],
       total: 0,
+      skipped: 0,
     };
   }
 
   // Build column index map
   const idx = {};
-  EXPECTED_HEADERS.forEach((h) => { idx[h] = headerValues.indexOf(h); });
+  [...EXPECTED_HEADERS, ...OPTIONAL_HEADERS].forEach((h) => { idx[h] = headerValues.indexOf(h); });
 
   const rows = [];
   const errors = [];
+  let skipped = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCSVRow(lines[i]);
-    // #76 — warn when a row has more columns than expected (silently truncated data)
-    if (cols.length > EXPECTED_HEADERS.length) {
-      errors.push(`Row ${i + 1}: has ${cols.length} columns but expected ${EXPECTED_HEADERS.length} — check CSV format for extra commas.`);
+    // #76 — warn when a row is WIDER than the file's own header row (stray commas
+    // → silently truncated data). #683: compare against headerValues.length, NOT
+    // EXPECTED_HEADERS.length — the export gains columns over time, and a new
+    // upstream column must never be reported as a malformed row.
+    if (cols.length > headerValues.length) {
+      errors.push(`Row ${i + 1}: has ${cols.length} columns but the header has ${headerValues.length} — check CSV format for extra commas.`);
     }
     const date = parseDate(cols[idx['Date']] || '');
     if (!date) {
+      skipped++;
       errors.push(`Row ${i + 1}: Could not parse date "${cols[idx['Date']]}"`);
       continue;
     }
@@ -116,6 +130,7 @@ export function parseRevenueCSV(csvText) {
       totalTrips:            parseNum(cols[idx['Total trips']]),
       freeTrips:             parseNum(cols[idx['Free trips']]),
       penaltyTrips:          parseNum(cols[idx['Penalty trips']]),
+      totalReservedTripMinutes: parseNum(cols[idx['Total reserved trip minutes']]),
       totalRideTripMinutes:  parseNum(cols[idx['Total ride trip minutes']]),
       totalPausedTripMinutes:parseNum(cols[idx['Total paused trip minutes']]),
       totalTripDistanceKm:   parseNum(cols[idx['Total trip distance (km)']]),
@@ -139,5 +154,5 @@ export function parseRevenueCSV(csvText) {
     });
   }
 
-  return { rows, errors, total: rows.length };
+  return { rows, errors, total: rows.length, skipped };
 }

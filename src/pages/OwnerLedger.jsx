@@ -7,6 +7,7 @@ import { orgWrite, orgDelete, orgUpdate } from '../hooks/orgWrite.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { formatEUR, todayISO } from '../utils/formatters.js';
 import { LEDGER_ENTRY_TYPES, LEDGER_TYPE_KEYS, signedAmount, ownerBalance } from '../utils/ownerLedger.js';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import styles from './OwnerLedger.module.css';
 
 function nameOf(users, uid, fallback) {
@@ -168,14 +169,11 @@ export default function OwnerLedger() {
 
         {/* Owner setup prompt */}
         {owners.length === 0 ? (
-          <div className={styles.empty}>
-            <Scale size={40} className={styles.emptyIcon} />
-            <p className={styles.emptyTitle}>No owners designated yet</p>
-            <p className={styles.emptyDesc}>
-              Mark the company&rsquo;s owners below to start tracking each one&rsquo;s current account
-              (salary accrued vs paid, money put in, money taken out).
-            </p>
-          </div>
+          <EmptyState
+            icon={Scale}
+            title="No owners designated yet"
+            description="Mark the company’s owners below to start tracking each one’s current account (salary accrued vs paid, money put in, money taken out)."
+          />
         ) : (
           <>
             {/* Per-owner balance cards */}

@@ -240,7 +240,15 @@
 }
 
 @media (max-width: 768px) {
-  .quickActions { opacity: 1; }
-  .rowItem { grid-template-columns: 3px 16px 1fr; }
-  .quickActions { display: none; }
+  /* #667 — hover never fires on touch: keep quick actions visible and give them
+     their own row under the content column (mobile grid has no 4th column). */
+  .rowItem { grid-template-columns: 3px 16px 1fr; row-gap: 8px; }
+  .urgencyStripe { grid-row: 1 / -1; }
+  .quickActions {
+    display: flex;
+    opacity: 1;
+    grid-column: 3;
+    gap: 8px;
+  }
+  .quickActions button { min-height: 44px; }
 }

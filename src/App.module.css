@@ -2,6 +2,7 @@
 .layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-canvas);
 }
 
@@ -16,6 +17,7 @@
   margin-left: var(--sidebar-width);
   transition: margin-left 280ms cubic-bezier(.2,.7,.2,1);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ─── Main scrollable area (below the TopBar) ─── */
@@ -36,6 +38,6 @@
 @media (max-width: 768px) {
   .content {
     margin-left: 0 !important; /* sidebar overlays on mobile */
-    padding-top: 56px;         /* TopBar height on mobile */
+    padding-top: calc(var(--topbar-height-mobile) + var(--safe-top)); /* mobile TopBar + notch */
   }
 }

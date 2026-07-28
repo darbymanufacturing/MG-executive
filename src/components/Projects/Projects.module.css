@@ -189,3 +189,7 @@
   color: #E84545;
 }
 .btnDanger:hover { background: rgba(232, 69, 69, 0.08); opacity: 1; }
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

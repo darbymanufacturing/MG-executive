@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Wrench, LogOut, WifiOff, ChevronRight, Clock, MapPin, Tag, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
+import EmptyState from '../components/Shared/EmptyState.jsx';
 import styles from './TechnicianDashboard.module.css';
 
 const CATEGORY_LABEL = { Q: 'Quick', M: 'Medium', C: 'Complex', B: 'Blocked', F: 'Finished' };
@@ -176,11 +177,11 @@ export default function TechnicianDashboard() {
             <p className={styles.emptyDesc}>Loading tickets…</p>
           </div>
         ) : myTickets.length === 0 ? (
-          <div className={styles.emptyState}>
-            <Wrench size={48} className={styles.emptyIcon} />
-            <h2 className={styles.emptyTitle}>All clear</h2>
-            <p className={styles.emptyDesc}>No tickets assigned to you or available to claim.</p>
-          </div>
+          <EmptyState
+            icon={Wrench}
+            title="All clear"
+            description="No tickets assigned to you or available to claim."
+          />
         ) : (
           <>
             <p className={styles.queueCount}>

@@ -1062,8 +1062,8 @@ function HoppSyncSection() {
       </div>
 
       {recentSyncs.length > 0 && (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
             <thead>
               <tr style={{ background: 'var(--bg-section)', textAlign: 'left' }}>
                 <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--fg-secondary)' }}>When</th>

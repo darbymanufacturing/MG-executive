@@ -240,3 +240,7 @@
   font-size: var(--text-sm);
   padding: 40px 0;
 }
+
+@media (max-width: 768px) {
+  .search, .inlineSelect { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

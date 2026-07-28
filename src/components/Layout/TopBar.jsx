@@ -103,7 +103,12 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
         >
           <RefreshCw size={16} />
         </button>
-        <button className="btn btn-ghost btn-sm" onClick={onToggleTheme} title="Toggle theme">
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={onToggleTheme}
+          title="Toggle theme"
+          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
@@ -111,6 +116,7 @@ export default function TopBar({ title, theme, onToggleTheme, onOpenCapture, onO
           className={`btn btn-ghost btn-sm ${styles.bellBtn}`}
           onClick={onOpenNotifications}
           title="Notifications"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         >
           <Bell size={16} />
           {unreadCount > 0 && (

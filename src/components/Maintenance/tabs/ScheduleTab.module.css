@@ -236,3 +236,7 @@
   .actions { grid-column: 1 / -1; justify-content: flex-start; justify-self: start; }
   .right { justify-self: start; text-align: left; }
 }
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

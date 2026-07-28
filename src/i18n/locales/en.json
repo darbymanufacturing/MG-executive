@@ -6,5 +6,33 @@
     "delete": "Delete",
     "confirm": "Confirm",
     "loading": "Loading…"
+  },
+  "pow": {
+    "loadingTasks": "Loading tasks…",
+    "weekEmptyTitle": "No tasks this week",
+    "weekEmptyDesc": "Add tasks to the To Do list and assign them to show up here.",
+    "all": "All",
+    "todoEmptyTitle": "No tasks",
+    "todoEmptyDesc": "Create a new task to get started.",
+    "addTask": "Add task",
+    "unassign": "Remove {{person}}",
+    "assignTo": "Assign to {{person}}",
+    "changeSteps": "Change steps for {{person}}",
+    "hideSteps": "Hide steps",
+    "showSteps": "Show steps ({{count}})",
+    "title": "Title",
+    "titlePlaceholder": "e.g. Build login flow",
+    "category": "Category",
+    "description": "Description",
+    "descriptionPlaceholder": "Short description...",
+    "addStep": "Add step",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save",
+    "add": "Add",
+    "assignFromTodo": "Assign tasks from the To Do List",
+    "categoryNamePlaceholder": "Category name...",
+    "newCategory": "New Category",
+    "pickSteps": "Pick which steps show on the POW board:"
   }
 }

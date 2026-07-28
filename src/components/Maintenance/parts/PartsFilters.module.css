@@ -108,3 +108,7 @@
     width: 100%;
   }
 }
+
+@media (max-width: 768px) {
+  .input, .select { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

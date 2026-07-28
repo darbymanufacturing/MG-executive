@@ -499,4 +499,9 @@
   .dateRow    { grid-template-columns: 1fr; }
   .stepTitle  { font-size: 1.1rem; }
   .inlineDate { display: none; }
+  .removeBtn  { min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+}
+
+@media (max-width: 768px) {
+  .dateInput, .inlineInput { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

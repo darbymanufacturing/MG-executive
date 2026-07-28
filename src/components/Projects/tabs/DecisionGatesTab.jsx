@@ -4,6 +4,7 @@ import { useProjects } from '../../../context/ProjectContext.jsx';
 import Modal from '../../Shared/Modal.jsx';
 import Button from '../../Shared/Button.jsx';
 import ConfirmDialog from '../../Shared/ConfirmDialog.jsx';
+import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './DecisionGatesTab.module.css';
 
 const GATE_STATUSES = ['On Track', 'At Risk', 'Decided'];
@@ -149,12 +150,12 @@ export default function DecisionGatesTab() {
       </div>
 
       {gates.length === 0 ? (
-        <div className={styles.empty}>
-          <CheckCircle size={32} style={{ opacity: 0.3 }} />
-          <p>No decision gates yet.</p>
-          <p className={styles.emptySub}>Add a gate to track a key decision — like the Patras Q4 2026 revenue threshold.</p>
-          <Button variant="primary" onClick={openNew}><Plus size={14} /> New Gate</Button>
-        </div>
+        <EmptyState
+          icon={CheckCircle}
+          title="No decision gates yet."
+          description="Add a gate to track a key decision — like the Patras Q4 2026 revenue threshold."
+          action={<Button variant="primary" onClick={openNew}><Plus size={14} /> New Gate</Button>}
+        />
       ) : (
         <div className={styles.gateList}>
           {gates.map((g) => {

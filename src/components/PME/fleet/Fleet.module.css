@@ -64,10 +64,16 @@
 .pill:hover    { border-color: var(--color-primary-light); color: var(--color-primary-light); }
 .pillActive    { background: var(--color-surface-2); color: var(--color-text-primary); border-color: var(--color-border); }
 
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-xs);
+  min-width: 640px;
 }
 .table th {
   text-align: left;
@@ -84,6 +90,14 @@
   font-variant-numeric: tabular-nums;
 }
 .table tr:last-child td { border-bottom: none; }
+
+@media (max-width: 640px) {
+  /* Hide City (col 3) and Overturn × (col 6) */
+  .table th:nth-child(3),
+  .table td:nth-child(3),
+  .table th:nth-child(6),
+  .table td:nth-child(6) { display: none; }
+}
 
 .row:hover td { background: var(--color-surface-2); }
 .rowHigh td   { background: rgba(232,69,69,0.04); }

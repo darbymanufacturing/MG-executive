@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { getSteps } from './StepsList.jsx';
 import styles from './AssignStepsModal.module.css';
 
 export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
+  const { t } = useTranslation();
   const steps = getSteps(task);
   const existingSelected = task.powSteps?.[person] ?? steps.map((_, i) => i);
   // Use lazy initializer to avoid allocation churn (#277)
@@ -33,13 +35,13 @@ export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
       <div className={styles.modal}>
         <div className={styles.header}>
           <div>
-            <h2>Assign σε {person}</h2>
+            <h2>{t('pow.assignTo', { person })}</h2>
             <p className={styles.subtitle}>{task.title}</p>
           </div>
           <button className={styles.closeBtn} onClick={onClose}><X size={18}/></button>
         </div>
 
-        <p className={styles.hint}>Επέλεξε ποια steps θα εμφανιστούν στο POW board:</p>
+        <p className={styles.hint}>{t('pow.pickSteps')}</p>
 
         <div className={styles.stepsList}>
           {steps.map((content, idx) => (
@@ -57,7 +59,7 @@ export default function AssignStepsModal({ task, person, onConfirm, onClose }) {
         </div>
 
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onClose}>Άκυρο</button>
+          <button className={styles.cancelBtn} onClick={onClose}>{t('pow.cancel')}</button>
           <button className={styles.confirmBtn} onClick={() => { onConfirm([...selected]); onClose(); }}>
             Assign ({selected.size} steps)
           </button>

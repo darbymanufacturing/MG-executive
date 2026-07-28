@@ -121,3 +121,23 @@
 .primaryBtn { height: 38px; padding: 0 16px; border: none; border-radius: var(--radius-md); background: var(--accent); color: #fff; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; }
 .primaryBtn:hover:not(:disabled) { background: var(--accent-hover); }
 .ghostBtn:disabled, .primaryBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@media (max-width: 760px) {
+  .tHead { display: none; }
+  .row {
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 12px 14px;
+  }
+  .row .date  { grid-column: 1; grid-row: 1; }
+  .row .amount { grid-column: 2; grid-row: 1; }
+  .row .owner { grid-column: 1 / -1; grid-row: 2; white-space: normal; }
+  .row .type  { grid-column: 1 / -1; grid-row: 3; }
+  .note { white-space: normal; }
+  .right { justify-self: end; text-align: right; }
+  .row > .right:last-child { grid-column: 2; grid-row: 2; justify-self: end; }
+}
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

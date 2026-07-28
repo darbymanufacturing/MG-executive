@@ -1,5 +1,6 @@
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,4 +186,8 @@
 
 @keyframes onb-spin {
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

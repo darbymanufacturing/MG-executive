@@ -165,4 +165,5 @@
   .dropZone { padding: var(--space-6) var(--space-4); }
   .actions { flex-wrap: wrap; justify-content: stretch; }
   .actions > * { flex: 1; min-width: 120px; }
+  .select { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

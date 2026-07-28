@@ -91,3 +91,7 @@
   font-size: 0.8125rem;
   color: var(--color-success);
 }
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

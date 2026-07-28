@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Check, X } from 'lucide-react';
 import { usePow } from '../../context/PowContext.jsx';
 import TaskCard from './TaskCard.jsx';
@@ -7,6 +8,7 @@ import styles from './PowBoard.module.css';
 const ASSIGNEES = ['Panos', 'Kostas'];
 
 function CategoryColumn({ cat }) {
+  const { t } = useTranslation();
   const { powTasks, currentWeek, removeCategory, renameCategory } = usePow();
   const [editing, setEditing] = useState(false);
   const [newName, setNewName] = useState(cat.name);
@@ -74,7 +76,7 @@ function CategoryColumn({ cat }) {
         })}
 
         {colTasks.length === 0 && (
-          <p className={styles.emptyCol}>Assign tasks από το To Do List</p>
+          <p className={styles.emptyCol}>{t('pow.assignFromTodo')}</p>
         )}
       </div>
     </div>
@@ -82,6 +84,7 @@ function CategoryColumn({ cat }) {
 }
 
 export default function PowBoard() {
+  const { t } = useTranslation();
   const { categories, addCategory } = usePow();
   const [addingCat, setAddingCat]   = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -107,20 +110,20 @@ export default function PowBoard() {
           <div className={styles.addCatBox}>
             <input
               className={styles.addCatInput}
-              placeholder="Όνομα κατηγορίας..."
+              placeholder={t('pow.categoryNamePlaceholder')}
               value={newCatName}
               onChange={e => setNewCatName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAddCat(); if (e.key === 'Escape') setAddingCat(false); }}
               autoFocus
             />
             <div className={styles.addCatActions}>
-              <button className={styles.addCatConfirm} onClick={handleAddCat}>Προσθήκη</button>
+              <button className={styles.addCatConfirm} onClick={handleAddCat}>{t('pow.add')}</button>
               <button className={styles.addCatCancel} onClick={() => setAddingCat(false)}><X size={14}/></button>
             </div>
           </div>
         ) : (
           <button className={styles.addCatBtn} onClick={() => setAddingCat(true)}>
-            <Plus size={15}/> Νέα Κατηγορία
+            <Plus size={15}/> {t('pow.newCategory')}
           </button>
         )}
       </div>

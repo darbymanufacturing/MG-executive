@@ -17,6 +17,7 @@ body {
   color: var(--color-text-primary, #0F172A);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 html[data-theme="dark"] body {
@@ -39,6 +40,15 @@ button { cursor: pointer; font-family: var(--font-body); }
 input, select, textarea {
   font-family: var(--font-body);
   font-size: var(--text-sm);
+}
+
+/* #664 — iOS Safari force-zooms any focused control under 16px. Bump every
+   form control to 16px on touch-sized viewports (mirrors the Pow TaskModal
+   pattern at TaskModal.module.css:299-303). */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: var(--text-base);
+  }
 }
 
 /* Scrollbar */

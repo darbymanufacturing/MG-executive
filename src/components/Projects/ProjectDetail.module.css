@@ -2,6 +2,7 @@
 
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--color-bg);
   padding: var(--space-6) var(--space-8);
 }
@@ -310,4 +311,8 @@
 @media (max-width: 600px) {
   .page { padding: var(--space-3); padding-top: calc(56px + var(--space-3)); }
   .section { padding: var(--space-4); }
+}
+
+@media (max-width: 768px) {
+  .inlineInput, .metaSelect { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
 }

@@ -92,3 +92,7 @@
   padding: 2px;
 }
 .deleteBtn:hover { color: var(--color-danger); }
+
+@media (max-width: 768px) {
+  .input, .select { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

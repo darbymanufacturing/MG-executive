@@ -198,3 +198,16 @@
   .triggerLabel { max-width: 90px; }
   .menu { min-width: 200px; }
 }
+
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}
+
+/* #673 — on true phone widths the TopBar row is over-subscribed (menu + switcher +
+   3 action buttons + avatar), starving the flex:1 capture bar. Cap the fleet label
+   harder here to hand that width back. Kept as an ellipsised label rather than
+   hiding it: which fleet is active changes every number on screen, so it must stay
+   readable. */
+@media (max-width: 480px) {
+  .triggerLabel { max-width: 44px; }
+}

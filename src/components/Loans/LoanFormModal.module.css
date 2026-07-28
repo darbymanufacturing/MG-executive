@@ -84,3 +84,7 @@
   .actions { flex-direction: column-reverse; }
   .actions > * { width: 100%; }
 }
+
+@media (max-width: 768px) {
+  .input, .textarea { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

@@ -424,3 +424,7 @@
 }
 .btnPrimary:hover:not(:disabled) { background: var(--accent-hover); }
 .btnGhost:disabled, .btnPrimary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@media (max-width: 768px) {
+  .input, .searchInput { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}

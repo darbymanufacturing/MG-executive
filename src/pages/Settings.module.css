@@ -1,4 +1,4 @@
-.page { display: flex; flex-direction: column; min-height: 100vh; }
+.page { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 
 /* Loader2 spin for the Hopp Sync section's "Syncing…" button */
 .spinning {
@@ -293,4 +293,12 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* #664 — iOS Safari force-zooms any focused control under 16px. This must live at
+   the END of the file: the mobile block above sits BEFORE the base `.input` rule,
+   and equal-specificity ties are decided by source order, so an override up there
+   is silently dead. */
+@media (max-width: 768px) {
+  .input { font-size: var(--text-base); }
 }

@@ -448,3 +448,7 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+@media (max-width: 768px) {
+  .input, .stepInput { font-size: var(--text-base); } /* #664 — prevent iOS zoom on focus */
+}
