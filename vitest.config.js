@@ -8,7 +8,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     css: false,
-    include: ['src/**/*.{test,spec}.{js,jsx}', 'scripts/**/*.{test,spec}.{js,jsx}'],
+    // api/** was missing here — all 15 api/__tests__ suites (incl. the new mcp.test.js)
+    // were silently never run by `npm run test:run` / CI. Found & fixed alongside the
+    // MCP connector work (see CHANGELOG).
+    include: ['src/**/*.{test,spec}.{js,jsx}', 'scripts/**/*.{test,spec}.{js,jsx}', 'api/**/*.{test,spec}.js'],
     // Rules tests need the Firestore emulator — run them via `npm run test:rules`
     // (vitest.rules.config.js), not in the default jsdom unit run.
     exclude: [...configDefaults.exclude, '**/*.rules.test.js'],

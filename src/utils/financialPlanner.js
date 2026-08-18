@@ -84,10 +84,10 @@ const MONTH_NAMES = [
   'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
 ];
 
-const SOFTWARE_CATEGORIES = ['SW subscriptions, Telco charges', 'Operations & computing services', 'App Development Fee'];
-const STAFF_CATEGORIES = ['Employees', 'Contractors', 'Payroll Fees'];
-const DIVIDEND_CATEGORIES = ['CEO'];
-const EXCLUDED_CATEGORIES = ['Transfer, withdraw'];
+export const SOFTWARE_CATEGORIES = ['SW subscriptions, Telco charges', 'Operations & computing services', 'App Development Fee'];
+export const STAFF_CATEGORIES = ['Employees', 'Contractors', 'Payroll Fees'];
+export const DIVIDEND_CATEGORIES = ['CEO'];
+export const EXCLUDED_CATEGORIES = ['Transfer, withdraw'];
 
 export const PLANNER_METRICS = ['revenue', 'expenses', 'netCashFlow', 'dividends', 'retained', 'opening', 'closing'];
 
@@ -127,7 +127,7 @@ function absMonth(yyyyMm) {
   return y * 12 + (m - 1);
 }
 
-function bucketForCategory(category) {
+export function bucketForCategory(category) {
   if (EXCLUDED_CATEGORIES.includes(category)) return 'excluded';
   if (DIVIDEND_CATEGORIES.includes(category)) return 'dividend';
   if (SOFTWARE_CATEGORIES.includes(category)) return 'software';
@@ -137,7 +137,7 @@ function bucketForCategory(category) {
 
 // Loans-module interest rows — see CASH-VIEW RULES §2 in the header. Tolerates
 // both the em-dash the loans writer uses and a plain hyphen.
-const LOAN_INTEREST_RE = /^Interest\s+[—-]\s+Loan/;
+export const LOAN_INTEREST_RE = /^Interest\s+[—-]\s+Loan/;
 
 /**
  * Determine whether `cost` has an occurrence in year/monthIdx (0-indexed month),
