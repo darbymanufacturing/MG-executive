@@ -114,7 +114,11 @@ export function revenueBreakdown(revenueRows, financial, periodMonths = 1) {
   };
 
   const gross = totalRevenue(revenueRows);
-  const hoppFee = fin.applyFranchiseFee ? gross * fin.franchiseRate : 0;
+  // franchiseExempt rows (e.g. Stripe/XSlide direct revenue) never had a
+  // platform cut taken — the fee only ever applies to the feeable portion.
+  // When no row carries the flag this is identical to gross * franchiseRate.
+  const feeableGross = totalRevenue(revenueRows.filter((r) => !r?.franchiseExempt));
+  const hoppFee = fin.applyFranchiseFee ? feeableGross * fin.franchiseRate : 0;
   const companyShare = gross - hoppFee;
   const vatPortion = gross * fin.vatRate;
   const simCost = fin.monthlySimCost * periodMonths;
@@ -156,7 +160,13 @@ export function applyFinancialAdjustments(trendArray, financial) {
   const revenueMultiplier = fin.applyFranchiseFee ? (1 - fin.franchiseRate) : 1;
 
   return trendArray.map((entry) => {
-    const adjRevenue = parseFloat(((entry.revenue || 0) * revenueMultiplier - fin.monthlySimCost).toFixed(2));
+    // entry.exemptRevenue (franchiseExempt rows, e.g. Stripe/XSlide) skips the
+    // multiplier entirely — absent/0 for every pre-existing caller, so this is
+    // byte-identical to the old `(entry.revenue||0) * revenueMultiplier` then.
+    const totalRev  = entry.revenue || 0;
+    const exemptRev = entry.exemptRevenue || 0;
+    const feeableRev = totalRev - exemptRev;
+    const adjRevenue = parseFloat((feeableRev * revenueMultiplier + exemptRev - fin.monthlySimCost).toFixed(2));
     const adjProfit  = parseFloat((adjRevenue - (entry.total || 0)).toFixed(2));
     return { ...entry, revenue: adjRevenue, profit: adjProfit };
   });
@@ -222,6 +232,9 @@ export function monthlyRevenueSummary(revenueData, year) {
     return {
       month: `${month} ${y}`,
       revenue:        sumCents(rows, (r) => r.totalPaidRevenue),
+      // franchiseExempt subtotal (Stripe/XSlide) — feeds applyFinancialAdjustments
+      // so the platform fee is deducted only from the feeable portion.
+      exemptRevenue:  sumCents(rows.filter((r) => r.franchiseExempt), (r) => r.totalPaidRevenue),
       trips:          rows.reduce((s, r) => s + (r.totalTrips || 0), 0),
       distance:       rows.reduce((s, r) => s + (r.totalTripDistanceKm || 0), 0),
       // #69 — this is an AVERAGE of daily unique user counts, not a true monthly
@@ -246,6 +259,7 @@ export function combinedMonthlyTrend(costTrendData, revenueData, year) {
     return {
       ...costMonth,
       revenue: parseFloat(((rev?.revenue) || 0).toFixed(2)),
+      exemptRevenue: parseFloat(((rev?.exemptRevenue) || 0).toFixed(2)),
       profit:  parseFloat((((rev?.revenue) || 0) - (costMonth.total || 0)).toFixed(2)),
     };
   });
@@ -278,16 +292,22 @@ export function allTimeCombinedTrend(costs, revenueData) {
 
   // Build revenue lookup by YYYY-MM (accumulated in integer cents to avoid float drift)
   const revCentsKey = {};
+  const exemptCentsKey = {};
   revenueData.forEach((r) => {
     const key = r.date.slice(0, 7);
     revCentsKey[key] = (revCentsKey[key] || 0) + Math.round((r.totalPaidRevenue || 0) * 100);
+    if (r.franchiseExempt) {
+      exemptCentsKey[key] = (exemptCentsKey[key] || 0) + Math.round((r.totalPaidRevenue || 0) * 100);
+    }
   });
 
   return costTrend.map(({ _key, ...rest }) => {
     const rev = (revCentsKey[_key] || 0) / 100;
+    const exemptRev = (exemptCentsKey[_key] || 0) / 100;
     return {
       ...rest,
       revenue: parseFloat(rev.toFixed(2)),
+      exemptRevenue: parseFloat(exemptRev.toFixed(2)),
       profit:  parseFloat((rev - (rest.total || 0)).toFixed(2)),
     };
   });

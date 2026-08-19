@@ -63,6 +63,29 @@ describe('annualizedRevenue', () => {
     const fixedNow = new Date(2026, 0, 15); // 2026-01-15
     expect(annualizedRevenue(rows, null, { now: fixedNow })).toBeCloseTo(12000);
   });
+
+  test('franchiseExempt rows (Stripe/XSlide) skip the fee in the <12-month branch', () => {
+    // 6 months × 1000 = 6000 gross → 12000 annualized; one of those months (1000)
+    // is exempt → 2000 of the annualized total never pays the 19% fee.
+    const rows = Array.from({ length: 6 }, (_, i) => ({
+      date: `2026-0${i + 1}-15`,
+      totalPaidRevenue: 1000,
+      franchiseExempt: i === 5,
+    }));
+    // feeable 10000 × 0.81 + exempt 2000 − simCost 1800 = 8100 + 2000 − 1800 = 8300
+    expect(annualizedRevenue(rows, FIN_DEFAULTS)).toBeCloseTo(8300);
+  });
+
+  test('franchiseExempt rows skip the fee in the ≥12-month branch too', () => {
+    const rows = Array.from({ length: 13 }, (_, i) => {
+      const d = new Date(2025, i, 15); // Jan 2025 … Jan 2026
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { date: `${key}-15`, totalPaidRevenue: 1000, franchiseExempt: i === 12 }; // 2026-01 exempt
+    });
+    const fixedNow = new Date(2026, 0, 15); // window: 2025-02..2026-01, all 1000 → gross 12000
+    // feeable 11000 × 0.81 + exempt 1000 − simCost 1800 = 8910 + 1000 − 1800 = 8110
+    expect(annualizedRevenue(rows, FIN_DEFAULTS, { now: fixedNow })).toBeCloseTo(8110);
+  });
 });
 
 describe('annualInvestmentCost', () => {

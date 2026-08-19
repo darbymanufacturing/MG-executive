@@ -329,6 +329,33 @@ export function CostProvider({ children }) {
     return { written, duplicates: debits.length - toImport.length };
   }, [costs, orgId]);
 
+  // Book Stripe/XSlide processing fees as cost rows — one per calendar month,
+  // summed by the Stripe import panel from the raw CSV `Fee` column. Same
+  // idempotency shape as importBankCosts: a deterministic doc id
+  // (orgDocId(orgId,'stripefee',monthKey)) makes re-importing an overlapping
+  // range a safe overwrite of that month's fee total, never a duplicate.
+  const importStripeFees = useCallback(async (monthlyFees) => {
+    if (!orgId) throw new Error('importStripeFees: no active org');
+    const now = new Date().toISOString();
+    await Promise.all((monthlyFees || []).map(({ monthKey, monthLabel, amount }) => {
+      const id = orgDocId(orgId, 'stripefee', monthKey);
+      const [y, m] = monthKey.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      const cost = {
+        id,
+        name: `Stripe fees — ${monthLabel}`,
+        amount: Math.round((Math.abs(Number(amount) || 0) + Number.EPSILON) * 100) / 100,
+        startDate: `${monthKey}-${String(lastDay).padStart(2, '0')}`,
+        frequency: 'one-time',
+        category: 'Transaction Fees',
+        source: 'stripe-xslide',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return orgWrite(COSTS_COL, cost, { id, rethrow: true, errorMessage: 'Stripe fee import failed' });
+    }));
+  }, [orgId]);
+
   return (
     <CostContext.Provider
       value={{
@@ -349,6 +376,7 @@ export function CostProvider({ children }) {
         clearAllData,
         importData,
         importBankCosts,
+        importStripeFees,
       }}
     >
       {children}

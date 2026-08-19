@@ -95,6 +95,42 @@ describe('revenueBreakdown — the Hopp fee + VAT + SIM identity', () => {
   });
 });
 
+describe('revenueBreakdown — franchiseExempt rows (Stripe/XSlide)', () => {
+  test('the franchise fee applies only to non-exempt rows', () => {
+    const rows = [
+      { date: '2026-01-15', totalPaidRevenue: 1000 },                          // Hopp — feeable
+      { date: '2026-01-16', totalPaidRevenue: 500, franchiseExempt: true },     // Stripe — exempt
+    ];
+    const b = revenueBreakdown(rows, FIN_DEFAULTS, 1);
+
+    expect(b.gross).toBe(1500);                 // both rows counted
+    expect(b.hoppFee).toBeCloseTo(190);          // 19% of the Hopp row ONLY (1000 × 0.19)
+    expect(b.companyShare).toBeCloseTo(1310);    // 1500 - 190, the exempt row keeps its full amount
+  });
+
+  test('an all-exempt set never pays the franchise fee, regardless of the toggle', () => {
+    const rows = [{ date: '2026-01-15', totalPaidRevenue: 1000, franchiseExempt: true }];
+    const b = revenueBreakdown(rows, FIN_DEFAULTS, 1);
+    expect(b.hoppFee).toBe(0);
+    expect(b.companyShare).toBe(1000);
+  });
+
+  // The safety property the whole design leans on: when no row carries the
+  // flag, behaviour is byte-identical to before franchiseExempt existed.
+  test('regression: an all-non-exempt set is byte-identical to plain revenueBreakdown', () => {
+    const rows = [
+      { date: '2026-01-10', totalPaidRevenue: 400 },
+      { date: '2026-01-15', totalPaidRevenue: 600 },
+    ];
+    const withoutFlagKey = revenueBreakdown(rows, FIN_DEFAULTS, 1);
+    const withExplicitFalse = revenueBreakdown(
+      rows.map((r) => ({ ...r, franchiseExempt: false })), FIN_DEFAULTS, 1,
+    );
+    expect(withExplicitFalse).toEqual(withoutFlagKey);
+    expect(withoutFlagKey.hoppFee).toBeCloseTo(190); // 1000 × 0.19, same as the plain-gross case above
+  });
+});
+
 describe('operatingRevenue', () => {
   test('matches revenueBreakdown.operatingRevenue', () => {
     const rows = [{ date: '2026-01-15', totalPaidRevenue: 1000 }];
@@ -126,6 +162,24 @@ describe('applyFinancialAdjustments — monthly trend post-processor', () => {
     const trend = [{ month: 'Jan 2026', revenue: 1000 }];
     const adjusted = applyFinancialAdjustments(trend, FIN_DEFAULTS);
     expect(adjusted[0].profit).toBeCloseTo(660); // 660 - 0
+  });
+
+  test('exemptRevenue (Stripe/XSlide) skips the multiplier entirely', () => {
+    // 1000 total, 300 of it exempt: feeable 700 × 0.81 + 300 − 150 = 567 + 300 − 150 = 717
+    const trend = [{ month: 'Jan 2026', revenue: 1000, exemptRevenue: 300, total: 500 }];
+    const adjusted = applyFinancialAdjustments(trend, FIN_DEFAULTS);
+    expect(adjusted[0].revenue).toBeCloseTo(717);
+    expect(adjusted[0].profit).toBeCloseTo(217); // 717 - 500
+  });
+
+  test('regression: an absent exemptRevenue produces the same revenue/profit as today', () => {
+    const trend = [{ month: 'Jan 2026', revenue: 1000, total: 500 }];
+    const withoutField = applyFinancialAdjustments(trend, FIN_DEFAULTS);
+    const withExplicitZero = applyFinancialAdjustments(
+      [{ ...trend[0], exemptRevenue: 0 }], FIN_DEFAULTS,
+    );
+    expect(withExplicitZero[0].revenue).toBe(withoutField[0].revenue);
+    expect(withExplicitZero[0].profit).toBe(withoutField[0].profit);
   });
 });
 

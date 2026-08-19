@@ -29,10 +29,14 @@ export function annualizedRevenue(revenueData, financial, options = {}) {
     ...financial,
   } : null;
 
-  const applyFin = (grossAnnual, months) => {
+  // franchiseExempt rows (Stripe/XSlide) never had a platform cut taken — the
+  // multiplier applies only to the feeable portion. exemptAnnual is always 0
+  // for every pre-existing caller, so applyFin is byte-identical then.
+  const applyFin = (grossAnnual, exemptAnnual, months) => {
     if (!fin) return grossAnnual;
     const revenueMultiplier = fin.applyFranchiseFee ? (1 - fin.franchiseRate) : 1;
-    return grossAnnual * revenueMultiplier - fin.monthlySimCost * months;
+    const feeableAnnual = grossAnnual - exemptAnnual;
+    return feeableAnnual * revenueMultiplier + exemptAnnual - fin.monthlySimCost * months;
   };
 
   // Determine data span in months
@@ -47,20 +51,27 @@ export function annualizedRevenue(revenueData, financial, options = {}) {
     // Sum the last 12 complete calendar months (including off-season zeros)
     const now = options.now ?? new Date();
     let grossTotal = 0;
+    let exemptTotal = 0;
     for (let i = 0; i < 12; i++) {
       const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      grossTotal += revenueData
-        .filter((r) => r.date.startsWith(key))
+      const monthRows = revenueData.filter((r) => r.date.startsWith(key));
+      grossTotal += monthRows.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+      exemptTotal += monthRows
+        .filter((r) => r.franchiseExempt)
         .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
     }
-    return applyFin(grossTotal, 12);
+    return applyFin(grossTotal, exemptTotal, 12);
   }
 
   // Less than 12 months of data: scale by actual span
   const totalRev = revenueData.reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
+  const exemptRev = revenueData
+    .filter((r) => r.franchiseExempt)
+    .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
   const annualGross = (totalRev / spanMonths) * 12;
-  return applyFin(annualGross, 12);
+  const annualExempt = (exemptRev / spanMonths) * 12;
+  return applyFin(annualGross, annualExempt, 12);
 }
 
 /** Total annualized cost of investment-category items only */

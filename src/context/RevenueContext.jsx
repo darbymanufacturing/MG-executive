@@ -76,6 +76,45 @@ export function RevenueProvider({ children }) {
     refreshRevenue();
   }, [orgId, fleetForCity, refreshRevenue]);
 
+  // ── Import Stripe/XSlide revenue (batch, chunked, source-suffixed doc ID) ──
+  // Sibling to importRevenueDays with ONE deliberate difference: the doc id
+  // carries a 'stripe' suffix (orgDocId(orgId, date, location, 'stripe')) so a
+  // Stripe day can never collide with — and silently overwrite — a Hopp day for
+  // the same date+location. Every row is also stamped franchiseExempt: true
+  // (this money never had a Hopp platform cut taken) and source: 'stripe-xslide'.
+  const importStripeRevenue = useCallback(async (days) => {
+    if (!orgId) throw new Error('importStripeRevenue: no active org');
+    const uid = auth.currentUser?.uid ?? null;
+    const sbEntries = [];
+    for (let i = 0; i < days.length; i += BATCH_SIZE) {
+      const chunk = days.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((day) => {
+        const docId = orgDocId(orgId, day.date, day.location || 'global', 'stripe');
+        const cityKey = day.location || day.city || null;
+        const fleet = cityKey ? fleetForCity(cityKey) : null;
+        const fleetId = fleet?._docId ?? null;
+        const docData = {
+          ...day,
+          orgId,
+          createdByUid: uid,
+          source: 'stripe-xslide',
+          franchiseExempt: true,
+          ...(fleetId ? { fleetId } : {}),
+        };
+        batch.set(doc(db, REVENUE_COL, docId), docData); // setDoc via batch → overwrites
+        sbEntries.push({ id: docId, data: docData });
+      });
+      await safeWrite(
+        () => batch.commit(),
+        { rethrow: true, errorMessage: 'Stripe revenue import failed mid-batch' },
+      );
+    }
+    await dualWriteSupabase(REVENUE_COL, orgId, sbEntries)
+      .catch((e) => console.warn('[supabase dual-write] late failure:', e?.message ?? e));
+    refreshRevenue();
+  }, [orgId, fleetForCity, refreshRevenue]);
+
   // ── Delete a single day ───────────────────────────────────────────────────
   const deleteRevenueDay = useCallback(async (docId) => {
     await orgDelete(REVENUE_COL, docId, { rethrow: true, errorMessage: 'Failed to delete revenue entry' });
@@ -115,9 +154,13 @@ export function RevenueProvider({ children }) {
     revenueLoading,
     snapshotError: error ? error.message : null,
     importRevenueDays,
+    importStripeRevenue,
     deleteRevenueDay,
     clearAllRevenue,
-  }), [revenueData, revenueLoading, error, importRevenueDays, deleteRevenueDay, clearAllRevenue]);
+  }), [
+    revenueData, revenueLoading, error, importRevenueDays, importStripeRevenue,
+    deleteRevenueDay, clearAllRevenue,
+  ]);
 
   return (
     <RevenueContext.Provider value={value}>

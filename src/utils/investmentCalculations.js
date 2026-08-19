@@ -99,8 +99,9 @@ export function revenuePerScooterLifetime(scooter, revenueRows, tickets, financi
     const activeOnDay = row.uniqueVehiclesCount || row.activeScooters || defaultFleetSize || 1;
     let daily = row.totalPaidRevenue / activeOnDay;
 
-    // Apply franchise fee if enabled
-    if (fin?.applyFranchiseFee && fin.franchiseRate > 0) {
+    // Apply franchise fee if enabled — franchiseExempt rows (Stripe/XSlide)
+    // never had a platform cut taken, so they skip the multiplier entirely.
+    if (fin?.applyFranchiseFee && fin.franchiseRate > 0 && !row.franchiseExempt) {
       daily = daily * (1 - fin.franchiseRate);
     }
 

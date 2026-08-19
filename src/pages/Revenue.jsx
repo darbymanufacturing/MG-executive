@@ -5,6 +5,7 @@ import Header from '../components/Layout/Header.jsx';
 import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import CsvImportPanel from '../components/Revenue/CsvImportPanel.jsx';
+import StripeImportPanel from '../components/Revenue/StripeImportPanel.jsx';
 import RevenueTable from '../components/Revenue/RevenueTable.jsx';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import Skeleton from '../components/Shared/Skeleton.jsx';
@@ -101,8 +102,13 @@ export default function Revenue() {
           </div>
         )}
 
-        {/* CSV Import */}
-        {!revenueLoading && <CsvImportPanel locations={locations} />}
+        {/* CSV Import — two independent revenue sources, kept in separate docs */}
+        {!revenueLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <CsvImportPanel locations={locations} />
+            <StripeImportPanel locations={locations} />
+          </div>
+        )}
 
         {/* Data table */}
         {!revenueLoading && hasData && (
