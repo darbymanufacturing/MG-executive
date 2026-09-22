@@ -71,9 +71,12 @@ export default function RepairsTab({ scooterId }) {
                     </td>
                     <td>{t.daysOpen ?? '—'}</td>
                     <td className={styles.warning}>
-                      {t.partsUsed?.length
+                      {/* #696 — guard on the real shape: a CSV-imported ticket used to
+                          carry `partsUsed` as free text, whose .length is truthy, and
+                          .reduce on a string crashed this whole tab. */}
+                      {Array.isArray(t.partsUsed) && t.partsUsed.length
                         ? formatEUR(t.partsUsed.reduce((s, p) => s + (p.quantity || 0) * (p.unitCost || 0), 0))
-                        : '—'}
+                        : (t.partsUsedText || (typeof t.partsUsed === 'string' ? t.partsUsed : '') || '—')}
                     </td>
                     <td>
                       <button

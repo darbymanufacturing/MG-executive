@@ -133,7 +133,14 @@ export function parseRepairLogCsv(csvText, defaultScooterId = null) {
     const issueTags      = colTags    !== -1 ? (cols[colTags]    || '').trim() : '';
     const realIssue      = colReal    !== -1 ? (cols[colReal]    || '').trim() : '';
     const comment        = colComment !== -1 ? (cols[colComment] || '').trim() : '';
-    const partsUsed      = colParts   !== -1 ? (cols[colParts]   || '').trim() : '';
+    /* #696 — the CSV's "Parts used" cell is free text ("brake cable, grip"),
+     * but everywhere else in the app `partsUsed` is an ARRAY of
+     * {partId, partName, quantity, unitCost} written by the crew repair flow
+     * (repairSessionWriter.js). Storing the string here made
+     * `t.partsUsed?.length` truthy in RepairsTab, which then called .reduce on a
+     * string and crashed that scooter's Repairs tab. Keep the raw text under a
+     * separate key and leave the structured field empty. */
+    const partsUsedText  = colParts   !== -1 ? (cols[colParts]   || '').trim() : '';
     const fixedBy        = colFixedBy !== -1 ? (cols[colFixedBy] || '').trim() : '';
 
     // Map to maintenanceTickets shape
@@ -154,7 +161,8 @@ export function parseRepairLogCsv(csvText, defaultScooterId = null) {
       secondaryTag:    issueTags   || '',
       realIssue,
       comment,
-      partsUsed,
+      partsUsed: [],        // #696 — structured shape; imports carry no costed parts
+      partsUsedText,        // the raw free-text cell, preserved for humans
       fixedBy,
       notes:           `Imported from repair log. Tags: ${issueTags}`,
       importSource:    'repairLogCsv',

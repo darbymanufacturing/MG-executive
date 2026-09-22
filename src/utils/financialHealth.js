@@ -6,8 +6,9 @@
  * When provided, annualizedRevenue applies franchise fee and SIM deductions so that
  * P&L metrics reflect operating revenue, not gross paid revenue.
  */
-import { normalizeToAnnual, totalMonthlyCost } from './calculations.js';
+import { normalizeToAnnual, normalizeToMonthly, totalMonthlyCost } from './calculations.js';
 import { monthlyRevenueSummary } from './revenueCalculations.js';
+import { groupForCategory } from './constants.js';
 
 /**
  * Annualized revenue based on the actual data span.
@@ -115,8 +116,28 @@ export function calcROI(costs, revenueData, financial) {
 }
 
 /**
+ * Monthly debt service derived from the cost rows themselves (#699).
+ *
+ * `config.monthlyDebtService` has never existed as a Settings field — Dashboard
+ * computed this inline while MoneyOverview passed the raw config, so the Money
+ * page's "Loan coverage" chip was permanently "—" while the identical chip on
+ * /pulse/classic worked. One helper, one number, both callers.
+ *
+ * Every cost whose category belongs to the `debt` group (loans, credit cards)
+ * normalized to a monthly run-rate.
+ */
+export function monthlyDebtServiceFromCosts(costs) {
+  if (!Array.isArray(costs) || costs.length === 0) return 0;
+  return costs
+    .filter((c) => groupForCategory(c.category) === 'debt')
+    .reduce((sum, c) => sum + normalizeToMonthly(c), 0);
+}
+
+/**
  * DSCR = Annual Operating Cash Flow / Annual Debt Service.
  * Returns null if monthlyDebtService is null/0 or no revenue.
+ * Callers that don't carry an explicit figure should pass
+ * `{ ...config, monthlyDebtService: monthlyDebtServiceFromCosts(costs) }`.
  */
 export function calcDSCR(costs, revenueData, config, financial) {
   const debt = config.monthlyDebtService;

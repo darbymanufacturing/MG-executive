@@ -22,6 +22,9 @@ import { timingSafeEqual } from 'node:crypto';
 import { getDb, FieldValue } from './_lib/firebase-admin.js';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
+import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
+
+const HEARTBEAT_ENV = 'HEARTBEAT_PARITY_CHECK';
 
 // Firestore collection → Supabase table (the migrated set). `config` + `pow` both
 // fold into app_config, so their Firestore counts are summed against that one table.
@@ -103,5 +106,16 @@ export default async function handler(req, res) {
     console.error('[parity-check] failed to write parity_checks doc:', e?.message || e);
   }
 
-  return res.status(200).json({ ok: errors.length === 0, hasDrift: drifted.length > 0, perTable, errors });
+  // #691 — drift and errors get their own alert instead of hiding inside a 200.
+  const hasDrift = drifted.length > 0;
+  if (errors.length === 0 && !hasDrift) {
+    await heartbeatOk(HEARTBEAT_ENV, `parity ok (${Object.keys(perTable).length} tables)`);
+  } else {
+    await heartbeatFail(
+      HEARTBEAT_ENV,
+      `drift=${drifted.map((t) => t.table).join(',') || 'none'} errors=${errors.length}`,
+    );
+  }
+
+  return res.status(200).json({ ok: errors.length === 0, hasDrift, perTable, errors });
 }

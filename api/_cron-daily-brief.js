@@ -2,14 +2,24 @@
  * api/cron-daily-brief.js — Vercel Cron handler for daily brief generation.
  * Scheduled: 05:00 UTC daily (≈ 07:00 Athens EET / 08:00 EEST)
  *
- * Current status: skeleton. Full implementation requires firebase-admin to
- * read user list and operational data server-side. For now, the daily brief
- * is generated client-side when the user opens the app (DailyBrief.jsx).
+ * Current status: STILL A SKELETON — it acknowledges and returns. The brief only
+ * exists if someone opens Home that day (DailyBrief.jsx generates it client-side).
  *
- * To fully activate:
- *   1. npm install firebase-admin
- *   2. Add FIREBASE_SERVICE_ACCOUNT_KEY env var in Vercel (JSON string of service account)
- *   3. Replace the stub below with the actual fan-out logic
+ * Correction (2026-09-22): the old note here said activation was blocked on
+ * installing firebase-admin. That is stale — `_lib/firebase-admin.js` is live
+ * (the purge + parity crons use it) and identity moved to Supabase (ADR-0023).
+ * What is actually missing is server-side payload aggregation: `_daily-brief.js`
+ * only NARRATES a payload the client computes (`buildBriefPayload`), so a real
+ * fan-out means porting that aggregation to the server — money-math work that
+ * belongs in its own pass (docs/AUTOMATION_PLAN.md, Phase 4).
+ *
+ * Deliberately NO heartbeat ping here (#691): this handler returns 200 while
+ * doing nothing, so pinging would report a dead pipeline as healthy — exactly
+ * the false signal the heartbeat design exists to avoid. Wire
+ * HEARTBEAT_DAILY_BRIEF when the fan-out actually ships.
+ *
+ * Keeping the cron scheduled is still useful: it is a second daily touch on the
+ * deployment, and its schedule is already correct for when the fan-out lands.
  */
 
 import { requireCronOrUser } from './_lib/require-auth.js';
@@ -66,6 +76,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     ok: true,
     date,
-    message: 'Daily brief cron acknowledged. Client-side generation is active; server-side fan-out pending firebase-admin setup.',
+    stub: true,
+    message: 'Daily brief cron acknowledged. Client-side generation is active; server-side fan-out is Phase 4 of docs/AUTOMATION_PLAN.md (needs payload aggregation ported server-side).',
   });
 }

@@ -92,7 +92,11 @@ function InvoiceCapture({ onClose, addCost }) {
         name: invoice.vendor || 'Invoice',
         amount: invoice.amount || 0,
         category: invoice.suggestedCategory || 'variable',
-        frequency: 'once',
+        // #693 — MUST be a canonical frequency key (constants.js FREQUENCIES).
+        // 'once' is not one: financialPlanner.expandCostForMonth returns null for
+        // unknown keys, so every invoice captured here was silently invisible in
+        // the Planner while upcomingPayments treated it as an open-ended commitment.
+        frequency: 'one-time',
         startDate: invoice.date || new Date().toISOString().slice(0, 10),
         notes: `Invoice #${invoice.invoiceNumber || '—'} captured via Omni`,
         source: 'invoice-capture',

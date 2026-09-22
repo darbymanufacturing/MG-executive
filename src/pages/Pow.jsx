@@ -29,8 +29,8 @@ function PowInner() {
   const { t } = useTranslation();
   const {
     categories, allTodoTasks, powTasks, doneTasks,
-    currentWeek, showDone, setShowDone,
-    setCurrentWeek, loading,
+    currentWeek, isWeekOverridden, showDone, setShowDone,
+    setCurrentWeek, resetCurrentWeek, loading,
   } = usePow();
 
   const [addingTask,      setAddingTask]      = useState(false);
@@ -86,10 +86,25 @@ function PowInner() {
             <button className={styles.weekBtn} onClick={() => setCurrentWeek(Math.max(1, currentWeek - 1))}>
               <ChevronDown size={13}/>
             </button>
-            <div className={styles.weekInfo}>
-              <span className={styles.weekLabel}>Week {currentWeek}</span>
-              <span className={styles.weekDates}>{getWeekRange(currentWeek)}</span>
-            </div>
+            {/* #695 — while browsing another week, the label becomes a "back to
+                this week" button. The override also expires on its own when the
+                real week rolls over, so POW can no longer latch. */}
+            {isWeekOverridden ? (
+              <button
+                type="button"
+                className={styles.weekInfo}
+                onClick={resetCurrentWeek}
+                title="Back to this week"
+              >
+                <span className={styles.weekLabel}>Week {currentWeek}</span>
+                <span className={styles.weekDates}>Back to today</span>
+              </button>
+            ) : (
+              <div className={styles.weekInfo}>
+                <span className={styles.weekLabel}>Week {currentWeek}</span>
+                <span className={styles.weekDates}>{getWeekRange(currentWeek)}</span>
+              </div>
+            )}
             <button className={styles.weekBtn} onClick={() => setCurrentWeek(currentWeek + 1)}>
               <ChevronUp size={13}/>
             </button>

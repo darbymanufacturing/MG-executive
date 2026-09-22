@@ -37,6 +37,9 @@ import {
   sbDelDoc,
   sbDelByOrg,
 } from './_lib/supabase-admin.js';
+import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
+
+const HEARTBEAT_ENV = 'HEARTBEAT_PURGE_ORGS';
 
 const BATCH_SIZE = 450;
 // Spark free tier = 20k writes/day. Keep well under it so a purge can't starve the
@@ -243,15 +246,20 @@ export default async function handler(req, res) {
       report.push({ orgId, status: 'purged', deleted: orgDeletes + memberUids.length + 1 });
     }
 
+    const purged = report.filter((r) => r.status === 'purged').length;
+    // #691 — ping only on verified completion, never merely "handler returned 200".
+    await heartbeatOk(HEARTBEAT_ENV, `purged=${purged} deletes=${deletesThisRun}`);
+
     return res.status(200).json({
       ok: true,
-      purged: report.filter((r) => r.status === 'purged').length,
+      purged,
       deletesThisRun,
       report,
       trigger: auth.trigger,
     });
   } catch (err) {
     console.error('cron-purge-deleted-orgs error:', err);
+    await heartbeatFail(HEARTBEAT_ENV, `purge failed: ${err?.message || err}`);
     return res.status(500).json({ ok: false, error: 'Purge failed', report });
   }
 }

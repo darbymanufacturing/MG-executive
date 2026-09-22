@@ -81,7 +81,17 @@
   align-items: center;
   gap: 0;
   min-width: 90px;
+  /* #695 — the same box renders as a <button> while a week override is active,
+     so neutralize default button chrome and keep both variants identical. */
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
 }
+
+button.weekInfo { cursor: pointer; }
+button.weekInfo:hover .weekDates { color: var(--accent); }
 
 .weekLabel {
   font-size: var(--text-sm);

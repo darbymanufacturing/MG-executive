@@ -20,9 +20,8 @@ import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import {
   monthlyTrendData, budgetVariance, filterCostsByLocation,
-  allTimeMonthlyTrendData, normalizeToMonthly, breakdownByCategory,
+  allTimeMonthlyTrendData, breakdownByCategory,
 } from '../utils/calculations.js';
-import { groupForCategory } from '../utils/constants.js';
 import {
   avgTripsPerDay, revenuePerTrip,
   vehicleUtilization, combinedMonthlyTrend,
@@ -35,7 +34,7 @@ import { exportDashboardToPDF } from '../utils/exportData.js';
 import {
   calcEBITDA, calcROI, calcDSCR, calcBreakEvenRevenue,
   calcPaybackPeriod, calcCostRecoveryRate, calcRevGrowthMoM,
-  getHealthColor,
+  getHealthColor, monthlyDebtServiceFromCosts,
 } from '../utils/financialHealth.js';
 import { useProjects } from '../context/ProjectContext.jsx';
 import { isPowDay, daysSince, relativeLabel, currentWeekStart } from '../utils/powHelpers.js';
@@ -267,11 +266,8 @@ export default function Dashboard() {
   // ── Financial health metrics ──────────────────────────────────────────────
   const usedCosts   = viewMode === 'month' ? periodCosts : filteredCosts;
 
-  const autoDebtService = useMemo(() =>
-    usedCosts
-      .filter((c) => groupForCategory(c.category) === 'debt')
-      .reduce((sum, c) => sum + normalizeToMonthly(c), 0),
-  [usedCosts]);
+  // #699 — one shared helper so this page and /money can never disagree.
+  const autoDebtService = useMemo(() => monthlyDebtServiceFromCosts(usedCosts), [usedCosts]);
 
   const ebitda      = hasPeriodData ? calcEBITDA(usedCosts, periodRevenue, financial)       : null;
   const roi         = hasPeriodData ? calcROI(usedCosts, periodRevenue, financial)           : null;

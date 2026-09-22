@@ -10,7 +10,7 @@ import HealthChips from '../components/Money/HealthChips.jsx';
 import ShowTheMath from '../components/Money/ShowTheMath.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
-import { calcEBITDA, calcDSCR, calcCostRecoveryRate } from '../utils/financialHealth.js';
+import { calcEBITDA, calcDSCR, calcCostRecoveryRate, monthlyDebtServiceFromCosts } from '../utils/financialHealth.js';
 import { isCommitment } from '../utils/upcomingPayments.js';
 import { formatEUR } from '../utils/formatters.js';
 import styles from './MoneyOverview.module.css';
@@ -44,7 +44,15 @@ export default function MoneyOverview() {
     const rev = scopedRevenue || [];
     return {
       ebitdaMargin: calcEBITDA(costs, rev, fin).ebitdaMargin,
-      dscr: calcDSCR(costs, rev, config || {}, fin),
+      // #699 — derive debt service from the loan/card cost rows; there is no
+      // `monthlyDebtService` Settings field, so the raw config always yielded null
+      // and this chip read "—" forever.
+      dscr: calcDSCR(
+        costs,
+        rev,
+        { ...(config || {}), monthlyDebtService: monthlyDebtServiceFromCosts(costs) || null },
+        fin,
+      ),
       costRecovery: calcCostRecoveryRate(costs, rev, fin),
     };
   }, [scopedCosts, scopedRevenue, config, fin]);

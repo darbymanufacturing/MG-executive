@@ -33,6 +33,12 @@ function friendlyError(code) {
 export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  /* #692 — "we could not READ your profile" is a completely different situation
+   * from "you have no profile". Both used to end at the same fail-closed
+   * "Account not provisioned" screen, which is what the owner saw on 2026-09-07
+   * when the free-tier Supabase project auto-paused. Track the read failure so
+   * the shell can say "can't reach the server" and offer a retry instead. */
+  const [profileError, setProfileError] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [claimsSyncing, setClaimsSyncing] = useState(false);
   const { error: toastError } = useToast();
@@ -68,6 +74,7 @@ export function AuthProvider({ children }) {
 
       if (!firebaseUser) {
         setUserProfile(null);
+        setProfileError(null);   // #692 — signing out is not a read failure
         setAuthLoading(false);
         return;
       }
@@ -84,6 +91,9 @@ export function AuthProvider({ children }) {
         // (preserves the "no access" gate for misconfigured environments).
         if (!supabase) {
           setUserProfile(null);
+          // #692 — misconfigured environment is an infrastructure problem, not
+          // an unprovisioned account; say so rather than blaming the user.
+          setProfileError('The app is not configured to reach the database (Supabase env vars missing).');
           setAuthLoading(false);
           return;
         }
@@ -91,7 +101,7 @@ export function AuthProvider({ children }) {
         // Initial select — RLS self-read policy: source_doc_id = auth.jwt()->>'sub'.
         // This works before any orgId claim exists because the Firebase ID token
         // sub = uid; the accessToken hook in supabase.js sends it on every request.
-        const { data: row } = await supabase
+        const { data: row, error: profileReadError } = await supabase
           .from('users')
           .select('data')
           .eq('source_doc_id', uid)
@@ -109,6 +119,17 @@ export function AuthProvider({ children }) {
         // only by an admin via createTechnicianAccount. Clear authLoading either
         // way so the app never hangs on a missing row.
         setUserProfile(profile);
+
+        // #692 — a transport/RLS/paused-project failure is NOT "unprovisioned".
+        // Stay fail-closed (no profile ⇒ no access) but remember why, so the
+        // shell can offer "retry" instead of accusing a real admin of having no
+        // account. A successful read that simply found no row clears this.
+        if (profileReadError) {
+          console.error('[auth] profile read failed:', profileReadError.message || profileReadError);
+          setProfileError(profileReadError.message || 'Could not reach the server');
+        } else {
+          setProfileError(null);
+        }
 
         // #428 — If no profile row, skip claim check (NoAccessScreen gate handles it).
         if (!profile) {
@@ -294,7 +315,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, authLoading, claimsSyncing, userRole, userProfile,
+      user, authLoading, claimsSyncing, userRole, userProfile, profileError,
       signIn, signUp, signOut, createTechnicianAccount,
       refreshClaims, syncClaims, getIdToken,
     }}>

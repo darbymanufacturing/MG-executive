@@ -198,9 +198,60 @@ function NoAccessScreen() {
   );
 }
 
+/* ─── Server-unreachable screen (#692) ───
+ * Fail-closed like NoAccessScreen, but tells the truth: we could not READ the
+ * profile (paused/unreachable database, RLS error, missing env), so retrying is
+ * the right action — not asking an administrator for a role you already have. */
+function ServerUnreachableScreen({ detail }) {
+  const { signOut } = useAuth();
+  return (
+    <div
+      className="omni-app"
+      data-theme={safeStorage.getRaw(THEME_KEY) || 'light'}
+      style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px' }}
+    >
+      <div style={{ maxWidth: 460, textAlign: 'center' }}>
+        <h1 style={{ marginBottom: 8 }}>Can&rsquo;t reach the server</h1>
+        <p style={{ color: 'var(--fg-muted)', marginBottom: 20 }}>
+          You&rsquo;re signed in, but Omni couldn&rsquo;t load your account from the database.
+          This is usually temporary &mdash; retry in a moment. If it keeps happening, the
+          database may be paused.
+        </p>
+        {detail && (
+          <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--text-xs)', marginBottom: 20 }}>
+            {detail}
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--accent)',
+              color: '#fff', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)',
+            }}
+          >
+            Retry
+          </button>
+          <button
+            onClick={signOut}
+            style={{
+              padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'transparent',
+              color: 'var(--fg-muted)', border: '1px solid var(--border)', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)',
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Admin app shell ─── */
 function AppShell() {
-  const { userRole } = useAuth();
+  const { userRole, profileError } = useAuth();
   const location = useLocation();
   // Developer mode (Settings → Developer) — runtime toggle that reveals the Numbers
   // Inspector on ANY build. Read unconditionally (top of the component, before any
@@ -256,6 +307,9 @@ function AppShell() {
   // crew-tier role that slipped past the redirect above, gets a no-access screen + sign-out.
   // 'owner' is the org-owner role (ADR-0014) — it MUST be admitted, not locked out.
   if (userRole !== 'admin' && userRole !== 'owner' && userRole !== 'staff') {
+    // #692 — same fail-closed outcome, honest cause: distinguish "couldn't read
+    // your profile" (paused DB / network / RLS) from "you have no role".
+    if (profileError) return <ServerUnreachableScreen detail={profileError} />;
     return <NoAccessScreen />;
   }
 

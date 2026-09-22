@@ -23,8 +23,30 @@ const DEFAULT_CATEGORIES = [
 
 // Week 1 = Nov 3, 2025 (Monday) — must match Pow.jsx
 const WEEK1_START_MS = new Date('2025-11-03T00:00:00').getTime();
-function computeCurrentWeek() {
-  return Math.max(1, Math.ceil((Date.now() - WEEK1_START_MS) / (7 * 24 * 60 * 60 * 1000)));
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** POW week number containing `ms` (same origin as the Week-1 anchor). */
+export function weekForMs(ms) {
+  return Math.max(1, Math.ceil((ms - WEEK1_START_MS) / WEEK_MS));
+}
+/**
+ * Resolve which POW week to show (#695).
+ *
+ * A stored `currentWeek` is a manual nudge (the chevrons), valid only while it
+ * was set inside the week we are actually in. Before this, `stored || computed`
+ * meant the first click ever latched the tracker permanently: the stored number
+ * always won, the week stopped advancing on Mondays, and no UI could undo it.
+ * Legacy rows have no `currentWeekSetAt`, so they read as stale and self-heal.
+ *
+ * Pure + exported for tests.
+ */
+export function resolveCurrentWeek(config, nowMs = Date.now()) {
+  const computedWeek = weekForMs(nowMs);
+  const storedWeek = Number(config?.currentWeek) || null;
+  const setAtMs = config?.currentWeekSetAt ? Date.parse(config.currentWeekSetAt) : NaN;
+  const storedIsForThisWeek = Number.isFinite(setAtMs) && weekForMs(setAtMs) === computedWeek;
+  const currentWeek = storedWeek && storedIsForThisWeek ? storedWeek : computedWeek;
+  return { currentWeek, computedWeek, isWeekOverridden: currentWeek !== computedWeek };
 }
 
 export function PowProvider({ children }) {
@@ -40,7 +62,9 @@ export function PowProvider({ children }) {
     () => (configItem?.categories?.length ? configItem.categories : DEFAULT_CATEGORIES),
     [configItem],
   );
-  const currentWeek = configItem?.currentWeek || computeCurrentWeek();
+  /* #695 — see resolveCurrentWeek: a manual week survives only for the week it
+   * was chosen in, so POW can never latch again. */
+  const { currentWeek, computedWeek, isWeekOverridden } = resolveCurrentWeek(configItem);
 
   // Normalize each task (back-compat for old assignee/summary/todo-status docs).
   const tasks = useMemo(() => {
@@ -77,7 +101,15 @@ export function PowProvider({ children }) {
     });
   }, [configDocId]);
 
-  const setCurrentWeek = useCallback((week) => { saveConfig({ currentWeek: week }); }, [saveConfig]);
+  /* Stamp WHEN the week was chosen so the override can expire (#695). */
+  const setCurrentWeek = useCallback((week) => {
+    saveConfig({ currentWeek: week, currentWeekSetAt: new Date().toISOString() });
+  }, [saveConfig]);
+
+  /** Drop any manual override and snap back to the real current week (#695). */
+  const resetCurrentWeek = useCallback(() => {
+    saveConfig({ currentWeek: null, currentWeekSetAt: null });
+  }, [saveConfig]);
 
   const addCategory = useCallback((name) => {
     const newCat = { id: `cat-${crypto.randomUUID()}`, name, order: categories.length };
@@ -210,15 +242,16 @@ export function PowProvider({ children }) {
   );
 
   const value = useMemo(() => ({
-    categories, currentWeek, showDone, loading, snapshotError: error ? error.message : null,
+    categories, currentWeek, computedWeek, isWeekOverridden, showDone, loading,
+    snapshotError: error ? error.message : null,
     tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
-    setCurrentWeek, setShowDone,
+    setCurrentWeek, resetCurrentWeek, setShowDone,
     addCategory, removeCategory, renameCategory,
     addTask, updateTask, toggleAssignee, toggleStep, markDone, markBacklog, deleteTask,
   }), [
-    categories, currentWeek, showDone, loading, error,
+    categories, currentWeek, computedWeek, isWeekOverridden, showDone, loading, error,
     tasks, backlogTasks, powTasks, doneTasks, allTodoTasks,
-    setCurrentWeek, addCategory, removeCategory, renameCategory,
+    setCurrentWeek, resetCurrentWeek, addCategory, removeCategory, renameCategory,
     addTask, updateTask, toggleAssignee, toggleStep, markDone, markBacklog, deleteTask,
   ]);
 

@@ -88,7 +88,19 @@ export default function IssueDetail() {
   };
 
   const handleStatusChange = (status) => {
-    updateIssue(id, { status });
+    /* #698 — "Snoozed" without a `snoozeUntil` is a no-op: every open-filter
+     * (Issues.jsx isEffectivelyOpen, IssueContext activeIssues) only hides a
+     * snoozed issue while snoozeUntil is in the future, so the issue kept
+     * showing as open. Default to tomorrow 09:00 local, matching the Inbox's
+     * "Tomorrow" snooze; clear it again when leaving the snoozed state. */
+    if (status === 'snoozed') {
+      const until = new Date();
+      until.setDate(until.getDate() + 1);
+      until.setHours(9, 0, 0, 0);
+      updateIssue(id, { status, snoozeUntil: until.toISOString() });
+      return;
+    }
+    updateIssue(id, { status, snoozeUntil: null });
   };
 
   const handleSaveNextAction = async () => {

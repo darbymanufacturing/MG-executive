@@ -1,24 +1,37 @@
 name: External Crons
 
-# Triggers the two scheduled API endpoints that don't live in vercel.json (the
-# Vercel Hobby plan allows a maximum of 2 cron entries; cron-daily-brief uses one,
-# and the second is free since the Phase-4 cutover retired cron-hopp-sync — the
-# hopp-sync v2 worker on the Oracle VM owns the Hopp schedule now).
+# INDEPENDENT SECOND CALLER for the scheduled API endpoints (#691).
 #
-# Handlers that run here:
-#   - /api/cron-purge-deleted-orgs   (Phase 2.6 — purges orgs past 30-day grace)
+# History: these two jobs used to live ONLY here, because the Vercel Hobby plan
+# allowed just 2 cron entries. Vercel lifted that to 100 per project on every
+# plan (2026-01-20), so as of 2026-09-22 all four jobs are scheduled natively in
+# vercel.json — which removes the "two systems, one secret, silently out of
+# sync" failure class that made 110 consecutive runs here fail with 401.
+#
+# This workflow is kept deliberately, as redundancy: if Vercel's scheduler
+# stalls, these calls still fire (and vice versa). The handlers are idempotent,
+# so being called twice a day is harmless.
+#
+# Handlers triggered here:
+#   - /api/cron-keepalive             (keeps the free-tier Supabase project awake)
+#   - /api/cron-purge-deleted-orgs    (Phase 2.6 — purges orgs past 30-day grace)
 #   - /api/cron-supabase-parity-check (Supabase/Firestore row-count diff check)
 #
 # Prerequisites:
-#   - Repo secret CRON_SECRET must be set (GitHub → repo Settings → Secrets →
-#     Actions). Use the same value as the CRON_SECRET env var in Vercel.
+#   - Repo secret CRON_SECRET must be set (GitHub → repo Settings → Secrets and
+#     variables → Actions) to the SAME value as the CRON_SECRET env var in Vercel.
+#     The preflight step below fails loudly if it is missing, so this can never
+#     again rot silently behind a generic 401.
 #   - GitHub Actions must be enabled for the repository.
+#
+# NOTE: scheduled workflows are disabled automatically after 60 days without
+# repository activity. The external heartbeats (Healthchecks.io) catch that.
 
 on:
   schedule:
-    # Daily at 06:00 UTC (09:00 Athens summer / 08:00 Athens winter).
-    # Offset from the Vercel cron (daily-brief 05:00) so they don't compete.
-    - cron: '0 6 * * *'
+    # Daily at 07:00 UTC — offset from the Vercel crons (04:00–06:30 UTC) so the
+    # two schedulers act as a check on each other rather than racing.
+    - cron: '0 7 * * *'
   # Allow manual runs from the Actions tab for testing / on-demand backfills.
   workflow_dispatch:
 
@@ -29,20 +42,45 @@ jobs:
       contents: read
     timeout-minutes: 10
     steps:
-      - name: Purge deleted orgs
+      - name: Verify CRON_SECRET is configured
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error title=CRON_SECRET missing::The repository secret CRON_SECRET is empty or unset, so every call below would 401. Set it in Settings → Secrets and variables → Actions to the same value as CRON_SECRET in Vercel."
+            exit 1
+          fi
+          echo "CRON_SECRET is present (${#CRON_SECRET} characters)."
+
+      - name: Supabase keep-alive
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           response=$(curl --silent --show-error --fail-with-body \
             --request POST \
-            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            --header "Content-Type: application/json" \
+            "https://mg-executive.vercel.app/api/cron-keepalive")
+          echo "Response: $response"
+
+      - name: Purge deleted orgs
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          response=$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer $CRON_SECRET" \
             --header "Content-Type: application/json" \
             "https://mg-executive.vercel.app/api/cron-purge-deleted-orgs")
           echo "Response: $response"
 
       - name: Supabase parity check
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           response=$(curl --silent --show-error --fail-with-body \
             --request POST \
-            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --header "Authorization: Bearer $CRON_SECRET" \
             --header "Content-Type: application/json" \
             "https://mg-executive.vercel.app/api/cron-supabase-parity-check")
           echo "Response: $response"

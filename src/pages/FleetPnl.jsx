@@ -49,8 +49,13 @@ export default function FleetPnl() {
       const revenue = (revenueData ?? [])
         .filter((r) => inFleet(r.location ?? r.city))
         .reduce((s, r) => s + (Number(r.totalPaidRevenue) || 0), 0);
+      /* #694 — only count repair costs that survived review. `costStatus` is
+       * stamped by the crew flow (repairSessionWriter) and flipped by Cost
+       * Approvals; a cost the owner REJECTED used to keep reducing fleet profit
+       * forever. Tickets with no costStatus at all are legacy/admin-completed
+       * and carry no cost, so they contribute 0 either way. */
       const maintenance = (tickets ?? [])
-        .filter((t) => inFleet(t.city))
+        .filter((t) => inFleet(t.city) && t.costStatus !== 'rejected')
         .reduce((s, t) => s + (Number(t.totalCost) || 0), 0);
       const directCosts = (costs ?? [])
         .filter((c) => c.fleetId === f._docId)

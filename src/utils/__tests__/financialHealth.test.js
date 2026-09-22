@@ -8,6 +8,7 @@ import {
   calcCostRecoveryRate,
   calcBreakEvenRevenue,
   getHealthColor,
+  monthlyDebtServiceFromCosts,
 } from '../financialHealth.js';
 
 const FIN_DEFAULTS = {
@@ -230,5 +231,45 @@ describe('getHealthColor — traffic-light thresholds', () => {
 
   test('returns muted for unknown metric', () => {
     expect(getHealthColor('unknownMetric', 100)).toBe('muted');
+  });
+});
+
+/* ── #699 — Money page's "Loan coverage" chip was permanently "—" because no
+ *    `config.monthlyDebtService` field exists anywhere. Debt service is now
+ *    derived from the loan/credit-card cost rows by one shared helper. */
+describe('monthlyDebtServiceFromCosts (#699)', () => {
+  test('returns 0 for empty or invalid input', () => {
+    expect(monthlyDebtServiceFromCosts([])).toBe(0);
+    expect(monthlyDebtServiceFromCosts(null)).toBe(0);
+    expect(monthlyDebtServiceFromCosts(undefined)).toBe(0);
+  });
+
+  test('sums only debt-group categories, normalized to monthly', () => {
+    const costs = [
+      { name: 'Alpha loan', category: 'Bank loans', amount: 400, frequency: 'monthly' },
+      { name: 'Card', category: 'credit-card', amount: 100, frequency: 'monthly' },
+      { name: 'Rent', category: 'Space rent', amount: 350, frequency: 'monthly' },
+      { name: 'Insurance', category: 'Insurance', amount: 1200, frequency: 'annual' },
+    ];
+    // Only the two debt rows count: 400 + 100.
+    expect(monthlyDebtServiceFromCosts(costs)).toBeCloseTo(500, 5);
+  });
+
+  test('feeds calcDSCR so the chip can render a real ratio', () => {
+    const costs = [
+      { name: 'Alpha loan', category: 'Bank loans', amount: 500, frequency: 'monthly' },
+      { name: 'Rent', category: 'Space rent', amount: 300, frequency: 'monthly' },
+    ];
+    const revenue = Array.from({ length: 12 }, (_, i) => ({
+      date: `2026-${String(i + 1).padStart(2, '0')}-15`,
+      totalPaidRevenue: 3000,
+    }));
+    const debt = monthlyDebtServiceFromCosts(costs);
+    expect(debt).toBeGreaterThan(0);
+    const dscr = calcDSCR(costs, revenue, { monthlyDebtService: debt }, undefined);
+    expect(dscr).not.toBeNull();
+    expect(Number.isFinite(dscr)).toBe(true);
+    // Without the helper (the old code path) the chip got null and showed "—".
+    expect(calcDSCR(costs, revenue, {}, undefined)).toBeNull();
   });
 });
