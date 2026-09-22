@@ -7,6 +7,7 @@ import { useIssues } from './IssueContext.jsx';
 import { useMaintenance } from './MaintenanceContext.jsx';
 import { resolveCurrentWeek } from './PowContext.jsx';
 import { INTAKE_STATUSES, missingForApproval } from '../utils/intake.js';
+import { openTicketForScooter, matchPartsByName } from '../utils/maintenanceAutomation.js';
 
 /**
  * IntakeContext — the owner's side of Omni Autopilot (docs/AUTOMATION_PLAN.md).
@@ -38,7 +39,7 @@ export function IntakeProvider({ children }) {
   const { items: users } = useOrgCollection('users', {});
   const { addCost } = useCosts();
   const { createIssue } = useIssues();
-  const { addTicket, scooters } = useMaintenance();
+  const { addTicket, completeTicket, tickets, parts, scooters } = useMaintenance();
 
   /** Newest first; the queue is read far more often than it is written. */
   const all = useMemo(() => {
@@ -125,19 +126,34 @@ export function IntakeProvider({ children }) {
       return created?.id || created?._docId || null;
     },
 
-    /* A fault report opens a ticket; a "done" report records a completed one.
-     * Cost capture on completion (labour × rate + parts) lands with the
-     * Maintenance revamp so every completion path shares one calculation. */
+    /* A fault report opens a ticket. A "done" report CLOSES the scooter's open
+     * ticket — costed and stock-deducted through completeTicket, the same path
+     * as an admin completion — instead of opening a duplicate. Only when nothing
+     * is open does it record an already-completed ticket. */
     ticket: async (item, p) => {
       const scooterId = String(p.scooterId).trim();
       const scooter = (scooters || []).find((s) => String(s.scooterId) === scooterId);
       const done = Boolean(p.completed);
+      const { matched, unmatched } = matchPartsByName(p.parts || [], parts || []);
       const notes = [
         p.notes,
-        p.parts?.length ? `Parts: ${p.parts.join(', ')}` : null,
+        unmatched.length ? `Parts (not in catalog): ${unmatched.join(', ')}` : null,
         p.minutes ? `Labour: ${p.minutes} min` : null,
         item.evidence?.transcript ? `Voice note: “${item.evidence.transcript}”` : null,
       ].filter(Boolean).join('\n');
+
+      if (done) {
+        const open = openTicketForScooter(tickets || [], scooterId);
+        if (open) {
+          await completeTicket(open._docId, {
+            labourMinutes: p.minutes || 0,
+            partsUsed: matched,
+            note: notes || null,
+          });
+          return open._docId;
+        }
+      }
+
       return addTicket({
         scooterId,
         city: scooter?.city || '',
@@ -150,7 +166,7 @@ export function IntakeProvider({ children }) {
         notes,
         labourMinutes: p.minutes ?? null,
         partsUsed: [],
-        partsUsedText: p.parts?.join(', ') || '',
+        partsUsedText: (p.parts || []).join(', '),
         source: `autopilot-${item.source}`,
       });
     },
@@ -175,7 +191,7 @@ export function IntakeProvider({ children }) {
       }, { id, rethrow: true, errorMessage: 'Failed to create the POW task' });
       return id;
     },
-  }), [commitCostRecord, owners, createIssue, scooters, addTicket, orgId]);
+  }), [commitCostRecord, owners, createIssue, scooters, parts, tickets, addTicket, completeTicket, orgId]);
 
   /**
    * Approve one item: write the real record, then mark the item approved.

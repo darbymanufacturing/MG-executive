@@ -8,6 +8,9 @@ import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
+import {
+  scooterStatusAfter, completionCostFields, stockAfterUse, reorderSuggestions,
+} from '../utils/maintenanceAutomation.js';
 
 // ── Firestore paths (Phase 2 / ADR-0002+0003) ─────────────────────────────────
 const TICKETS_COL  = 'maintenanceTickets';
@@ -224,6 +227,42 @@ export function MaintenanceProvider({ children }) {
   // #625 — exclude Discontinued parts so the low-stock KPI/alert count matches the
   // Parts table, which already filters them out in its local isLow check.
   const lowStockParts   = useMemo(() => parts.filter((p) => p.status !== 'Discontinued' && p.stockOnHand <= p.reorderPoint && p.reorderPoint > 0), [parts]);
+  // Autopilot Phase 3 — what to reorder now (draft orders only; nothing is sent automatically).
+  const reorder = useMemo(() => reorderSuggestions(parts), [parts]);
+
+  // ── Autopilot Phase 3 — bookkeeping the work already implies ──────────────
+  // Defined BEFORE ticket CRUD: addTicket/completeTicket list these in their
+  // dependency arrays, which read the bindings during render.
+
+  /* Keep the scooter's status in step with its tickets: an open ticket means
+   * "In Repair", no open tickets means "Active" (protected statuses like Donor
+   * or Retired are never overridden). Failures don't block the ticket write. */
+  const syncScooterStatus = useCallback(async (scooterId, nextTickets) => {
+    const scooter = scooters.find((sc) => String(sc.scooterId ?? '').trim() === String(scooterId ?? '').trim());
+    const next = scooterStatusAfter(scooter, nextTickets);
+    if (!next || !scooter?._docId) return;
+    await orgUpdate(SCOOTERS_COL, scooter._docId, {
+      status: next,
+      statusChangedBy: 'autopilot',
+      statusChangedAt: new Date().toISOString(),
+    }, { rethrow: false, errorMessage: 'Ticket saved, but the scooter status could not be updated' });
+  }, [scooters]);
+
+  // Mark this occurrence serviced: a recurring schedule rolls nextDue forward by its
+  // interval (status stays 'active'); a one-off becomes status 'done'. Stamps lastCompleted.
+  const markScheduleDone = useCallback(async (docId) => {
+    const s = schedules.find((x) => x._docId === docId);
+    if (!s) throw new Error('Schedule not found');
+    const today = new Date().toISOString().slice(0, 10);
+    const recurs = s.recurrence && s.recurrence !== 'none' && Number(s.interval) > 0;
+    // #623 — anchor the advance to max(s.nextDue, today) so a late completion always
+    // produces a future nextDue rather than remaining in the past.
+    const anchor = s.nextDue < today ? today : s.nextDue;
+    const patch = recurs
+      ? { nextDue: advanceDueDate(anchor, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
+      : { status: 'done', lastCompleted: today };
+    await orgUpdate(SCHEDULES_COL, docId, patch, { rethrow: true, errorMessage: 'Failed to update schedule' });
+  }, [schedules]);
 
   // ── Ticket CRUD ───────────────────────────────────────────────────────────
   const addTicket = useCallback(async (data) => {
@@ -236,8 +275,10 @@ export function MaintenanceProvider({ children }) {
     const existing = tickets.filter((t) => t._docId === baseId || t._docId?.startsWith(`${baseId}_`));
     const docId   = existing.length === 0 ? baseId : `${baseId}_${existing.length + 1}`;
     await orgWrite(TICKETS_COL, data, { id: docId, rethrow: true, errorMessage: 'Failed to create ticket' });
+    // Autopilot Phase 3 — a new open ticket puts the scooter "In Repair".
+    await syncScooterStatus(scooterId, [...tickets, { ...data, scooterId, _docId: docId }]);
     return docId;
-  }, [tickets, orgId]);
+  }, [tickets, orgId, syncScooterStatus]);
 
   const updateTicket = useCallback(async (docId, data) => {
     await orgUpdate(TICKETS_COL, docId, data, { rethrow: true, errorMessage: 'Failed to update ticket' });
@@ -247,12 +288,48 @@ export function MaintenanceProvider({ children }) {
     await orgDelete(TICKETS_COL, docId, { rethrow: true, errorMessage: 'Failed to delete ticket' });
   }, []);
 
-  const completeTicket = useCallback(async (docId) => {
+  /* Autopilot Phase 3 (#694) — completing a ticket OUTSIDE the crew flow used to
+   * write only status + date, so most repairs cost €0 in Fleet P&L and never
+   * touched stock. Now any completion may carry labour minutes + parts:
+   *   - cost is computed with the crew flow's own math (computeRepairPay) and
+   *     lands as costStatus 'pending' → Cost Approvals, like a technician repair
+   *   - used parts come off the shelf (never below zero)
+   *   - a ticket raised from a preventive schedule rolls that schedule forward
+   *   - the scooter goes back to Active when its last open ticket closes
+   * Calling completeTicket(docId) with no details behaves as before, plus the
+   * schedule/scooter bookkeeping. */
+  const completeTicket = useCallback(async (docId, details = {}) => {
+    const ticket = tickets.find((t) => t._docId === docId);
+    const costFields = completionCostFields({
+      labourMinutes: details.labourMinutes,
+      partsUsed: details.partsUsed,
+      labourRatePerHour: config.labourRatePerHour,
+    });
+
     await orgUpdate(TICKETS_COL, docId, {
       status: 'Completed',
-      dateCompleted: new Date().toISOString().slice(0, 10),
+      dateCompleted: details.dateCompleted || new Date().toISOString().slice(0, 10),
+      ...costFields,
+      ...(details.note ? { completionNote: details.note } : {}),
     }, { rethrow: true, errorMessage: 'Failed to complete ticket' });
-  }, []);
+
+    for (const { docId: partDocId, stockOnHand } of stockAfterUse(parts, costFields.partsUsed || [])) {
+      await orgUpdate(PARTS_COL, partDocId, { stockOnHand }, {
+        rethrow: false, errorMessage: 'Ticket completed, but a stock update failed',
+      });
+    }
+
+    if (ticket?.scheduleId && schedules.some((x) => x._docId === ticket.scheduleId)) {
+      await markScheduleDone(ticket.scheduleId).catch(() => {});
+    }
+
+    if (ticket?.scooterId) {
+      await syncScooterStatus(
+        ticket.scooterId,
+        tickets.map((t) => (t._docId === docId ? { ...t, status: 'Completed' } : t)),
+      );
+    }
+  }, [tickets, parts, schedules, config.labourRatePerHour, markScheduleDone, syncScooterStatus]);
 
   const assignTicket = useCallback(async (docId, uid, displayName) => {
     await orgUpdate(TICKETS_COL, docId, {
@@ -353,21 +430,6 @@ export function MaintenanceProvider({ children }) {
     await orgDelete(SCHEDULES_COL, docId, { rethrow: true, errorMessage: 'Failed to delete schedule' });
   }, []);
 
-  // Mark this occurrence serviced: a recurring schedule rolls nextDue forward by its
-  // interval (status stays 'active'); a one-off becomes status 'done'. Stamps lastCompleted.
-  const markScheduleDone = useCallback(async (docId) => {
-    const s = schedules.find((x) => x._docId === docId);
-    if (!s) throw new Error('Schedule not found');
-    const today = new Date().toISOString().slice(0, 10);
-    const recurs = s.recurrence && s.recurrence !== 'none' && Number(s.interval) > 0;
-    // #623 — anchor the advance to max(s.nextDue, today) so a late completion always
-    // produces a future nextDue rather than remaining in the past.
-    const anchor = s.nextDue < today ? today : s.nextDue;
-    const patch = recurs
-      ? { nextDue: advanceDueDate(anchor, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
-      : { status: 'done', lastCompleted: today };
-    await orgUpdate(SCHEDULES_COL, docId, patch, { rethrow: true, errorMessage: 'Failed to update schedule' });
-  }, [schedules]);
 
   // ── Custom tags ───────────────────────────────────────────────────────────────
   const addCustomTag = useCallback(async (type, tag) => {
@@ -433,6 +495,8 @@ export function MaintenanceProvider({ children }) {
     isAtMaxActive,
     totalRevenueLost,
     lowStockParts,
+    reorder,
+    syncScooterStatus,
     // Ticket ops
     addTicket,
     updateTicket,
@@ -467,6 +531,7 @@ export function MaintenanceProvider({ children }) {
   }), [
     ticketsWithCalc, parts, scooters, config, loading, error,
     activeTickets, activeCount, totalOpenCount, isAtMaxActive, totalRevenueLost, lowStockParts,
+    reorder, syncScooterStatus,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
     addScooter, updateScooter, deleteScooter,
     schedules, schedulesLoading, addSchedule, updateSchedule, deleteSchedule, markScheduleDone,

@@ -5,6 +5,7 @@ import PartsFilters from '../parts/PartsFilters.jsx';
 import PartsTable from '../parts/PartsTable.jsx';
 import PartForm from '../parts/PartForm.jsx';
 import styles from './PartsTab.module.css';
+import ReorderPanel from '../parts/ReorderPanel.jsx';
 
 const INITIAL_FILTERS = { search: '', status: '', model: '', supplier: '' };
 
@@ -81,6 +82,8 @@ export default function PartsTab() {
 
   return (
     <div className={styles.container}>
+      {/* Autopilot Phase 3 — low stock becomes a draft order per supplier. */}
+      <ReorderPanel />
       <div className={styles.toolbar}>
         <div className={styles.meta}>
           <span className={styles.count}>

@@ -7,6 +7,7 @@ import ActiveTicketsBanner from '../tickets/ActiveTicketsBanner.jsx';
 import TicketFilters from '../tickets/TicketFilters.jsx';
 import TicketTable from '../tickets/TicketTable.jsx';
 import TicketForm from '../tickets/TicketForm.jsx';
+import CompleteTicketDialog from '../tickets/CompleteTicketDialog.jsx';
 import Skeleton from '../../Shared/Skeleton.jsx';
 import styles from './RepairLogTab.module.css';
 
@@ -15,9 +16,11 @@ const EMPTY_FILTERS = { search: '', statuses: [], categories: [], tags: [] };
 
 export default function RepairLogTab({ filteredTickets }) {
   const {
-    config, isAtMaxActive, activeCount, loading,
+    config, isAtMaxActive, activeCount, loading, parts, tickets,
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
   } = useMaintenance();
+  // Autopilot Phase 3 (#694): completing asks for time + parts so the repair is costed.
+  const [completing, setCompleting] = useState(null);
   const [filters,       setFilters]       = useState(EMPTY_FILTERS);
   const [showForm,      setShowForm]      = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
@@ -107,8 +110,8 @@ export default function RepairLogTab({ filteredTickets }) {
     await deleteTicket(docId);
   }
 
-  async function handleComplete(docId) {
-    await completeTicket(docId);
+  function handleComplete(docId) {
+    setCompleting((tickets || []).find((t) => t._docId === docId) || { _docId: docId });
   }
 
   async function handleAssign(docId, uid) {
@@ -154,6 +157,16 @@ export default function RepairLogTab({ filteredTickets }) {
           onComplete={handleComplete}
           technicians={technicians}
           onAssign={handleAssign}
+        />
+      )}
+
+      {completing && (
+        <CompleteTicketDialog
+          ticket={completing}
+          parts={parts}
+          labourRatePerHour={config?.labourRatePerHour}
+          onConfirm={(details) => completeTicket(completing._docId, details)}
+          onClose={() => setCompleting(null)}
         />
       )}
 

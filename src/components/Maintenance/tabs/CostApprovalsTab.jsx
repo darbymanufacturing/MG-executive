@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Euro, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRepairSessions } from '../../../context/RepairSessionContext.jsx';
+import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { useToast } from '../../../context/ToastContext.jsx';
 import EmptyState from '../../Shared/EmptyState.jsx';
 import styles from './CostApprovalsTab.module.css';
@@ -86,14 +87,45 @@ function ApprovalCard({ session, onApprove, onReject, busy }) {
 }
 
 export default function CostApprovalsTab() {
-  const { pendingApprovals, loading, approveSession, rejectSession } = useRepairSessions();
+  const { pendingApprovals: sessionApprovals, loading, approveSession, rejectSession } = useRepairSessions();
+  const { tickets, updateTicket } = useMaintenance();
   const toast = useToast();
   const [busyId, setBusyId] = useState(null);
+
+  /* Autopilot Phase 3 (#694) — repairs completed OUTSIDE the crew flow (admin
+   * "Mark Completed" with time/parts, or a WhatsApp "done" message) carry their
+   * cost on the ticket itself with costStatus 'pending' and no repair session.
+   * They are reviewed here alongside technician sessions, in the same card. */
+  const ticketApprovals = useMemo(() => (tickets || [])
+    .filter((t) => t.costStatus === 'pending' && !t.sessionId && Number(t.totalCost) > 0)
+    .map((t) => ({
+      id: `ticket:${t._docId}`,
+      kind: 'ticket',
+      ticketDocId: t._docId,
+      scooterId: t.scooterId,
+      technicianName: t.source === 'autopilot-whatsapp' ? 'via WhatsApp' : 'Completed in Omni',
+      completedAt: t.dateCompleted,
+      labourCost: t.labourCost ?? 0,
+      extraCost: 0,
+      totalPartsCost: t.totalPartsCost ?? 0,
+      totalCost: t.totalCost ?? 0,
+      estimatedMinutes: t.labourMinutes ?? 0,
+      labourRatePerHour: t.labourRatePerHour ?? 0,
+    })), [tickets]);
+
+  const pendingApprovals = useMemo(
+    () => [...sessionApprovals, ...ticketApprovals],
+    [sessionApprovals, ticketApprovals],
+  );
 
   async function handleApprove(session) {
     setBusyId(session.id);
     try {
-      await approveSession(session);
+      if (session.kind === 'ticket') {
+        await updateTicket(session.ticketDocId, { costStatus: 'approved', approvedAt: new Date().toISOString() });
+      } else {
+        await approveSession(session);
+      }
       toast.success(`Approved €${Number(session.totalCost ?? 0).toFixed(2)} for scooter ${session.scooterId}`);
     } catch (err) {
       toast.error(err.message || 'Failed to approve');
@@ -105,7 +137,15 @@ export default function CostApprovalsTab() {
   async function handleReject(session, reason) {
     setBusyId(session.id);
     try {
-      await rejectSession(session, reason);
+      if (session.kind === 'ticket') {
+        await updateTicket(session.ticketDocId, {
+          costStatus: 'rejected',
+          rejectionReason: reason,
+          rejectedAt: new Date().toISOString(),
+        });
+      } else {
+        await rejectSession(session, reason);
+      }
       toast.info(`Rejected repair cost for scooter ${session.scooterId}`);
     } catch (err) {
       toast.error(err.message || 'Failed to reject');

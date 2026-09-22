@@ -21,6 +21,7 @@ import createInvite from './_create-invite.js';
 import signup from './_signup.js';
 import cronDailyBrief from './_cron-daily-brief.js';
 import cronKeepalive from './_cron-keepalive.js';
+import cronMaintenance from './_cron-maintenance.js';
 import cronPurgeDeletedOrgs from './_cron-purge-deleted-orgs.js';
 import cronSupabaseParityCheck from './_cron-supabase-parity-check.js';
 import dailyBrief from './_daily-brief.js';
@@ -46,6 +47,7 @@ const ROUTES = {
   'create-user': createUser,
   'cron-daily-brief': cronDailyBrief,
   'cron-keepalive': cronKeepalive,
+  'cron-maintenance': cronMaintenance,
   'cron-purge-deleted-orgs': cronPurgeDeletedOrgs,
   'cron-supabase-parity-check': cronSupabaseParityCheck,
   'daily-brief': dailyBrief,
