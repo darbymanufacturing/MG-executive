@@ -8,6 +8,7 @@ import { validate } from '../../utils/validateForm.js';
 import { costSchema } from '../../utils/schemas/costSchema.js';
 import { useFleet } from '../../context/FleetContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import { useProjectsOptional } from '../../context/ProjectContext.jsx';
 import { vatSplit } from '../../utils/vat.js';
 import styles from './CostFormModal.module.css';
 
@@ -21,6 +22,7 @@ const EMPTY = {
   notes: '',
   location: '',
   fleetId: '', // FF-3 — which fleet's P&L this cost hits ('' = company-wide overhead)
+  projectId: '', // Autopilot Phase 4 — optional: the project this spend belongs to
   vatIncluded: true, // Greek receipts are gross-of-VAT by default (owner ask, VAT-awareness)
   // Loan-specific
   lenderName: '',
@@ -42,6 +44,9 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
   const isEdit = !!initialData?.id;
   const { fleets, activeFleet } = useFleet(); // FF-3 — per-cost fleet scope
   const { config } = useCosts();
+  // Autopilot Phase 4 — tagging a cost to a project gives project budgets their REAL spend.
+  const projectsCtx = useProjectsOptional();
+  const activeProjects = projectsCtx?.activeProjects ?? [];
   // Guard: config.financial can be absent (fresh org before CostContext seeds
   // defaults) — fall back to DEFAULT_CONFIG's rate rather than assuming 0.24 inline.
   const vatRate = config?.financial?.vatRate ?? DEFAULT_CONFIG.financial.vatRate;
@@ -113,6 +118,7 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
         endDate:        form.endDate        || null,
         location:       form.location       || null,
         fleetId:        form.fleetId        || null,
+        projectId:      form.projectId      || null,
         // Loan fields
         lenderName:     form.lenderName     || null,
         principalAmount:form.principalAmount ? parseFloat(form.principalAmount) : null,
@@ -216,6 +222,20 @@ export default function CostFormModal({ isOpen, onClose, onSave, initialData, lo
               <option value="">Whole company (shared overhead)</option>
               {fleets.map((f) => (
                 <option key={f._docId} value={f._docId}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Autopilot Phase 4 — project budgets used to compare against ALL fleet
+            spend; tagging a cost here gives the project its real spend. */}
+        {activeProjects.length > 0 && (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="cost-project">Project <span className={styles.optional}>(optional)</span></label>
+            <select id="cost-project" className={styles.select} value={form.projectId || ''} onChange={set('projectId')}>
+              <option value="">Not part of a project</option>
+              {activeProjects.map((p) => (
+                <option key={p._docId} value={p._docId}>{p.name}</option>
               ))}
             </select>
           </div>

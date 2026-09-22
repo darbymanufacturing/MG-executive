@@ -25,7 +25,8 @@ import {
 } from './_lib/whatsapp.js';
 import { extractInvoice, extractionToIntake } from './_lib/invoice-extract.js';
 import { transcribeAudio } from './_lib/transcribe.js';
-import { ingestBatch } from './_lib/intake-store.js';
+import { ingestBatch, intakeOrgId } from './_lib/intake-store.js';
+import { storeReceipt } from './_lib/receipt-store.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 
 const HEARTBEAT_ENV = 'HEARTBEAT_WHATSAPP';
@@ -129,10 +130,14 @@ export default async function handler(req, res) {
       } else if (msg.type === 'image' || msg.type === 'document') {
         const mediaId = msg.image?.id || msg.document?.id;
         const media = await fetchMedia(mediaId);
-        const extracted = await extractInvoice({ base64: media.base64, mimeType: media.mimeType, hint: msg.image?.caption || msg.document?.caption });
+        const [extracted, fileUrl] = await Promise.all([
+          extractInvoice({ base64: media.base64, mimeType: media.mimeType, hint: msg.image?.caption || msg.document?.caption }),
+          // Keep the original for VAT audits; a failed upload never blocks the expense.
+          storeReceipt(media, { orgId: intakeOrgId(), ref: msg.id }),
+        ]);
         raws = [extractionToIntake(extracted, {
           sourceRef: msg.id,
-          evidence: { channel: 'whatsapp', from, filename: msg.document?.filename || null },
+          evidence: { channel: 'whatsapp', from, filename: msg.document?.filename || null, fileUrl },
         })];
       } else if (msg.type === 'audio' || msg.type === 'voice') {
         const media = await fetchMedia(msg.audio?.id || msg.voice?.id);

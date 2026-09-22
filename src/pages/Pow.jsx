@@ -8,6 +8,7 @@ import TaskCard from '../components/Pow/TaskCard.jsx';
 import TaskModal from '../components/Pow/TaskModal.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import styles from './Pow.module.css';
+import PowWeekSummary from '../components/Pow/PowWeekSummary.jsx';
 
 const ASSIGNEES = ['Panos', 'Kostas'];
 
@@ -125,6 +126,9 @@ function PowInner() {
           </button>
         </div>
       </div>
+
+      {/* Autopilot Phase 4 — last week's recap, drafted for you to share. */}
+      <PowWeekSummary />
 
       {/* ── SECTION: This Week ───────────────────────────────────────────── */}
       <section className={`${styles.section} ${activeTab !== 'week' ? styles.mobileHidden : ''}`}>

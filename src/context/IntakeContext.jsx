@@ -89,6 +89,8 @@ export function IntakeProvider({ children }) {
       vatAmount: p.vatAmount != null ? Number(p.vatAmount) : undefined,
       source: `autopilot-${item.source}`,
       _intakeRef: `${item.source}:${item.sourceRef}`,
+      // The original receipt/invoice, kept for VAT audits and the accountant pack.
+      receiptUrl: item.evidence?.fileUrl || undefined,
     });
     return created?.id || null;
   }, [addCost]);

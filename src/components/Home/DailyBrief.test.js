@@ -179,3 +179,26 @@ describe('buildBriefPayload — metricsOverride (#616)', () => {
     expect(revenueThisMonth).toBe(500);
   });
 });
+
+/* ── 7. Autopilot Phase 4 — data-void must survive the net-revenue override ── */
+describe('buildBriefPayload — dataIsVoid with metricsOverride', () => {
+  test('is still true when net operating revenue is negative only because of fixed costs (SIM)', () => {
+    // With no revenue rows, #616's NET operating revenue is −150 (the SIM cost),
+    // which used to make the void guard impossible to trigger in production.
+    const { dataIsVoid } = buildBriefPayload(
+      { maintenanceCtx: { tickets: [], scooters: [] }, issueCtx: null, projectCtx: null, revenueCtx: { revenueData: [] }, costsCtx: null },
+      TODAY,
+      { revenue: { operatingRevenue: -150 }, costsMTD: 0 },
+    );
+    expect(dataIsVoid).toBe(true);
+  });
+
+  test('is false as soon as there is real revenue this month', () => {
+    const { dataIsVoid } = buildBriefPayload(
+      { maintenanceCtx: { tickets: [], scooters: [] }, issueCtx: null, projectCtx: null, revenueCtx: { revenueData: [{ date: todayStr, totalPaidRevenue: 40 }] }, costsCtx: null },
+      TODAY,
+      { revenue: { operatingRevenue: -110 }, costsMTD: 0 },
+    );
+    expect(dataIsVoid).toBe(false);
+  });
+});

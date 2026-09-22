@@ -96,6 +96,53 @@ export async function sendText(to, body) {
   return true;
 }
 
+/**
+ * Send a pre-approved TEMPLATE message. Meta only allows a business to start a
+ * conversation (e.g. the unprompted 07:00 brief) with a template approved in
+ * WhatsApp Manager; free-form text is rejected outside the 24-hour window that
+ * opens when the person messages us. Template variables may not contain
+ * newlines or long runs of spaces, so the text is flattened first.
+ */
+export async function sendTemplate(to, templateName, bodyParams = [], languageCode = 'en') {
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_ID;
+  if (!token || !phoneId || !templateName) return false;
+
+  const flatten = (t) => String(t ?? '')
+    .replace(/[\r\n\t]+/g, ' · ')
+    .replace(/ {4,}/g, '   ')
+    .slice(0, 1000);
+
+  const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        components: bodyParams.length
+          ? [{ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text: flatten(text) })) }]
+          : [],
+      },
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    console.warn('[whatsapp] template send failed', res.status, (await res.text().catch(() => '')).slice(0, 200));
+    return false;
+  }
+  return true;
+}
+
+/** Numbers the morning brief goes to (defaults to the intake allowlist). */
+export function briefRecipients() {
+  const raw = process.env.WHATSAPP_BRIEF_NUMBERS || process.env.WHATSAPP_ALLOWED_NUMBERS || '';
+  return raw.split(',').map((s) => s.replace(/\D/g, '')).filter(Boolean);
+}
+
 /** Download a media object (photo / voice note / document) as base64. */
 export async function fetchMedia(mediaId) {
   const token = process.env.WHATSAPP_TOKEN;

@@ -114,6 +114,7 @@ export async function commitCost(supa, orgId, item) {
     vatAmount: p.vatAmount != null ? round2(p.vatAmount) : undefined,
     source: `autopilot-${item.source}`,
     _intakeRef: `${item.source}:${item.sourceRef}`,
+    receiptUrl: item.evidence?.fileUrl || undefined,
     createdByUid: 'autopilot',
     createdAt: nowIso,
     updatedAt: nowIso,

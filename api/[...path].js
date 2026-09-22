@@ -14,6 +14,7 @@
  */
 import acceptInvite from './_accept-invite.js';
 import accountantForward from './_accountant-forward.js';
+import accountantPack from './_accountant-pack.js';
 import createUser from './_create-user.js';
 import cloudinaryDelete from './_cloudinary-delete.js';
 import cloudinarySign from './_cloudinary-sign.js';
@@ -24,6 +25,7 @@ import cronKeepalive from './_cron-keepalive.js';
 import cronMaintenance from './_cron-maintenance.js';
 import cronPurgeDeletedOrgs from './_cron-purge-deleted-orgs.js';
 import cronSupabaseParityCheck from './_cron-supabase-parity-check.js';
+import cronWeather from './_cron-weather.js';
 import dailyBrief from './_daily-brief.js';
 import deleteAccount from './_delete-account.js';
 import deleteUser from './_delete-user.js';
@@ -41,6 +43,7 @@ import whatsapp from './_whatsapp.js';
 const ROUTES = {
   'accept-invite': acceptInvite,
   'accountant-forward': accountantForward,
+  'accountant-pack': accountantPack,
   'cloudinary-delete': cloudinaryDelete,
   'cloudinary-sign': cloudinarySign,
   'create-invite': createInvite,
@@ -50,6 +53,7 @@ const ROUTES = {
   'cron-maintenance': cronMaintenance,
   'cron-purge-deleted-orgs': cronPurgeDeletedOrgs,
   'cron-supabase-parity-check': cronSupabaseParityCheck,
+  'cron-weather': cronWeather,
   'daily-brief': dailyBrief,
   'delete-account': deleteAccount,
   'delete-user': deleteUser,

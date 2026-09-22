@@ -14,7 +14,7 @@
  *
  * Trigger: Vercel cron (Bearer CRON_SECRET) or an admin, manually.
  */
-import { requireCronOrUser } from './_lib/require-auth.js';
+import { requireCronOrUser, requireOrgMember } from './_lib/require-auth.js';
 import { supabaseAdmin } from './_lib/supabase-admin.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 import { intakeOrgId } from './_lib/intake-store.js';
@@ -42,6 +42,7 @@ export default async function handler(req, res) {
   if (!auth) return;
 
   const orgId = intakeOrgId();
+  if (!requireOrgMember(auth, orgId, res)) return;
   const today = new Date().toISOString().slice(0, 10);
   const report = { date: today, ticketsRaised: 0, scootersUpdated: 0, errors: [] };
 

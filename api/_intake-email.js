@@ -21,7 +21,8 @@
  *   ANTHROPIC_KEY            for extraction
  */
 import { timingSafeEqual } from 'node:crypto';
-import { ingestBatch } from './_lib/intake-store.js';
+import { ingestBatch, intakeOrgId } from './_lib/intake-store.js';
+import { storeReceipt } from './_lib/receipt-store.js';
 import { extractInvoice, extractionToIntake } from './_lib/invoice-extract.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 
@@ -88,14 +89,14 @@ export default async function handler(req, res) {
     }
 
     try {
-      const extracted = await extractInvoice({
-        base64: contentBase64,
-        mimeType,
-        hint: subject,
-      });
+      const [extracted, fileUrl] = await Promise.all([
+        extractInvoice({ base64: contentBase64, mimeType, hint: subject }),
+        // Keep the original PDF/photo for VAT audits and the accountant pack.
+        storeReceipt({ base64: contentBase64, mimeType }, { orgId: intakeOrgId(), ref: `${messageId}_${filename || 'attachment'}` }),
+      ]);
       const raw = extractionToIntake(extracted, {
         sourceRef: `${messageId}:${filename || 'attachment'}`,
-        evidence: { from, subject, filename, receivedAt, senderTrusted: trusted },
+        evidence: { from, subject, filename, receivedAt, senderTrusted: trusted, fileUrl },
       });
       // An untrusted sender never gets the benefit of the doubt: force review by
       // dropping the category guess, which sends it down the "hold" path.

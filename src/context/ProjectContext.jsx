@@ -462,3 +462,10 @@ export function useProjects() {
   if (!ctx) throw new Error('useProjects must be inside <ProjectProvider>');
   return ctx;
 }
+
+/** Like useProjects, but returns null outside <ProjectProvider> instead of
+ *  throwing — for shared forms (the cost form) that should work anywhere. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useProjectsOptional() {
+  return useContext(ProjectContext);
+}

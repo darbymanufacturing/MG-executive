@@ -29,8 +29,9 @@ function roleOf(decoded) {
 
 /**
  * Require a signed-in Firebase user. If `roles` is given, the `user_role` custom
- * claim on the JWT must be in it. Returns { uid, email, role } or null (after
- * sending 401/403).
+ * claim on the JWT must be in it. Returns { uid, email, role, orgId } or null
+ * (after sending 401/403). `orgId` is the caller's org custom claim (stamped by
+ * sync-claim, ADR-0004) — null for a user whose claims were never synced.
  */
 export async function requireUser(req, res, { roles } = {}) {
   const token = readBearer(req);
@@ -53,12 +54,12 @@ export async function requireUser(req, res, { roles } = {}) {
       return null;
     }
   }
-  return { uid: decoded.uid, email: decoded.email ?? null, role };
+  return { uid: decoded.uid, email: decoded.email ?? null, role, orgId: decoded.orgId ?? null };
 }
 
 /**
  * Allow EITHER the Vercel cron secret OR a signed-in user with an allowed role.
- * Returns { trigger: 'cron' | 'manual', uid, role } or null.
+ * Returns { trigger: 'cron' | 'manual', uid, role, orgId } or null.
  */
 export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', 'staff'] } = {}) {
   const token = readBearer(req);
@@ -97,5 +98,19 @@ export async function requireCronOrUser(req, res, { roles = ['admin', 'owner', '
   }
   const user = await requireUser(req, res, { roles });
   if (!user) return null; // requireUser already responded
-  return { trigger: 'manual', uid: user.uid, role: user.role };
+  return { trigger: 'manual', uid: user.uid, role: user.role, orgId: user.orgId };
+}
+
+/**
+ * Org-scoped jobs (the Autopilot crons + intake feeds) run for ONE org — the
+ * configured `intakeOrgId()`. A cron trigger is trusted; a MANUAL trigger must
+ * come from a member of that org, or any other tenant's admin could run this
+ * org's job and read its report. Responds 403 and returns false when refused:
+ *   if (!requireOrgMember(auth, orgId, res)) return;
+ */
+export function requireOrgMember(auth, orgId, res) {
+  if (auth?.trigger === 'cron') return true;
+  if (auth?.orgId && auth.orgId === orgId) return true;
+  res.status(403).json({ error: 'This job belongs to another organization.' });
+  return false;
 }

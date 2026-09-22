@@ -4,7 +4,7 @@ import { useCosts } from '../../context/CostContext.jsx';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useProjects } from '../../context/ProjectContext.jsx';
 import { useMaintenance } from '../../context/MaintenanceContext.jsx';
-import { budgetFromCity } from '../../utils/budgetFromCity.js';
+import { budgetFromCity, projectSpend } from '../../utils/budgetFromCity.js';
 import { CITIES } from './constants.js';
 import styles from './BudgetTracker.module.css';
 import sharedStyles from './Projects.module.css';
@@ -63,8 +63,18 @@ export default function BudgetTracker({ project }) {
   const { updateProject } = useProjects();
   const { scooters } = useMaintenance();
 
-  const { revenue, expenses, net, revTransactions, costTransactions } =
-    budgetFromCity(costs, revenueData, project.linkedCity);
+  const cityBudget = budgetFromCity(costs, revenueData, project.linkedCity);
+  const { revenue, revTransactions } = cityBudget;
+
+  /* Autopilot Phase 4 — once any cost is tagged to this project, its budget is
+   * measured against THAT spend. Before, "Expenses" was every fleet cost's
+   * monthly rate, so "% of budget used" was really "company spend ÷ project
+   * budget" and meant nothing. Untagged projects keep the old view, labelled. */
+  const tagged = projectSpend(costs, project._docId);
+  const usesTagged = tagged.count > 0;
+  const expenses = usesTagged ? tagged.spent : cityBudget.expenses;
+  const costTransactions = usesTagged ? tagged.transactions : cityBudget.costTransactions;
+  const net = usesTagged ? revenue - tagged.spent : cityBudget.net;
 
   // Fleet counts for the linked city (all statuses)
   const cityScooters   = project.linkedCity
@@ -138,7 +148,11 @@ export default function BudgetTracker({ project }) {
         <div className={styles.statRow}>
           <span className={styles.statLabel}>
             Expenses
-            <span className={styles.statHint}> — all fleet costs</span>
+            <span className={styles.statHint}>
+              {usesTagged
+                ? ` — ${tagged.count} cost${tagged.count === 1 ? '' : 's'} tagged to this project`
+                : ' — all fleet costs (tag costs to this project in the cost form to track its real spend)'}
+            </span>
           </span>
           <span className={styles.statValue} style={{
             color: pct >= 90 ? '#E84545' : pct >= 70 ? '#F5A623' : 'var(--color-text-primary)',

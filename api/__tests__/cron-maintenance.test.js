@@ -11,7 +11,9 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../_lib/require-auth.js', () => ({
+// Keep the REAL requireOrgMember guard; only the token check is faked.
+vi.mock('../_lib/require-auth.js', async () => ({
+  ...(await vi.importActual('../_lib/require-auth.js')),
   requireCronOrUser: vi.fn(async () => ({ trigger: 'cron' })),
 }));
 
@@ -129,5 +131,15 @@ describe('cron-maintenance', () => {
     await handler({ method: 'GET', query: {} }, mockRes());
     expect(heartbeatOk).toHaveBeenCalledTimes(1);
     expect(heartbeatFail).not.toHaveBeenCalled();
+  });
+
+  it('refuses a manual run from another organization and writes nothing', async () => {
+    const { requireCronOrUser } = await import('../_lib/require-auth.js');
+    requireCronOrUser.mockResolvedValueOnce({ trigger: 'manual', uid: 'u2', role: 'owner', orgId: 'org2' });
+    const res = mockRes();
+    await handler({ method: 'GET', query: {} }, res);
+    expect(res.statusCode).toBe(403);
+    expect(writes.upserts).toHaveLength(0);
+    expect(writes.updates).toHaveLength(0);
   });
 });

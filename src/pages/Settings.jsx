@@ -15,6 +15,7 @@ import Button from '../components/Shared/Button.jsx';
 import ConfirmDialog from '../components/Shared/ConfirmDialog.jsx';
 import Modal from '../components/Shared/Modal.jsx';
 import ScooterTabsConfig from '../components/Settings/ScooterTabsConfig.jsx';
+import AccountantPanel from '../components/Settings/AccountantPanel.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { useMaintenance } from '../context/MaintenanceContext.jsx';
 import { useFleet } from '../context/FleetContext.jsx';
@@ -132,9 +133,6 @@ export default function Settings() {
   const [inviteRole, setInviteRole] = useState('crew'); // crew | staff | admin
   const [inviteLoading, setInviteLoading] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(null); // uid to remove
-  // Accountant email config — #88: no hardcoded email fallback
-  const [accountantEmail, setAccountantEmail] = useState(() => localStorage.getItem('omni_accountant_email') || '');
-  const [accountantSaved, setAccountantSaved] = useState(false);
 
   // Load crew accounts in real time (crew + technician roles)
   // #401: scope to caller's org to prevent cross-tenant user list leaks
@@ -150,12 +148,6 @@ export default function Settings() {
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgUsers]);
-
-  const handleSaveAccountant = () => {
-    localStorage.setItem('omni_accountant_email', accountantEmail.trim());
-    setAccountantSaved(true);
-    setTimeout(() => setAccountantSaved(false), 2000);
-  };
 
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !invitePassword.trim()) return;
@@ -685,39 +677,8 @@ export default function Settings() {
           <p className={styles.sectionDesc}>
             Configure external connections — accountant email forwarding, bank sync, etc.
           </p>
-          <div className={styles.dataCard}>
-            <div className={styles.dataCardHeader}>
-              <Download size={16} />
-              <span>Accountant Email</span>
-            </div>
-            <p className={styles.dataCardDesc}>
-              Invoices captured via Omni Capture will be forwarded to this address when you click
-              &quot;Forward to Accountant&quot;.
-            </p>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="email"
-                className={styles.input}
-                style={{ maxWidth: 320 }}
-                placeholder="accountant@example.com"
-                value={accountantEmail}
-                onChange={e => { setAccountantEmail(e.target.value); setAccountantSaved(false); }}
-                onKeyDown={e => { if (e.key === 'Enter') handleSaveAccountant(); }}
-              />
-              <Button variant="secondary" size="sm" onClick={handleSaveAccountant}
-                disabled={!accountantEmail.trim()}>
-                {accountantSaved ? <><CheckCircle size={14} /> Saved</> : 'Save'}
-              </Button>
-            </div>
-            {!accountantEmail.trim() && (
-              <p style={{ marginTop: 6, fontSize: 12, color: 'var(--status-amber)' }}>
-                Set accountant email before forwarding invoices.
-              </p>
-            )}
-            <p className={styles.dataCardDesc} style={{ marginTop: 8, fontSize: 12 }}>
-              This is stored locally. Set <code>ACCOUNTANT_EMAIL</code> env var in Vercel for the API.
-            </p>
-          </div>
+          {/* Autopilot Phase 4 (#700) — address in org config + monthly expense pack. */}
+          <AccountantPanel />
         </section>
 
         {/* Data Management */}

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
+import { useRevenue } from '../../../context/RevenueContext.jsx';
+import { seasonalityFromRevenue } from '../../../utils/seasonality.js';
 import Button from '../../Shared/Button.jsx';
 import styles from './SeasonalityEditor.module.css';
 
@@ -24,9 +26,12 @@ const MONTHS = [
 ];
 
 export default function SeasonalityEditor() {
-  const { config, updateConfig } = useMaintenance();
+  const { config, updateConfig, scooters } = useMaintenance();
+  const { revenueData } = useRevenue();
 
   const [values, setValues] = useState({});
+  // Autopilot Phase 4 — which months the last "Calibrate" filled, and from when.
+  const [calibrated, setCalibrated] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   // #224: track whether user has made in-flight edits; don't overwrite from effect
@@ -49,6 +54,28 @@ export default function SeasonalityEditor() {
     dirtyRef.current = true; // #224: mark dirty so effect won't overwrite
     setValues((prev) => ({ ...prev, [key]: val }));
     setSaved(false);
+  }
+
+  /* Autopilot Phase 4 — fill the table from the last 12 complete months of real
+   * revenue (€ per scooter per day). It only FILLS the inputs: nothing is saved
+   * until the owner reviews and presses Save ("hold until approved"). Months
+   * with no revenue keep their current value. */
+  function handleCalibrate() {
+    const fleetSize = (scooters || []).filter((sc) => !['Retired', 'Donor'].includes(sc.status)).length;
+    const { index, basis } = seasonalityFromRevenue(revenueData || [], { fleetSize });
+    const filled = Object.entries(index).filter(([, v]) => v != null);
+    if (!filled.length) {
+      setCalibrated({ count: 0 });
+      return;
+    }
+    dirtyRef.current = true;
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const [key, v] of filled) next[key] = v;
+      return next;
+    });
+    setSaved(false);
+    setCalibrated({ count: filled.length, fleetSize, basis });
   }
 
   async function handleSave() {
@@ -114,7 +141,17 @@ export default function SeasonalityEditor() {
       </table>
 
       <div className={styles.footer}>
+        {calibrated && (
+          <span className={styles.savedMsg}>
+            {calibrated.count
+              ? `Filled ${calibrated.count} month${calibrated.count === 1 ? '' : 's'} from actual revenue across ${calibrated.fleetSize} scooters — review, then save.`
+              : 'No revenue in the last 12 months to calibrate from.'}
+          </span>
+        )}
         {saved && <span className={styles.savedMsg}>Saved successfully</span>}
+        <Button variant="secondary" size="sm" onClick={handleCalibrate} disabled={saving}>
+          Calibrate from last 12 months
+        </Button>
         <Button
           variant="primary"
           size="sm"

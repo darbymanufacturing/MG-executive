@@ -49,7 +49,24 @@ function buildPrompt(date, data) {
     openIssues = [], overdueTickets = [], activeTickets = 0, completedToday = 0,
     openProjects = [], revenueThisWeek = 0, revenuePrevWeek = 0,
     costsThisMonth = 0, criticalIssues = 0, fleetSize = 0, inRepair = 0,
+    feedHealth = null,
   } = data;
+
+  // Autopilot Phase 4 — optional. Only the server cron supplies this; when it
+  // does, the brief says plainly which automatic feed has gone quiet and how
+  // many items are waiting for approval. Pre-computed facts only, as always.
+  const feedLines = [];
+  if (feedHealth && typeof feedHealth === 'object') {
+    if (Number.isFinite(feedHealth.revenueDaysStale) && feedHealth.revenueDaysStale >= 3) {
+      feedLines.push(`Revenue data is ${feedHealth.revenueDaysStale} days old (last day: ${feedHealth.revenueLastDate || 'unknown'}) — a Hopp export is due`);
+    }
+    if (Number(feedHealth.pendingReview) > 0) {
+      feedLines.push(`${feedHealth.pendingReview} automatic import(s) waiting for approval in Review`);
+    }
+    if (Number(feedHealth.dueTicketsToday) > 0) {
+      feedLines.push(`${feedHealth.dueTicketsToday} preventive service ticket(s) raised today`);
+    }
+  }
 
   // Defense-in-depth: coerce the array fields so a malformed payload (e.g. a count
   // sent where an array is expected) can never throw a TypeError → 500.
@@ -74,6 +91,7 @@ OPERATIONAL DATA:
 ${criticalIssuesList.length ? `- Critical/high issues:\n${criticalIssuesList.slice(0, 3).map(i => `  • [${i.urgency.toUpperCase()}] ${i.title}${i.nextAction ? ` → ${i.nextAction}` : ''}`).join('\n')}` : ''}
 ${blockedProjects.length ? `- Blocked projects:\n${blockedProjects.slice(0, 2).map(p => `  • ${p.name}${p.blockers?.[0]?.text ? `: ${p.blockers[0].text.slice(0, 60)}` : ''}`).join('\n')}` : ''}
 ${overdueTickets.length ? `- Most overdue tickets:\n${overdueTickets.slice(0, 2).map(t => `  • ${t.issueDescription?.slice(0, 60)} (${t.daysOpen}d)`).join('\n')}` : ''}
+${feedLines.length ? `- Automation:\n${feedLines.map((l) => `  • ${l}`).join('\n')}` : ''}
 
 Use the daily_brief tool to return the structured brief.
 
@@ -104,61 +122,75 @@ export default async function handler(req, res) {
   }
 
   try {
-    const message = await client.messages.create({
-      // Opus 4.8 for sharper "needs attention today" judgment — at one brief/day this is ~€37/yr per client (negligible).
-      // CORRECTNESS INVARIANT: every number is pre-computed in buildPrompt(); the model only narrates. Never hand it raw
-      // rows to total up — that's where hallucinated figures come from. See docs/SCALING.md §13.
-      model: 'claude-opus-4-8',
-      max_tokens: 1024,
-      tools: [{
-        name: 'daily_brief',
-        description: 'Return the structured daily operational brief.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            narrative: {
-              type: 'string',
-              description: '2-3 sentence plain English summary of key operational state and biggest thing needing attention today.',
-            },
-            sections: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  items: { type: 'array', items: { type: 'string' } },
-                },
-                required: ['title', 'items'],
-              },
-            },
-          },
-          required: ['narrative', 'sections'],
-        },
-      }],
-      tool_choice: { type: 'tool', name: 'daily_brief' },
-      messages: [{ role: 'user', content: buildPrompt(date, data) }],
-    });
-
-    const toolUse = message.content.find(b => b.type === 'tool_use' && b.name === 'daily_brief');
-    if (!toolUse) {
-      return res.status(200).json({
-        narrative: 'Brief generation encountered a formatting issue. Check the app for details.',
-        sections: [],
-        generatedAt: new Date().toISOString(),
-        error: 'No tool_use block returned',
-      });
-    }
-    const parsed = toolUse.input;
-
-    return res.status(200).json({
-      // #604 — strip Opus 4.8's tool-use XML leakage from the narrative string.
-      narrative: sanitizeNarrative(parsed.narrative),
-      sections: parsed.sections || [],
-      generatedAt: new Date().toISOString(),
-    });
-
+    const generated = await generateBrief(date, data);
+    return res.status(200).json(generated);
   } catch (err) {
     console.error('daily-brief error:', err);
     return res.status(500).json({ error: 'Brief generation failed' });
   }
+}
+
+/**
+ * Generate the narrated brief for a pre-computed payload.
+ *
+ * Exported for the 07:00 server cron (Autopilot Phase 4), so the scheduled brief
+ * and the one generated when someone opens Home are produced by the SAME prompt,
+ * model and sanitizer. CORRECTNESS INVARIANT (unchanged): every number is
+ * pre-computed by the caller; the model only narrates.
+ *
+ * @returns {Promise<{narrative:string, sections:object[], generatedAt:string, error?:string}>}
+ */
+export async function generateBrief(date, data) {
+  const message = await client.messages.create({
+    // Opus 4.8 for sharper "needs attention today" judgment — at one brief/day this is ~€37/yr per client (negligible).
+    // CORRECTNESS INVARIANT: every number is pre-computed in buildPrompt(); the model only narrates. Never hand it raw
+    // rows to total up — that's where hallucinated figures come from. See docs/SCALING.md §13.
+    model: 'claude-opus-4-8',
+    max_tokens: 1024,
+    tools: [{
+      name: 'daily_brief',
+      description: 'Return the structured daily operational brief.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          narrative: {
+            type: 'string',
+            description: '2-3 sentence plain English summary of key operational state and biggest thing needing attention today.',
+          },
+          sections: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                items: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['title', 'items'],
+            },
+          },
+        },
+        required: ['narrative', 'sections'],
+      },
+    }],
+    tool_choice: { type: 'tool', name: 'daily_brief' },
+    messages: [{ role: 'user', content: buildPrompt(date, data) }],
+  });
+
+  const toolUse = message.content.find(b => b.type === 'tool_use' && b.name === 'daily_brief');
+  if (!toolUse) {
+    return {
+      narrative: 'Brief generation encountered a formatting issue. Check the app for details.',
+      sections: [],
+      generatedAt: new Date().toISOString(),
+      error: 'No tool_use block returned',
+    };
+  }
+  const parsed = toolUse.input;
+
+  return {
+    // #604 — strip Opus 4.8's tool-use XML leakage from the narrative string.
+    narrative: sanitizeNarrative(parsed.narrative),
+    sections: parsed.sections || [],
+    generatedAt: new Date().toISOString(),
+  };
 }

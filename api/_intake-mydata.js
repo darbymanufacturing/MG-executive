@@ -21,8 +21,8 @@
  *                            (sandbox: https://mydataapidev.aade.gr)
  *   MYDATA_LOOKBACK_DAYS     default 45
  */
-import { requireCronOrUser } from './_lib/require-auth.js';
-import { ingestBatch } from './_lib/intake-store.js';
+import { requireCronOrUser, requireOrgMember } from './_lib/require-auth.js';
+import { ingestBatch, intakeOrgId } from './_lib/intake-store.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 
 const HEARTBEAT_ENV = 'HEARTBEAT_INTAKE_MYDATA';
@@ -157,6 +157,7 @@ export default async function handler(req, res) {
 
   const auth = await requireCronOrUser(req, res);
   if (!auth) return;
+  if (!requireOrgMember(auth, intakeOrgId(), res)) return;
 
   const userId = process.env.MYDATA_USER_ID;
   const key = process.env.MYDATA_SUBSCRIPTION_KEY;

@@ -23,8 +23,8 @@
  *   WALLET_API_BASE       override (default https://rest.budgetbakers.com/wallet)
  *   WALLET_LOOKBACK_DAYS  how far back to pull each run (default 45)
  */
-import { requireCronOrUser } from './_lib/require-auth.js';
-import { ingestBatch } from './_lib/intake-store.js';
+import { requireCronOrUser, requireOrgMember } from './_lib/require-auth.js';
+import { ingestBatch, intakeOrgId } from './_lib/intake-store.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 
 const HEARTBEAT_ENV = 'HEARTBEAT_INTAKE_WALLET';
@@ -126,6 +126,7 @@ export default async function handler(req, res) {
 
   const auth = await requireCronOrUser(req, res);
   if (!auth) return;
+  if (!requireOrgMember(auth, intakeOrgId(), res)) return;
 
   const token = process.env.WALLET_API_TOKEN;
   if (!token) {
