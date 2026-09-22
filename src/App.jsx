@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/Shared/ErrorBoundary.jsx';
 import { OrgProvider } from './context/OrgContext.jsx';
 import { FleetProvider } from './context/FleetContext.jsx';
 import { CostProvider } from './context/CostContext.jsx';
+import { IntakeProvider } from './context/IntakeContext.jsx';
 import { LoansProvider } from './context/LoansContext.jsx';
 import { RevenueProvider } from './context/RevenueContext.jsx';
 import { SprProvider } from './context/SprContext.jsx';
@@ -37,6 +38,7 @@ import Dashboard from './pages/Dashboard.jsx';   /* the classic dashboard — /p
 import Planner from './pages/Planner.jsx';       /* Excel-replica Financial Planner — the main /pulse view */
 import MoneyOverview from './pages/MoneyOverview.jsx';
 import Taxes from './pages/Taxes.jsx';
+import Review from './pages/Review.jsx';
 import CostManager from './pages/CostManager.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Settings from './pages/Settings.jsx';
@@ -359,6 +361,7 @@ function AppShell() {
             <Route path="/money"          element={<RouteErrorBoundary><MoneyOverview /></RouteErrorBoundary>} />
             <Route path="/taxes"          element={<RouteErrorBoundary><Taxes /></RouteErrorBoundary>} />
             <Route path="/costs"          element={<RouteErrorBoundary><CostManager /></RouteErrorBoundary>} />
+            <Route path="/review"         element={<RouteErrorBoundary><Review /></RouteErrorBoundary>} />
             <Route path="/revenue"        element={<RouteErrorBoundary><Revenue /></RouteErrorBoundary>} />
             <Route path="/fleet-pnl"      element={<RouteErrorBoundary><FleetPnl /></RouteErrorBoundary>} />
             <Route path="/owner-ledger"   element={<RouteErrorBoundary><OwnerLedger /></RouteErrorBoundary>} />
@@ -488,6 +491,7 @@ export default function App() {
                     <OrgProvider>
                       <FleetProvider>
                       <CostProvider>
+                        <IntakeProvider>
                         <LoansProvider>
                         <RevenueProvider>
                           <MaintenanceProvider>
@@ -521,6 +525,7 @@ export default function App() {
                           </MaintenanceProvider>
                         </RevenueProvider>
                         </LoansProvider>
+                        </IntakeProvider>
                       </CostProvider>
                       </FleetProvider>
                     </OrgProvider>

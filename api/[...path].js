@@ -27,6 +27,9 @@ import dailyBrief from './_daily-brief.js';
 import deleteAccount from './_delete-account.js';
 import deleteUser from './_delete-user.js';
 import hoppRefresh from './_hopp-refresh.js';
+import intakeEmail from './_intake-email.js';
+import intakeMydata from './_intake-mydata.js';
+import intakeWallet from './_intake-wallet.js';
 import invoiceParse from './_invoice-parse.js';
 import mcp from './_mcp.js';
 import syncClaim from './_sync-claim.js';
@@ -48,6 +51,9 @@ const ROUTES = {
   'delete-account': deleteAccount,
   'delete-user': deleteUser,
   'hopp-refresh': hoppRefresh,
+  'intake-email': intakeEmail,
+  'intake-mydata': intakeMydata,
+  'intake-wallet': intakeWallet,
   'invoice-parse': invoiceParse,
   'mcp': mcp,
   'signup': signup,
