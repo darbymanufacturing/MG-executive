@@ -283,6 +283,38 @@ export function classifyIntake(item, ctx = {}) {
 }
 
 /**
+ * What the owner still has to supply before a held item can be approved.
+ * Shared by the Review page (to enable the button) and IntakeContext (to refuse
+ * an incomplete approval), so the two can never disagree.
+ *
+ * @returns {string|null} the missing field's human label, or null when ready
+ */
+export function missingForApproval(item, overrides = {}) {
+  const p = { ...(item?.payload || {}), ...overrides };
+  switch (item?.kind) {
+    case 'cost':
+      if (!(Number(p.amount) > 0)) return 'Amount';
+      if (!p.category) return 'Category';
+      return null;
+    case 'ledger':
+      // "I paid a company cost personally" = the cost itself + who is owed.
+      if (!(Number(p.amount) > 0)) return 'Amount';
+      if (!p.ownerUid) return 'Who paid';
+      if (!p.category) return 'Category';
+      return null;
+    case 'ticket':
+      if (!String(p.scooterId || '').trim()) return 'Scooter ID';
+      return null;
+    case 'issue':
+    case 'task':
+      if (!String(p.name || '').trim()) return 'Title';
+      return null;
+    default:
+      return 'Unsupported item type';
+  }
+}
+
+/**
  * Run the whole pipeline for one raw record.
  * Returns the item ready to store, with match + gate applied.
  */

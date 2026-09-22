@@ -15,6 +15,7 @@ import {
   payeesMatch,
   amountsMatch,
   payeeKey,
+  missingForApproval,
 } from '../intake.js';
 
 const NOW = new Date('2026-09-22T10:00:00Z');
@@ -183,5 +184,40 @@ describe('prepareIntakeItem', () => {
     );
     expect(item.status).toBe('pending');
     expect(item.match).toBeNull();
+  });
+});
+
+describe('missingForApproval — what each record type still needs', () => {
+  const base = (kind, payload) => ({ kind, payload: { name: 'X', amount: 10, ...payload } });
+
+  it('expense needs an amount and a category', () => {
+    expect(missingForApproval(base('cost', { category: null }))).toBe('Category');
+    expect(missingForApproval(base('cost', { category: 'Fuel', amount: 0 }))).toBe('Amount');
+    expect(missingForApproval(base('cost', { category: 'Fuel' }))).toBeNull();
+  });
+
+  it('a personal payment also needs to know who paid', () => {
+    const item = base('ledger', { category: 'Fuel' });
+    expect(missingForApproval(item)).toBe('Who paid');
+    expect(missingForApproval(item, { ownerUid: 'u1' })).toBeNull();
+  });
+
+  it('a repair needs a scooter', () => {
+    expect(missingForApproval(base('ticket', { scooterId: '' }))).toBe('Scooter ID');
+    expect(missingForApproval(base('ticket', {}), { scooterId: '41735' })).toBeNull();
+  });
+
+  it('issues and tasks need only a title', () => {
+    expect(missingForApproval(base('issue', { name: '' }))).toBe('Title');
+    expect(missingForApproval(base('task', {}))).toBeNull();
+  });
+
+  it('refuses unknown kinds instead of pretending to approve them', () => {
+    expect(missingForApproval({ kind: 'mystery', payload: {} })).toBe('Unsupported item type');
+  });
+
+  it('overrides win over the stored payload', () => {
+    const item = base('cost', { category: null });
+    expect(missingForApproval(item, { category: 'Parts' })).toBeNull();
   });
 });

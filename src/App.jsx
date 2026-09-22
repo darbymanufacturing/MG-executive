@@ -87,6 +87,7 @@ const ROUTE_TITLES = {
   '/pme':         'PME',
   '/pow':         'POW v3',
   '/money':       'Money',
+  '/review':      'Review',
   '/taxes':       'Taxes',
   '/costs':       'Expenses',
   '/revenue':     'Revenue',
@@ -491,7 +492,6 @@ export default function App() {
                     <OrgProvider>
                       <FleetProvider>
                       <CostProvider>
-                        <IntakeProvider>
                         <LoansProvider>
                         <RevenueProvider>
                           <MaintenanceProvider>
@@ -500,6 +500,9 @@ export default function App() {
                                 <ProjectProvider>
                                   <IssueProvider>
                                     <InboxProvider>
+                                      {/* IntakeProvider (Autopilot) — needs Cost + Maintenance +
+                                          Issue above it to turn approvals into real records. */}
+                                      <IntakeProvider>
                                       <NotificationProvider>
                                         {/* ScooterConfigProvider hoisted here (Bug #356/#291):
                                             single config-doc listener shared by /scooters* AND
@@ -517,6 +520,7 @@ export default function App() {
                                           </MetricsProvider>
                                         </ScooterConfigProvider>
                                       </NotificationProvider>
+                                      </IntakeProvider>
                                     </InboxProvider>
                                   </IssueProvider>
                                 </ProjectProvider>
@@ -525,7 +529,6 @@ export default function App() {
                           </MaintenanceProvider>
                         </RevenueProvider>
                         </LoansProvider>
-                        </IntakeProvider>
                       </CostProvider>
                       </FleetProvider>
                     </OrgProvider>

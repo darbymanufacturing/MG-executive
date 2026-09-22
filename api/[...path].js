@@ -33,6 +33,7 @@ import intakeWallet from './_intake-wallet.js';
 import invoiceParse from './_invoice-parse.js';
 import mcp from './_mcp.js';
 import syncClaim from './_sync-claim.js';
+import whatsapp from './_whatsapp.js';
 
 // URL path segment (after /api/) → handler. Keys MUST match the old filenames so
 // every existing URL keeps working unchanged.
@@ -58,6 +59,7 @@ const ROUTES = {
   'mcp': mcp,
   'signup': signup,
   'sync-claim': syncClaim,
+  whatsapp,
 };
 
 // Hobby max is 60s; covers the longest handler (hopp-refresh upstream wait, daily-brief AI calls).
