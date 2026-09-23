@@ -7,11 +7,12 @@
  *   salaryAccrualsDue      on the 1st, each owner's monthly salary becomes a held
  *                          "salary accrued" ledger item
  *   ownerForCounterparty   a bank line to/from an owner is ledger money, not a cost
+ *   standingOrderCommitments  a direct debit due soon ticks its bill "Committed"
  *
  * Pure: shared by the finance cron and the tests.
  */
-import { payeeKey, payeesMatch, canonicalCategory } from './intake.js';
-import { isCommitment } from './upcomingPayments.js';
+import { payeeKey, payeesMatch, amountsMatch, canonicalCategory } from './intake.js';
+import { isCommitment, settlementPeriodFor } from './upcomingPayments.js';
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const monthOf = (d) => String(d || '').slice(0, 7);
@@ -127,4 +128,50 @@ export function ownerForCounterparty(owners = [], counterparty) {
     const parts = payeeKey(o.displayName).split(' ').filter((p) => p.length >= 3);
     return parts.length >= 2 && parts.every((p) => text.includes(p));
   }) || null;
+}
+
+/**
+ * Direct debits → Committed (AUTOMATION_PLAN §5 "Settlement ticks"). Wallet's
+ * planned payments ("standing orders") that the BANK collects on its own
+ * (`manualPayment !== true`) and that are due soon will leave the account
+ * whether anyone acts or not — exactly what "Committed" means in the settlement
+ * ledger (ADR-0027). Each unpaid, undismissed occurrence due within the window
+ * ticks the matching Omni commitment's occurrence month Committed.
+ *
+ * Only ever fills an EMPTY month: a month already committed/paid (by hand or
+ * by a bank debit) is left alone, and nothing here ever marks anything paid.
+ *
+ * @returns {{costId, period, standingOrderId, dueDate}[]}
+ */
+export function standingOrderCommitments({
+  orders = [], items = [], costs = [], allowedAccounts = new Set(), now = new Date(), horizonDays = 35,
+} = {}) {
+  const byId = new Map(orders
+    .filter((o) => o && o.manualPayment !== true)
+    .filter((o) => !allowedAccounts.size || allowedAccounts.has(String(o.accountId)))
+    .map((o) => [o.id, o]));
+  const from = new Date(now.getTime() - 5 * 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(now.getTime() + horizonDays * 86_400_000).toISOString().slice(0, 10);
+  const commitments = costs.filter((c) => isCommitment(c, { now }));
+
+  const out = [];
+  const seen = new Set();
+  for (const it of items) {
+    const order = byId.get(it?.standingOrderId);
+    if (!order || it.dismissed || it.paidDate) continue;
+    const due = String(it.originalDate || it.alignedDate || '').slice(0, 10);
+    if (!due || due < from || due > to) continue;
+
+    const amount = Math.abs(Number(order.amount) || 0);
+    const cost = commitments.find((c) => (payeesMatch(c.name, order.counterParty) || payeesMatch(c.name, order.name))
+      && amountsMatch(c.amount, amount));
+    if (!cost) continue;
+
+    const period = settlementPeriodFor(cost, due);
+    const key = `${cost.id}|${period}`;
+    if (!period || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ costId: cost.id, period, standingOrderId: order.id, dueDate: due });
+  }
+  return out;
 }

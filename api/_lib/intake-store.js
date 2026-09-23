@@ -235,11 +235,12 @@ export async function commitCost(supa, orgId, item) {
 }
 
 /**
- * Mark one occurrence of an existing cost as PAID because its bank debit
- * arrived (ADR-0027 settlements map). `period` is the OCCURRENCE month chosen by
- * the matcher (settlementPeriodFor) — not the debit's month (#705).
+ * Tick one occurrence of an existing cost (ADR-0027 settlements map): PAID
+ * because its bank debit arrived, or COMMITTED because a direct debit is
+ * scheduled (only into an empty month). `period` is the OCCURRENCE month chosen
+ * by settlementPeriodFor — not the debit's month (#705).
  */
-export async function commitSettlement(supa, orgId, targetCostId, period) {
+export async function commitSettlement(supa, orgId, targetCostId, period, { status = 'paid', via = null } = {}) {
   if (!/^\d{4}-\d{2}$/.test(String(period || ''))) return { settled: false, reason: 'bad period' };
 
   const { data: rows, error: readErr } = await supa
@@ -253,7 +254,9 @@ export async function commitSettlement(supa, orgId, targetCostId, period) {
 
   const settlements = { ...(row.data.settlements || {}) };
   if (settlements[period]?.status === 'paid') return { settled: false, reason: 'already paid' };
-  settlements[period] = { status: 'paid', at: new Date().toISOString(), by: 'autopilot' };
+  // "Committed" only ever fills an empty month — never downgrades a tick.
+  if (status === 'committed' && settlements[period]) return { settled: false, reason: 'already ticked' };
+  settlements[period] = { status, at: new Date().toISOString(), by: 'autopilot', ...(via ? { via } : {}) };
 
   const { error } = await supa
     .from(SUPABASE_TABLE.costs)

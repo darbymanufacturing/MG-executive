@@ -24,6 +24,8 @@
  *     3-month window), accountId=a,b (max 10), convertTo=EUR, limit ≤ 200, offset
  *   GET /v1/api/accounts → { accounts: Account[], nextOffset? }
  *     Account.balance.currentBalance, accountType, archived, currencyCode
+ *   GET /v1/api/standing-orders(/items) → planned payments + their occurrences
+ *     (originalDate, paidDate, dismissed; manualPayment=false = a direct debit)
  *
  * Trigger: cron (Authorization: Bearer ${CRON_SECRET}) or an admin manually.
  * Manual runs may pass ?from=YYYY-MM-DD to BACK-FILL history (the first run
@@ -41,10 +43,10 @@
  */
 import { requireCronOrUser, requireOrgMember } from './_lib/require-auth.js';
 import {
-  ingestBatch, intakeOrgId, saveAutopilotState, backfillFrom, loadOwners,
+  ingestBatch, intakeOrgId, saveAutopilotState, backfillFrom, loadOwners, loadCosts, commitSettlement,
 } from './_lib/intake-store.js';
 import { supabaseAdmin } from './_lib/supabase-admin.js';
-import { ownerForCounterparty } from '../src/utils/financeRules.js';
+import { ownerForCounterparty, standingOrderCommitments } from '../src/utils/financeRules.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
 
 const HEARTBEAT_ENV = 'HEARTBEAT_INTAKE_WALLET';
@@ -114,6 +116,42 @@ export async function fetchWalletAccounts({ base, token }) {
     ]);
     if (rateLimited) break;
     const batch = Array.isArray(json?.accounts) ? json.accounts : [];
+    out.push(...batch);
+    if (!batch.length || json.nextOffset == null) break;
+    offset = json.nextOffset;
+  }
+  return out;
+}
+
+/** Planned payments ("standing orders") — to tick direct debits Committed. */
+export async function fetchStandingOrders({ base, token }) {
+  const out = [];
+  let offset = 0;
+  for (let page = 0; page < 5; page += 1) {
+    const { json, rateLimited } = await walletGet(base, token, '/v1/api/standing-orders', [
+      ['limit', String(PAGE_LIMIT)], ['offset', String(offset)],
+    ]);
+    if (rateLimited) break;
+    const batch = Array.isArray(json?.standingOrders) ? json.standingOrders : [];
+    out.push(...batch);
+    if (!batch.length || json.nextOffset == null) break;
+    offset = json.nextOffset;
+  }
+  return out;
+}
+
+/** The occurrences of those planned payments due in a window (not dismissed). */
+export async function fetchStandingOrderItems({ base, token, from, to }) {
+  const out = [];
+  let offset = 0;
+  for (let page = 0; page < 5; page += 1) {
+    const { json, rateLimited } = await walletGet(base, token, '/v1/api/standing-orders/items', [
+      ['limit', String(PAGE_LIMIT)], ['offset', String(offset)],
+      ['originalDate', `gte.${from}T00:00:00Z`], ['originalDate', `lte.${to}T23:59:59Z`],
+      ['dismissed', 'false'],
+    ]);
+    if (rateLimited) break;
+    const batch = Array.isArray(json?.standingOrderItems) ? json.standingOrderItems : [];
     out.push(...batch);
     if (!batch.length || json.nextOffset == null) break;
     offset = json.nextOffset;
@@ -304,13 +342,30 @@ export default async function handler(req, res) {
     // Cash position (Planner opening balance + bank-today check). Only trustworthy
     // when the whole year was read — skip it on a rate-limited partial read.
     let cash = null;
+    let committed = 0;
     if (!records.rateLimited) {
       const accounts = await fetchWalletAccounts({ base, token });
       cash = walletCashPosition(accounts, records, { allowedAccounts: allowed, now });
+
+      // Direct debits due in the next weeks → their bills' months ticked Committed
+      // (ADR-0027), against the costs as they stand after this sync.
+      const [orders, items, costsNow] = await Promise.all([
+        fetchStandingOrders({ base, token }),
+        fetchStandingOrderItems({
+          base, token,
+          from: iso(new Date(now.getTime() - 5 * DAY_MS)),
+          to: iso(new Date(now.getTime() + 35 * DAY_MS)),
+        }),
+        loadCosts(supabaseAdmin(), orgId),
+      ]);
+      for (const c of standingOrderCommitments({ orders, items, costs: costsNow, allowedAccounts: allowed, now })) {
+        const r = await commitSettlement(supabaseAdmin(), orgId, c.costId, c.period, { status: 'committed', via: 'wallet-standing-order' });
+        if (r.settled) committed += 1;
+      }
     }
     await saveAutopilotState(orgId, {
       ...(cash ? { walletCash: cash } : {}),
-      lastSync: { wallet: { at: now.toISOString(), from, backfill: Boolean(backfill), fetched: records.length, ...report } },
+      lastSync: { wallet: { at: now.toISOString(), from, backfill: Boolean(backfill), fetched: records.length, committed, ...report } },
     });
 
     await heartbeatOk(
@@ -323,6 +378,7 @@ export default async function handler(req, res) {
       fetched: records.length,
       rateLimited: Boolean(records.rateLimited),
       cash: cash ? { balance: cash.balance, yearOpening: cash.yearOpening } : null,
+      committed,
       ...report,
     });
   } catch (err) {

@@ -88,3 +88,17 @@ describe('ingestBatch', () => {
     expect(docOf(fake.tables, 'intake_items', intakeDocId(ORG, 'gmail', 'g2')).reasons[0]).toMatch(/not on the trusted list/);
   });
 });
+
+describe('commitSettlement — committed never downgrades a tick', () => {
+  it('fills an empty month with Committed, but leaves a ticked month alone', async () => {
+    const { commitSettlement } = await import('../_lib/intake-store.js');
+    const r1 = await commitSettlement(fake, ORG, 'rent', '2026-10', { status: 'committed', via: 'wallet-standing-order' });
+    expect(r1.settled).toBe(true);
+    expect(docOf(fake.tables, 'costs', `${ORG}_rent`).settlements['2026-10']).toMatchObject({ status: 'committed', by: 'autopilot', via: 'wallet-standing-order' });
+    const r2 = await commitSettlement(fake, ORG, 'rent', '2026-10', { status: 'committed' });
+    expect(r2).toEqual({ settled: false, reason: 'already ticked' });
+    const r3 = await commitSettlement(fake, ORG, 'rent', '2026-10'); // the debit arrives → paid
+    expect(r3.settled).toBe(true);
+    expect(docOf(fake.tables, 'costs', `${ORG}_rent`).settlements['2026-10'].status).toBe('paid');
+  });
+});

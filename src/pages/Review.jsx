@@ -78,6 +78,7 @@ function SyncPanel({ autopilot, syncNow }) {
         r.invoices != null ? `${r.invoices} invoices` : null,
         r.auto ? `${r.auto} logged` : null,
         r.settled ? `${r.settled} marked paid` : null,
+        r.committed ? `${r.committed} direct debits ticked committed` : null,
         r.held ? `${r.held} to review` : null,
         r.recurringSuggested ? `${r.recurringSuggested} recurring bills found` : null,
         r.salaryAccruals ? `${r.salaryAccruals} salary accruals` : null,

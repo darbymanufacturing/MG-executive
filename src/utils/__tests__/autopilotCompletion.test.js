@@ -237,3 +237,28 @@ describe('advanceDueDate — timezone-proof (#707)', () => {
     expect(advanceDueDate('not a date', 'days', 1)).toBe('not a date');
   });
 });
+
+describe('direct debits → Committed (standing orders)', () => {
+  it('ticks the month of a bill the bank will collect on its own — only into an empty month', async () => {
+    const { standingOrderCommitments } = await import('../financeRules.js');
+    const now = new Date('2026-09-23T06:00:00Z');
+    const costs = [
+      { id: 'rent', name: 'Landlord Papadopoulos', amount: 350, frequency: 'monthly', startDate: '2026-01-01' },
+      { id: 'tel', name: 'Vodafone', amount: 40, frequency: 'monthly', startDate: '2026-01-05', settlements: { '2026-10': { status: 'paid' } } },
+    ];
+    const orders = [
+      { id: 'so1', accountId: 'acc', counterParty: 'LANDLORD PAPADOPOULOS', amount: -350, manualPayment: false },
+      { id: 'so2', accountId: 'acc', counterParty: 'Vodafone', amount: -40, manualPayment: false },
+      { id: 'so3', accountId: 'acc', counterParty: 'Landlord Papadopoulos', amount: -350, manualPayment: true },
+    ];
+    const items = [
+      { standingOrderId: 'so1', originalDate: '2026-10-01T00:00:00Z' },
+      { standingOrderId: 'so1', originalDate: '2026-12-01T00:00:00Z' },            // beyond the window
+      { standingOrderId: 'so1', originalDate: '2026-09-01T00:00:00Z', paidDate: '2026-09-01' }, // already paid
+      { standingOrderId: 'so2', originalDate: '2026-10-05T00:00:00Z' },            // settled month → left alone below
+      { standingOrderId: 'so3', originalDate: '2026-10-01T00:00:00Z' },            // manual payment, not a direct debit
+    ];
+    const out = standingOrderCommitments({ orders, items, costs, now });
+    expect(out).toEqual([{ costId: 'rent', period: '2026-10', standingOrderId: 'so1', dueDate: '2026-10-01' }]);
+  });
+});
