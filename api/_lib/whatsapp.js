@@ -172,7 +172,7 @@ export const ROUTER_SYSTEM_PROMPT = `You route short work messages from a Greek 
 
 Return ONLY valid JSON:
 {
-  "intent": "expense" | "owner_paid" | "issue" | "repair" | "task" | "question" | "unknown",
+  "intent": "expense" | "owner_paid" | "issue" | "repair" | "stock" | "task" | "question" | "unknown",
   "name": "short label, e.g. the supplier or the scooter problem",
   "amount": number or null,
   "date": "YYYY-MM-DD or null (null means today)",
@@ -191,6 +191,7 @@ Intent guide:
 - "owner_paid": the speaker paid a COMPANY cost personally, from their own card/cash.
 - "issue": something needs attention that is not a scooter repair (municipality, partner, admin).
 - "repair": a scooter fault or a completed repair ("41735 φρένα", "changed the brake cable on 41735, 25 min").
+- "stock": spare parts ARRIVED and went on the shelf ("ήρθαν 10 τακάκια", "received 4 brake cables") — list them in "parts" with quantities.
 - "task": something to do this week (often starts with POW).
 - "question": the person is asking Omni for information, not recording anything.
 
@@ -228,6 +229,7 @@ export function routedToIntake(routed, { sourceRef, from, transcript }) {
     owner_paid: 'ledger',
     issue: 'issue',
     repair: 'ticket',
+    stock: 'parts_receipt',
     task: 'task',
   };
   const kind = KIND_BY_INTENT[routed?.intent];
@@ -244,7 +246,10 @@ export function routedToIntake(routed, { sourceRef, from, transcript }) {
       scooterId: routed.scooterId || null,
       minutes: routed.minutes ?? null,
       completed: routed.completed === true,
-      parts: Array.isArray(routed.parts) ? routed.parts : [],
+      parts: Array.isArray(routed.parts) && kind !== 'parts_receipt' ? routed.parts : [],
+      // A delivery names parts in words; they are matched to the catalog when
+      // approved (Review / WhatsApp), never guessed here.
+      ...(kind === 'parts_receipt' ? { partNames: Array.isArray(routed.parts) ? routed.parts : [] } : {}),
       assignee: routed.assignee || null,
       notes: routed.note || null,
     },

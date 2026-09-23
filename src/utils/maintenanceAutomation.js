@@ -16,11 +16,15 @@
  *                                                     (dueScheduleTickets)
  *   - low stock becomes a draft order, never an automatic one
  *                                                     (reorderSuggestions)
+ *   - a delivery puts parts back on the shelf         (stockAfterReceipt)
+ *   - ONE completion plan for the app and for WhatsApp approvals
+ *                                                     (planTicketCompletion)
  *
- * Pure (no React, no Supabase) so the context, the server cron and the tests
- * all share one implementation.
+ * Pure (no React, no Supabase) so the context, the server (cron + WhatsApp
+ * approvals) and the tests all share one implementation.
  */
 import { computeRepairPay, round2 } from './repairPayCalc.js';
+import { orgDocId } from './orgDocId.js';
 
 /** Ticket statuses that no longer need work (MaintenanceContext TERMINAL_STATUSES). */
 export const TERMINAL_TICKET_STATUSES = new Set(['Completed', 'Donor']);
@@ -257,4 +261,127 @@ export function draftOrderText(suggestions = [], { company = 'Omni' } = {}) {
       company,
     ].join('\n'),
   }));
+}
+
+/**
+ * Advance a YYYY-MM-DD date by N units, for recurring maintenance schedules.
+ * setMonth/setDate handle month + year rollover. Returns the original string if
+ * the date can't be parsed. (Moved here from MaintenanceContext so the server
+ * can roll schedules forward too; the context re-exports it.)
+ */
+export function advanceDueDate(dateStr, unit, n = 1) {
+  // #707 — calendar arithmetic in UTC. The old version built LOCAL midnight and
+  // returned toISOString() (UTC): east of Greenwich (Athens, UTC+2/+3) every
+  // advance landed a day early, so a recurring service drifted one day earlier
+  // with each completion — and the browser and the UTC server disagreed.
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  if (unit === 'weeks') d.setUTCDate(d.getUTCDate() + n * 7);
+  else if (unit === 'months') d.setUTCMonth(d.getUTCMonth() + n);
+  else d.setUTCDate(d.getUTCDate() + n); // 'days' (default)
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The patch that marks one schedule occurrence serviced: a recurring schedule
+ * rolls nextDue forward by its interval (status stays 'active'); a one-off
+ * becomes 'done'. #623 — the advance is anchored to max(nextDue, today) so a
+ * late completion always lands in the future.
+ */
+export function scheduleDonePatch(schedule, today) {
+  const recurs = schedule?.recurrence && schedule.recurrence !== 'none' && Number(schedule.interval) > 0;
+  const anchor = schedule?.nextDue < today ? today : schedule?.nextDue;
+  return recurs
+    ? { nextDue: advanceDueDate(anchor, schedule.recurrence, Number(schedule.interval)), lastCompleted: today, status: 'active' }
+    : { status: 'done', lastCompleted: today };
+}
+
+/**
+ * A new ticket's document id: {org}_{scooter}_{date}, suffixed _2, _3… when
+ * that scooter already has a ticket that day. Same rule as the app's addTicket
+ * and the daily maintenance cron.
+ */
+export function ticketDocIdFor(orgId, scooterId, dateStr, tickets = []) {
+  const base = orgDocId(orgId, String(scooterId ?? '').trim(), dateStr);
+  const taken = tickets.filter((t) => t?._docId === base || t?._docId?.startsWith(`${base}_`)).length;
+  return taken === 0 ? base : `${base}_${taken + 1}`;
+}
+
+/**
+ * Everything completing a ticket changes, as one plan — applied by the app
+ * (MaintenanceContext.completeTicket) and by WhatsApp approvals on the server,
+ * so a repair closed from a chat is costed, destocked and bookkept exactly like
+ * one closed on screen:
+ *   ticketPatch   status + date + labour/parts cost (→ Cost Approvals as 'pending')
+ *   stock         the parts that come off the shelf
+ *   schedule      the preventive schedule this ticket came from, rolled forward
+ *   scooter       the scooter's new status when its last open ticket closes
+ */
+export function planTicketCompletion({
+  ticket, tickets = [], parts = [], schedules = [], scooters = [], config = {}, details = {},
+  today = new Date().toISOString().slice(0, 10),
+} = {}) {
+  const costFields = completionCostFields({
+    labourMinutes: details.labourMinutes,
+    partsUsed: details.partsUsed,
+    labourRatePerHour: config.labourRatePerHour,
+  });
+  const ticketPatch = {
+    status: 'Completed',
+    dateCompleted: details.dateCompleted || today,
+    ...costFields,
+    ...(details.note ? { completionNote: details.note } : {}),
+  };
+
+  const stock = stockAfterUse(parts, costFields.partsUsed || []);
+
+  const schedule = ticket?.scheduleId ? schedules.find((s) => s._docId === ticket.scheduleId) : null;
+
+  const scooter = ticket?.scooterId
+    ? scooters.find((sc) => sameScooter(sc.scooterId, ticket.scooterId))
+    : null;
+  const nextTickets = tickets.map((t) => (t._docId === ticket?._docId ? { ...t, status: 'Completed' } : t));
+  const scooterStatus = scooter ? scooterStatusAfter(scooter, nextTickets) : null;
+
+  return {
+    ticketPatch,
+    stock,
+    schedule: schedule ? { docId: schedule._docId, patch: scheduleDonePatch(schedule, today) } : null,
+    scooter: scooterStatus && scooter?._docId ? { docId: scooter._docId, status: scooterStatus } : null,
+  };
+}
+
+/**
+ * New stock levels after a delivery: received units go on the shelf and come
+ * off "on order" (never below zero). Closes the loop the reorder drafts open.
+ *
+ * @param {object[]} parts     inventory rows ({_docId, stockOnHand, unitsOnOrder})
+ * @param {object[]} received  [{partId, qty}]
+ * @returns {{docId:string, stockOnHand:number, unitsOnOrder:number, status:string}[]}
+ */
+export function stockAfterReceipt(parts = [], received = []) {
+  const totals = new Map();
+  for (const r of received || []) {
+    const qty = Number(r?.qty) || 0;
+    if (qty <= 0 || !r?.partId) continue;
+    totals.set(String(r.partId), (totals.get(String(r.partId)) || 0) + qty);
+  }
+  const out = [];
+  for (const [docId, qty] of totals) {
+    const part = parts.find((p) => p?._docId === docId);
+    if (!part) continue;
+    const stockOnHand = (Number(part.stockOnHand) || 0) + qty;
+    const unitsOnOrder = Math.max(0, (Number(part.unitsOnOrder) || 0) - qty);
+    out.push({ docId, stockOnHand, unitsOnOrder, status: partStatusAfter(part, stockOnHand, unitsOnOrder) });
+  }
+  return out;
+}
+
+/** A part's status from its stock (the Parts table's vocabulary); Discontinued is kept. */
+export function partStatusAfter(part, stockOnHand, unitsOnOrder = 0) {
+  if (part?.status === 'Discontinued') return 'Discontinued';
+  if (unitsOnOrder > 0) return 'On Order';
+  if (stockOnHand <= 0) return 'Out of Stock';
+  if (Number(part?.reorderPoint) > 0 && stockOnHand <= Number(part.reorderPoint)) return 'Low Stock';
+  return 'In Stock';
 }

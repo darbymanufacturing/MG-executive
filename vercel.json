@@ -60,6 +60,10 @@
     {
       "path": "/api/cron-weather",
       "schedule": "45 4 * * *"
+    },
+    {
+      "path": "/api/cron-finance",
+      "schedule": "45 3 * * *"
     }
   ]
 }

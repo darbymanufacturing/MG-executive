@@ -66,6 +66,12 @@ function buildPrompt(date, data) {
     if (Number(feedHealth.dueTicketsToday) > 0) {
       feedLines.push(`${feedHealth.dueTicketsToday} preventive service ticket(s) raised today`);
     }
+    if (feedHealth.accountantPackDue) {
+      feedLines.push(`The ${feedHealth.accountantPackDue} expense pack for the accountant is ready to review and send (Settings → Integrations)`);
+    }
+    if (feedHealth.seasonalityReview) {
+      feedLines.push('Seasonality has not been recalibrated in a year — Maintenance settings → "Calibrate from last 12 months"');
+    }
   }
 
   // Defense-in-depth: coerce the array fields so a malformed payload (e.g. a count

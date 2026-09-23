@@ -17,6 +17,7 @@
 import { Resend } from 'resend';
 import { requireUser } from './_lib/require-auth.js';
 import { supabaseAdmin } from './_lib/supabase-admin.js';
+import { loadAutopilotState, saveAutopilotState } from './_lib/intake-store.js';
 import { SUPABASE_TABLE } from '../src/lib/supabaseRowMap.js';
 import { monthExpenses, packTotals, packCsv } from '../src/utils/accountantPack.js';
 
@@ -102,7 +103,18 @@ export default async function handler(req, res) {
     });
     if (sendErr) throw new Error(sendErr.message || 'Resend rejected the email');
 
-    return res.status(200).json({ ok: true, sent: true, month, recipient, ...totals });
+    // Remember it went out: the panel shows "sent on …" and the morning brief
+    // stops nudging about this month's pack.
+    const state = await loadAutopilotState(orgId);
+    const sentAt = new Date().toISOString();
+    await saveAutopilotState(orgId, {
+      accountantPacks: {
+        ...(state.accountantPacks || {}),
+        [month]: { sentAt, to: recipient, by: user.email || user.uid, count: totals.count, total: totals.total },
+      },
+    });
+
+    return res.status(200).json({ ok: true, sent: true, sentAt, month, recipient, ...totals });
   } catch (err) {
     console.error('[accountant-pack]', err?.message || err);
     return res.status(500).json({ error: 'Could not build or send the pack.' });

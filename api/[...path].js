@@ -15,12 +15,14 @@
 import acceptInvite from './_accept-invite.js';
 import accountantForward from './_accountant-forward.js';
 import accountantPack from './_accountant-pack.js';
+import captureClassify from './_capture-classify.js';
 import createUser from './_create-user.js';
 import cloudinaryDelete from './_cloudinary-delete.js';
 import cloudinarySign from './_cloudinary-sign.js';
 import createInvite from './_create-invite.js';
 import signup from './_signup.js';
 import cronDailyBrief from './_cron-daily-brief.js';
+import cronFinance from './_cron-finance.js';
 import cronKeepalive from './_cron-keepalive.js';
 import cronMaintenance from './_cron-maintenance.js';
 import cronPurgeDeletedOrgs from './_cron-purge-deleted-orgs.js';
@@ -44,11 +46,13 @@ const ROUTES = {
   'accept-invite': acceptInvite,
   'accountant-forward': accountantForward,
   'accountant-pack': accountantPack,
+  'capture-classify': captureClassify,
   'cloudinary-delete': cloudinaryDelete,
   'cloudinary-sign': cloudinarySign,
   'create-invite': createInvite,
   'create-user': createUser,
   'cron-daily-brief': cronDailyBrief,
+  'cron-finance': cronFinance,
   'cron-keepalive': cronKeepalive,
   'cron-maintenance': cronMaintenance,
   'cron-purge-deleted-orgs': cronPurgeDeletedOrgs,

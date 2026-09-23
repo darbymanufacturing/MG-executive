@@ -1,11 +1,12 @@
 /**
- * intake.js — the brain of Omni Autopilot Phase 1 (docs/AUTOMATION_PLAN.md §3).
+ * intake.js — the brain of Omni Autopilot (docs/AUTOMATION_PLAN.md §3).
  *
  * Every automatic source (Wallet bank feed, AADE myDATA, the Gmail invoice
  * watcher, WhatsApp captures, Hopp CSV drops, internal rules) produces INTAKE
  * ITEMS. This module is the pure, shared decision layer over them:
  *
  *   normalizeIntakeItem()  — one canonical shape, whatever the source
+ *   applyLearnedRules()    — fill the supplier/category an earlier approval taught us
  *   matchIntakeItem()      — is this a duplicate / a known bill / an invoice payment?
  *   classifyIntake()       — auto-commit, or hold for the owner?
  *
@@ -15,18 +16,21 @@
  *
  * OWNER POLICY (Kostas, 2026-09-22): unsure items are HELD for approval. The
  * gate below is deliberately conservative — anything touching the owner ledger
- * or a loan balance is always held, no matter how confident the source is.
+ * or a loan balance is always held, no matter how confident the source is, and
+ * money is never auto-committed without a real category.
  */
 import { cleanMerchantName, categorizationText } from './normalizeGreekLatin.js';
-import { isCommitment } from './upcomingPayments.js';
+import { isCommitment, settlementPeriodFor } from './upcomingPayments.js';
+import { CATEGORIES } from './constants.js';
+import { inferCategoryFromText } from './bankRulesEngine.js';
 
 export const INTAKE_SOURCES = Object.freeze([
-  'wallet', 'mydata', 'gmail', 'whatsapp', 'hopp_csv', 'rule',
+  'wallet', 'mydata', 'gmail', 'whatsapp', 'hopp_csv', 'rule', 'capture',
 ]);
 
 export const INTAKE_KINDS = Object.freeze([
   'cost', 'revenue_import', 'ledger', 'loan_payment',
-  'ticket', 'parts_receipt', 'issue', 'task',
+  'ticket', 'parts_receipt', 'issue', 'task', 'recurring',
 ]);
 
 export const INTAKE_STATUSES = Object.freeze([
@@ -34,10 +38,13 @@ export const INTAKE_STATUSES = Object.freeze([
 ]);
 
 /** Kinds that ALWAYS need a human, however confident the source is. */
-export const ALWAYS_HELD_KINDS = Object.freeze(['ledger', 'loan_payment']);
+export const ALWAYS_HELD_KINDS = Object.freeze(['ledger', 'loan_payment', 'recurring']);
 
-/** Categories that mean "we don't actually know what this is". */
-const UNKNOWN_CATEGORIES = new Set(['Unknown', 'unknown', 'Other', 'Others', '']);
+/** Kinds that are money: they must never auto-commit without a real category. */
+const MONEY_KINDS = new Set(['cost']);
+
+/** Sources that report a PAYMENT (money left the account), not a document. */
+const PAYMENT_SOURCES = new Set(['wallet']);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -103,6 +110,40 @@ export function amountsMatch(a, b, tolerancePct = 0.02) {
   return Math.abs(x - y) <= Math.max(0.01, Math.max(x, y) * tolerancePct);
 }
 
+/* ── categories ──────────────────────────────────────────────────────────── */
+
+const CATEGORY_BY_LOWER = (() => {
+  const map = new Map();
+  for (const [key, def] of Object.entries(CATEGORIES)) {
+    map.set(key.toLowerCase(), key);
+    if (def?.label) map.set(String(def.label).toLowerCase(), key);
+  }
+  return map;
+})();
+
+/** Words that mean "we don't know" — in Omni and in Wallet's system categories. */
+const NOT_A_CATEGORY = new Set([
+  '', 'unknown', 'unknown expense', 'unknown income', 'uncategorized', 'other', 'others', 'missing',
+]);
+
+/**
+ * Turn any category guess into one of Omni's category KEYS, or null.
+ * Sources speak different vocabularies: Wallet uses Omni's own names
+ * (ADR-0026), the invoice extractor and the WhatsApp router return plain
+ * language ("Petrol", "Office rent"). A guess that isn't a real key must never
+ * reach a cost row — it would look categorized while matching no category.
+ */
+export function canonicalCategory(guess) {
+  if (guess == null) return null;
+  const s = String(guess).trim();
+  if (NOT_A_CATEGORY.has(s.toLowerCase())) return null;
+  const exact = CATEGORY_BY_LOWER.get(s.toLowerCase());
+  if (exact) return exact === 'Unknown' ? null : exact;
+  // Plain-language guesses → the same keyword rules the bank import uses.
+  const { category, matched } = inferCategoryFromText(s);
+  return matched ? category : null;
+}
+
 /* ── normalize ───────────────────────────────────────────────────────────── */
 
 /**
@@ -114,6 +155,7 @@ export function normalizeIntakeItem(raw = {}, { now = new Date() } = {}) {
   const kind = INTAKE_KINDS.includes(raw.kind) ? raw.kind : 'cost';
   const payload = raw.payload || {};
   const nowIso = now.toISOString();
+  const category = canonicalCategory(payload.category);
 
   return {
     source,
@@ -124,7 +166,8 @@ export function normalizeIntakeItem(raw = {}, { now = new Date() } = {}) {
       name: payload.name ? String(payload.name).trim() : '',
       amount: toNumber(payload.amount),
       date: toISODate(payload.date) || toISODate(nowIso),
-      category: payload.category ?? null,
+      category,
+      ...(payload.category && payload.category !== category ? { categoryGuess: String(payload.category) } : {}),
       vatAmount: payload.vatAmount == null ? null : toNumber(payload.vatAmount),
       currency: payload.currency || 'EUR',
     },
@@ -132,16 +175,75 @@ export function normalizeIntakeItem(raw = {}, { now = new Date() } = {}) {
     confidence: 0,
     reasons: [],
     match: null,
+    rule: null,
     status: 'pending',
     committedRef: null,
     decidedAt: null,
     decidedBy: null,
     createdAt: raw.createdAt || nowIso,
     updatedAt: nowIso,
+    // A source can insist on a human (e.g. mail from a sender not on the
+    // trusted list): the gate then holds it whatever else is known.
+    ...(raw.holdReason ? { noAuto: true, holdReason: String(raw.holdReason) } : {}),
   };
 }
 
+/* ── learned rules ───────────────────────────────────────────────────────── */
+
+/** Is this a rule an approval taught (vs one the owner typed on the Rules page)? */
+const isLearned = (r) => r?.learned === true;
+
+/**
+ * The supplier name + category earlier decisions taught us, for an item whose
+ * source didn't say. Checked in order of certainty:
+ *   1. ΑΦΜ rule      — myDATA invoices carry only the supplier's VAT number
+ *   2. learned payee — "JYSK" was approved as Space & Equipment before
+ *   3. owner rule    — a keyword rule typed on the Bank Import → Rules page
+ *   4. history       — the latest categorized cost from the same payee
+ * The bank import's built-in keyword DEFAULTS are deliberately not used: they
+ * are guesses, and a guess must never auto-commit money.
+ *
+ * @returns {null | { category, name?, via }}
+ */
+export function applyLearnedRules(item, { rules = [], costs = [] } = {}) {
+  if (!item || !MONEY_KINDS.has(item.kind)) return null;
+  const p = item.payload || {};
+  const list = Array.isArray(rules) ? rules : [];
+
+  const vat = String(p.counterpartVat || '').replace(/\D/g, '');
+  if (vat) {
+    const r = list.find((x) => x?.vatNumber && String(x.vatNumber).replace(/\D/g, '') === vat && x.category);
+    if (r) return { category: canonicalCategory(r.category), name: r.supplierName || null, via: 'Supplier ΑΦΜ rule' };
+  }
+
+  if (!p.name) return null;
+
+  const learned = list.find((x) => isLearned(x) && x.category && (x.supplierName || x.contains)
+    && payeesMatch(x.supplierName || x.contains, p.name));
+  if (learned) return { category: canonicalCategory(learned.category), via: 'Learned from an earlier approval' };
+
+  const haystack = categorizationText(p.name);
+  const owner = [...list]
+    .filter((x) => !isLearned(x) && x.contains && x.category)
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+    .find((x) => haystack.includes(String(x.contains).toUpperCase()));
+  if (owner) return { category: canonicalCategory(owner.category), via: `Your rule "${owner.contains}"` };
+
+  const seen = (Array.isArray(costs) ? costs : [])
+    .filter((c) => c?.name && canonicalCategory(c.category) && payeesMatch(c.name, p.name))
+    .sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))[0];
+  if (seen) return { category: canonicalCategory(seen.category), via: `Same supplier as "${seen.name}"` };
+
+  return null;
+}
+
 /* ── match ───────────────────────────────────────────────────────────────── */
+
+/** Channel a cost row came from: 'wallet', 'whatsapp', …, or 'manual'. */
+const channelOf = (cost) => {
+  const s = String(cost?.source || '');
+  return s.startsWith('autopilot-') ? s.slice('autopilot-'.length) : 'manual';
+};
 
 /**
  * Find what this item refers to among existing costs.
@@ -151,7 +253,8 @@ export function normalizeIntakeItem(raw = {}, { now = new Date() } = {}) {
  * four, and what lets a bank debit tick an existing bill as Paid rather than
  * adding a second row.
  *
- * @returns {null|{type:'duplicate'|'commitment'|'invoice_payment', targetId, score, why}}
+ * @returns {null|{type:'duplicate'|'commitment'|'invoice_payment'|'possible_duplicate',
+ *                 targetId, score, why, period?}}
  */
 export function matchIntakeItem(item, costs = [], { now = new Date(), paymentWindowDays = 60 } = {}) {
   if (!item || item.kind !== 'cost') return null;
@@ -176,23 +279,42 @@ export function matchIntakeItem(item, costs = [], { now = new Date(), paymentWin
     return { type: 'duplicate', targetId: dup.id, score: 0.95, why: 'Same payee, amount and date as an existing cost' };
   }
 
-  // 3. A recurring commitment this debit pays (→ tick the month Paid, don't add).
+  // Only a bank debit is a PAYMENT. An invoice, receipt photo or email is a
+  // document: receiving the bill must never tick it paid.
+  const isPayment = PAYMENT_SOURCES.has(item.source);
+
+  // 3. A recurring commitment this debit pays (→ tick that occurrence Paid, don't add).
   const commitment = list.find(
     (c) => isCommitment(c, { now })
       && payeesMatch(c.name, payload.name)
-      && amountsMatch(c.amount, payload.amount),
+      && (isPayment ? amountsMatch(c.amount, payload.amount) : true),
   );
-  if (commitment) {
+  if (commitment && !isPayment) {
+    // The bill for something already budgeted as a standing commitment. Adding
+    // it as a new cost would count it twice — the owner decides.
     return {
-      type: 'commitment',
-      targetId: commitment.id,
-      score: 0.9,
-      why: `Matches the recurring bill "${commitment.name}"`,
+      type: 'possible_duplicate', targetId: commitment.id, score: 0.6,
+      why: `Looks like the bill for your recurring "${commitment.name}" — it may already be counted`,
+    };
+  }
+  if (commitment) {
+    const period = settlementPeriodFor(commitment, payload.date);
+    if (period) {
+      return {
+        type: 'commitment', targetId: commitment.id, period, score: 0.9,
+        why: `Pays the recurring bill "${commitment.name}" (${period})`,
+      };
+    }
+    // Every occurrence around this date is already ticked: the owner recorded
+    // this payment by hand. Adding it again would count it twice.
+    return {
+      type: 'duplicate', targetId: commitment.id, score: 0.9,
+      why: `"${commitment.name}" is already ticked paid for this period`,
     };
   }
 
   // 4. A one-time cost (e.g. a myDATA invoice) this debit settles later.
-  const invoice = list.find((c) => {
+  const invoice = isPayment && list.find((c) => {
     if (c.frequency && c.frequency !== 'one-time') return false;
     if (!payeesMatch(c.name, payload.name)) return false;
     if (!amountsMatch(c.amount, payload.amount)) return false;
@@ -200,11 +322,27 @@ export function matchIntakeItem(item, costs = [], { now = new Date(), paymentWin
     return gap >= 0 && gap <= paymentWindowDays;
   });
   if (invoice) {
+    const period = settlementPeriodFor(invoice, payload.date);
+    return period
+      ? { type: 'invoice_payment', targetId: invoice.id, period, score: 0.85, why: `Pays "${invoice.name}"` }
+      : { type: 'duplicate', targetId: invoice.id, score: 0.85, why: `"${invoice.name}" is already marked paid` };
+  }
+
+  // 5. Same money through a DIFFERENT channel under a different name — a receipt
+  //    photo "Fuel €18" and the card debit "BP ΚΟΡΙΝΘ €18". Never merged on
+  //    amount alone (spec §3.4): held with the suggestion, the owner decides.
+  const maybe = list.find((c) => {
+    if (c.frequency && c.frequency !== 'one-time') return false;
+    if (channelOf(c) === item.source) return false; // same channel = distinct records
+    if (Math.abs(toNumber(c.amount) - payload.amount) > 0.01) return false;
+    const gap = daysBetween(c.startDate, payload.date);
+    const isInvoice = ['mydata', 'gmail'].includes(channelOf(c));
+    return Math.abs(gap) <= 3 || (isInvoice && gap >= 0 && gap <= paymentWindowDays);
+  });
+  if (maybe) {
     return {
-      type: 'invoice_payment',
-      targetId: invoice.id,
-      score: 0.85,
-      why: `Looks like payment of "${invoice.name}"`,
+      type: 'possible_duplicate', targetId: maybe.id, score: 0.6,
+      why: `Same amount as "${maybe.name}" (${maybe.startDate}) — same payment?`,
     };
   }
 
@@ -216,10 +354,10 @@ export function matchIntakeItem(item, costs = [], { now = new Date(), paymentWin
 /**
  * Decide: commit automatically, or hold for the owner?
  *
- * @param {object} item     normalized intake item (optionally with .match set)
+ * @param {object} item     normalized intake item (optionally with .match / .rule set)
  * @param {object} ctx
  * @param {boolean} [ctx.trustWalletCategories=true]  owner switch
- * @param {Set<string>|string[]} [ctx.knownSuppliers]  payee keys with a learned rule
+ * @param {Set<string>|string[]} [ctx.knownSuppliers]  payee keys with a saved rule
  * @returns {{decision:'auto'|'hold', confidence:number, reasons:string[]}}
  */
 export function classifyIntake(item, ctx = {}) {
@@ -238,7 +376,16 @@ export function classifyIntake(item, ctx = {}) {
     return {
       decision: 'hold',
       confidence: 0.5,
-      reasons: ['Money between the owners and the company is always reviewed'],
+      reasons: [item.kind === 'recurring'
+        ? 'A new standing commitment is always confirmed by you'
+        : 'Money between the owners, the company and its lenders is always reviewed'],
+    };
+  }
+  if (item.noAuto) {
+    return {
+      decision: 'hold',
+      confidence: 0.5,
+      reasons: [item.holdReason || 'You undid the automatic entry — waiting for your call'],
     };
   }
   if (!payload.amount || payload.amount <= 0) {
@@ -259,22 +406,30 @@ export function classifyIntake(item, ctx = {}) {
     return { decision: 'auto', confidence: match.score, reasons };
   }
 
+  // Maybe the same money seen twice — only the owner can say.
+  if (match?.type === 'possible_duplicate') {
+    return { decision: 'hold', confidence: 0.4, reasons: [match.why] };
+  }
+
+  // Nothing below may commit money without a real category.
+  if (!payload.category) {
+    reasons.push(item.source === 'wallet' ? 'Wallet left this uncategorized' : 'No category yet');
+    return { decision: 'hold', confidence: 0.35, reasons };
+  }
+
   // Wallet items the owner already categorized in Wallet — that WAS the review.
   if (item.source === 'wallet') {
-    const hasCategory = payload.category && !UNKNOWN_CATEGORIES.has(String(payload.category));
-    if (hasCategory && trustWalletCategories) {
+    if (trustWalletCategories) {
       reasons.push(`Categorized in Wallet as "${payload.category}"`);
       return { decision: 'auto', confidence: 0.9, reasons };
     }
-    reasons.push(hasCategory
-      ? 'Wallet categories are set to be double-checked'
-      : 'Wallet left this uncategorized');
+    reasons.push('Wallet categories are set to be double-checked');
     return { decision: 'hold', confidence: 0.4, reasons };
   }
 
-  // A supplier with a learned rule (taught by an earlier approval).
-  if (knownSuppliers.has(payeeKey(payload.name))) {
-    reasons.push('Known supplier with a saved rule');
+  // A supplier an earlier decision taught us (rule or history).
+  if (item.rule?.category || knownSuppliers.has(payeeKey(payload.name))) {
+    reasons.push(item.rule?.via || 'Known supplier with a saved rule');
     return { decision: 'auto', confidence: 0.85, reasons };
   }
 
@@ -284,8 +439,9 @@ export function classifyIntake(item, ctx = {}) {
 
 /**
  * What the owner still has to supply before a held item can be approved.
- * Shared by the Review page (to enable the button) and IntakeContext (to refuse
- * an incomplete approval), so the two can never disagree.
+ * Shared by the Review page (to enable the button), IntakeContext and the
+ * WhatsApp approval path (to refuse an incomplete approval), so they can never
+ * disagree.
  *
  * @returns {string|null} the missing field's human label, or null when ready
  */
@@ -294,13 +450,30 @@ export function missingForApproval(item, overrides = {}) {
   switch (item?.kind) {
     case 'cost':
       if (!(Number(p.amount) > 0)) return 'Amount';
-      if (!p.category) return 'Category';
+      if (!canonicalCategory(p.category)) return 'Category';
       return null;
     case 'ledger':
-      // "I paid a company cost personally" = the cost itself + who is owed.
       if (!(Number(p.amount) > 0)) return 'Amount';
       if (!p.ownerUid) return 'Who paid';
-      if (!p.category) return 'Category';
+      // "I paid a company cost personally" also books the cost → needs a category.
+      // A salary accrual is not a cost (the wage cost is booked separately).
+      if ((p.ledgerType || 'expense_reimbursable') === 'expense_reimbursable' && !canonicalCategory(p.category)) {
+        return 'Category';
+      }
+      return null;
+    case 'loan_payment':
+      if (!p.loanId) return 'Loan';
+      if (!(Number(p.amount) > 0)) return 'Amount';
+      if (Math.abs((Number(p.interest) || 0) + (Number(p.principal) || 0) - Number(p.amount)) > 0.02) {
+        return 'Interest / principal split';
+      }
+      return null;
+    case 'recurring':
+      if (!(Number(p.amount) > 0)) return 'Amount';
+      if (!canonicalCategory(p.category)) return 'Category';
+      return null;
+    case 'parts_receipt':
+      if (!Array.isArray(p.parts) || !p.parts.some((x) => x?.partId && Number(x.qty) > 0)) return 'Parts';
       return null;
     case 'ticket':
       if (!String(p.scooterId || '').trim()) return 'Scooter ID';
@@ -316,10 +489,21 @@ export function missingForApproval(item, overrides = {}) {
 
 /**
  * Run the whole pipeline for one raw record.
- * Returns the item ready to store, with match + gate applied.
+ * Returns the item ready to store, with rules, match + gate applied.
+ *
+ * @param {object} ctx  { now, rules, knownSuppliers, trustWalletCategories, noAuto }
  */
 export function prepareIntakeItem(raw, costs = [], ctx = {}) {
   const item = normalizeIntakeItem(raw, ctx);
+  if (ctx.noAuto) item.noAuto = true;
+
+  const rule = applyLearnedRules(item, { rules: ctx.rules, costs });
+  if (rule?.category) {
+    item.rule = rule;
+    if (!item.payload.category) item.payload.category = rule.category;
+    if (rule.name && /^ΑΦΜ\s/.test(item.payload.name)) item.payload.name = rule.name;
+  }
+
   item.match = matchIntakeItem(item, costs, ctx);
   const { decision, confidence, reasons } = classifyIntake(item, ctx);
   item.confidence = confidence;

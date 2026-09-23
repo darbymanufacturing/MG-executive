@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Sparkles, Paperclip, Camera, Send, Check, Eye, Receipt, RotateCcw,
+  Sparkles, Camera, Send, Check, Eye, Receipt, RotateCcw,
 } from 'lucide-react';
 import { useIssues } from '../../context/IssueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { authedFetch } from '../../utils/apiClient.js';
+import { ISSUE_TYPE_LABELS } from '../../utils/constants.js';
 import styles from './CaptureModal.module.css';
 
 function Spinner({ size = 14 }) {
@@ -275,16 +276,38 @@ export default function CaptureModal({ open, onClose }) {
     setStage('parsing');
 
     try {
-      const title = text.slice(0, 80).trim();
+      // #697 — the note is really read by a model now (the same fast model the
+      // WhatsApp router uses). If that's unavailable the note is still saved,
+      // and the result says it wasn't classified instead of pretending.
+      let fields = null;
+      try {
+        const res = await authedFetch('/api/capture-classify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (res.ok) fields = await res.json();
+      } catch { /* offline / not configured — fall through to a plain note */ }
+
+      const title = fields?.title || text.slice(0, 80).trim();
       const ref = await createIssue({
         title,
         description: text,
-        type: 'other',
-        urgency: 'medium',
-        nextAction: '',
+        type: fields?.type || 'other',
+        urgency: fields?.urgency || 'medium',
+        nextAction: fields?.nextAction || '',
       });
       setCreatedId(ref.id);
-      setResult({ title, type: 'Other', urgency: 'Medium', nextAction: '', contact: '' });
+      const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+      setResult(fields
+        ? {
+          title,
+          type: ISSUE_TYPE_LABELS[fields.type] || 'Other',
+          urgency: cap(fields.urgency),
+          nextAction: fields.nextAction,
+          contact: fields.contact,
+        }
+        : { title, type: 'Not classified', urgency: 'Medium', nextAction: '', contact: '' });
       setStage('confirmed');
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       closeTimerRef.current = setTimeout(() => onClose(), 2500);
@@ -371,7 +394,7 @@ export default function CaptureModal({ open, onClose }) {
             )}
 
             <div className={styles.footer}>
-              <button className="btn btn-ghost btn-sm"><Paperclip size={14} />Attach</button>
+              {/* #697 — the old "Attach" button had no handler; documents go through Invoice. */}
               <button className="btn btn-ghost btn-sm" onClick={() => setMode('invoice')}>
                 <Camera size={14} />Invoice
               </button>

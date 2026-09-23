@@ -7,6 +7,8 @@ import MonthSheet from '../components/Planner/MonthSheet.jsx';
 import CostFormModal from '../components/Costs/CostFormModal.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
+import { useOrg } from '../context/OrgContext.jsx';
+import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { buildPlannerModel, plannerYears, chainedOpenings } from '../utils/financialPlanner.js';
 import styles from './Planner.module.css';
 
@@ -76,6 +78,17 @@ export default function Planner() {
   }), [scopedCosts, scopedRevenue, config?.plannerOpening]);
 
   const openingBalance = openings[year]?.opening ?? (Number(config?.plannerOpening?.[year]) || 0);
+
+  // Autopilot — the real bank position from the Wallet sync (read-only robot state).
+  const { orgId } = useOrg();
+  const { item: autopilot } = useOrgDoc('config', orgId ? `${orgId}_autopilot` : null);
+  const walletCash = autopilot?.walletCash;
+  const bank = walletCash ? {
+    balance: Number(walletCash.balance),
+    asOf: walletCash.asOf,
+    openingYear: walletCash.yearOpening?.year,
+    openingAmount: Number(walletCash.yearOpening?.amount),
+  } : null;
   const openingDerived = openings[year]?.derived ?? false;
 
   const model = useMemo(() => buildPlannerModel({
@@ -159,6 +172,7 @@ export default function Planner() {
             openingBalance={openingBalance}
             onCommitOpening={handleCommitOpening}
             openingDerived={openingDerived}
+            bank={bank}
           />
         </div>
       ) : (

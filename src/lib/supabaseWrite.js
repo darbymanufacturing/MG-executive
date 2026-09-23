@@ -85,6 +85,37 @@ export async function sbWrite(collectionName, orgId, userUid, data, opts = {}) {
 }
 
 /**
+ * Bulk create/overwrite many docs at explicit ids — the Supabase equivalent of a
+ * Firestore writeBatch of set()s, for CSV importers. Same stamping as sbWrite;
+ * chunked; THROWS on the first failed chunk (an import must never half-succeed
+ * silently — unlike the best-effort dualWriteSupabase mirror).
+ * #706: importTickets/importParts only ever wrote Firestore after the ADR-0015
+ * cutover, so every repair-log and parts CSV import was invisible in the app.
+ *
+ * @param {Array<{id:string, data:object}>} entries
+ * @returns {Promise<{written:number}>}
+ */
+export async function sbWriteMany(collectionName, orgId, userUid, entries, { chunkSize = 400 } = {}) {
+  if (!supabase) throw new Error('supabaseWrite: Supabase client not configured.');
+  const table = tableFor(collectionName);
+  const now = new Date().toISOString();
+  let written = 0;
+  for (let i = 0; i < entries.length; i += chunkSize) {
+    const rows = entries.slice(i, i + chunkSize).map(({ id, data }) => toSupabaseRow(collectionName, orgId, id, {
+      ...data,
+      createdByUid: data.createdByUid ?? userUid ?? null,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    }));
+    const { error } = await supabase.from(table).upsert(rows, { onConflict: 'source_doc_id' });
+    if (error) throw friendlySupabaseError(error, `Import stopped after ${written} rows`);
+    written += rows.length;
+  }
+  if (written) emitSupabaseWrite(table); // #575 — nudge live read hooks
+  return { written };
+}
+
+/**
  * Create-or-merge at an explicit id — the Supabase equivalent of Firestore
  * setDoc(merge:true) used by the singleton config docs. Tries a shallow data-merge
  * (apply_doc_patch); if the row doesn't exist yet, inserts the full doc. Avoids the

@@ -1,45 +1,57 @@
 import { createContext, useContext, useMemo, useCallback } from 'react';
 import { useOrg } from './OrgContext.jsx';
+import { useAuth } from './AuthContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
+import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgUpdate, orgWrite } from '../hooks/orgWrite.js';
 import { useCosts } from './CostContext.jsx';
 import { useIssues } from './IssueContext.jsx';
 import { useMaintenance } from './MaintenanceContext.jsx';
-import { resolveCurrentWeek } from './PowContext.jsx';
+import { useLoans } from './LoansContext.jsx';
+import { resolveCurrentWeek } from '../utils/powWeek.js';
 import { INTAKE_STATUSES, missingForApproval } from '../utils/intake.js';
-import { openTicketForScooter, matchPartsByName } from '../utils/maintenanceAutomation.js';
+import { settlementPeriodFor } from '../utils/upcomingPayments.js';
+import {
+  costFromIntake, ledgerFromIntake, issueFromIntake, taskFromIntake, ticketActionFromIntake,
+  recurringFromIntake, learnedRuleFromApproval, loanPaymentPlan,
+} from '../utils/intakeRecords.js';
+import { authedFetch } from '../utils/apiClient.js';
 
 /**
  * IntakeContext — the owner's side of Omni Autopilot (docs/AUTOMATION_PLAN.md).
  *
- * The robots (Wallet / myDATA / Gmail / WhatsApp ingest endpoints) write intake
- * items server-side with the service-role key. Anything they were sure about is
- * already committed; anything else waits here as `pending`, because the owner
- * chose "hold until approved" (2026-09-22).
+ * The robots (Wallet / myDATA / Gmail / WhatsApp / the finance rules) write
+ * intake items server-side. Anything they were sure about is already committed —
+ * with an UNDO here; anything else waits as `pending`, because the owner chose
+ * "hold until approved" (2026-09-22).
  *
- * Approving turns an item into a REAL record through the app's normal client
- * seams — `addCost`, `createIssue`, `addTicket`, `orgWrite` — so an approved row
- * is indistinguishable from one typed by hand: same validation, same org
- * stamping, same audit trail. Every kind the WhatsApp router can produce is
- * handled; an unknown kind is refused rather than silently marked approved
- * (which would have lost the record — the bug this version fixes).
+ * Approving turns an item into a REAL record with the same pure builders the
+ * server uses for WhatsApp approvals (src/utils/intakeRecords.js), written
+ * through the app's normal org-scoped seams — and at the SAME deterministic ids,
+ * so an item approved on screen and again from a chat can never be recorded
+ * twice. Each approval of an expense also teaches a supplier rule (visible and
+ * editable on Bank Import → Rules). Unknown kinds are refused, never marked done.
  *
- * Mounted INSIDE Issue/Maintenance providers (App.jsx) because it needs both.
+ * Mounted inside Loans/Cost/Maintenance/Issue providers (App.jsx) — it needs all four.
  */
 const IntakeContext = createContext(null);
 
 const COLLECTION = 'intakeItems';
 const MAX_ITEMS = 500;
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const iso = () => new Date().toISOString();
+const safe = (s) => String(s ?? '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 80) || 'x';
 
 export function IntakeProvider({ children }) {
   const { orgId } = useOrg();
+  const { user } = useAuth();
   const { items, loading, error } = useOrgCollection(COLLECTION, { limit: MAX_ITEMS });
   const { items: users } = useOrgCollection('users', {});
-  const { addCost } = useCosts();
+  const { item: autopilot } = useOrgDoc('config', orgId ? `${orgId}_autopilot` : null);
+  const { costs, deleteCost, setCostSettlement } = useCosts();
   const { createIssue } = useIssues();
-  const { addTicket, completeTicket, tickets, parts, scooters } = useMaintenance();
+  const { addTicket, completeTicket, receiveParts, tickets, parts, scooters } = useMaintenance();
+  const { loans, updateLoan } = useLoans();
 
   /** Newest first; the queue is read far more often than it is written. */
   const all = useMemo(() => {
@@ -69,131 +81,101 @@ export function IntakeProvider({ children }) {
   );
 
   const patchItem = useCallback(async (docId, patch) => {
-    await orgUpdate(COLLECTION, docId, {
-      ...patch,
-      updatedAt: new Date().toISOString(),
-    }, { rethrow: true, errorMessage: 'Failed to update the intake item' });
+    await orgUpdate(COLLECTION, docId, { ...patch, updatedAt: iso() }, {
+      rethrow: true, errorMessage: 'Failed to update the intake item',
+    });
   }, []);
 
-  /* ── one committer per kind ─────────────────────────────────────────── */
+  /** The same deterministic id the server uses for a record made from this item. */
+  const recordId = useCallback(
+    (kind, item) => `${orgId}_intake_${kind}_${item.source}_${safe(item.sourceRef)}`,
+    [orgId],
+  );
 
-  const commitCostRecord = useCallback(async (item, p) => {
-    const created = await addCost({
-      name: p.name,
-      amount: Number(p.amount) || 0,
-      category: p.category || 'Unknown',
-      frequency: 'one-time',
-      startDate: p.date || todayISO(),
-      notes: p.notes || null,
-      vatIncluded: p.vatAmount != null ? true : undefined,
-      vatAmount: p.vatAmount != null ? Number(p.vatAmount) : undefined,
-      source: `autopilot-${item.source}`,
-      _intakeRef: `${item.source}:${item.sourceRef}`,
-      // The original receipt/invoice, kept for VAT audits and the accountant pack.
-      receiptUrl: item.evidence?.fileUrl || undefined,
+  /* ── one committer per kind (mirrors api/_lib/intake-commit.js) ────────── */
+
+  const writeCost = useCallback(async (kind, item, doc) => {
+    if (!orgId) throw new Error('No active organization');
+    const id = recordId(kind, item);
+    await orgWrite('costs', { ...doc, id: crypto.randomUUID(), createdAt: iso(), updatedAt: iso() }, {
+      id, rethrow: true, errorMessage: 'Failed to save the cost',
     });
-    return created?.id || null;
-  }, [addCost]);
+    return id;
+  }, [orgId, recordId]);
 
   const committers = useMemo(() => ({
-    cost: (item, p) => commitCostRecord(item, p),
+    cost: (item, p) => writeCost('cost', item, costFromIntake(item, p)),
 
-    /* "I paid a company cost with my own card": the company still incurred the
-     * cost (so it goes in the books), AND the company now owes that owner. */
+    /* Owner money: "I paid it personally" books the cost AND what the company now
+     * owes; a salary accrual / payment / capital-in is ledger-only. */
     ledger: async (item, p) => {
-      const costId = await commitCostRecord(item, p);
+      const type = p.ledgerType || 'expense_reimbursable';
+      const costId = type === 'expense_reimbursable' ? await writeCost('cost', item, costFromIntake(item, p)) : null;
       const owner = owners.find((o) => o._docId === p.ownerUid);
-      await orgWrite('ownerLedger', {
-        ownerUid: p.ownerUid,
-        ownerName: owner?.displayName ?? null,
-        type: 'expense_reimbursable',
-        amount: Number(p.amount) || 0,
-        date: p.date || todayISO(),
-        note: [p.name, p.notes].filter(Boolean).join(' — ') || 'Captured by Autopilot',
-        linkedCostId: costId,
-        source: `autopilot-${item.source}`,
-      }, { rethrow: true, errorMessage: 'Failed to add the ledger entry' });
-      return costId;
+      const id = recordId('ledger', item);
+      await orgWrite('ownerLedger', ledgerFromIntake(item, p, { ownerName: owner?.displayName ?? null, costId }), {
+        id, rethrow: true, errorMessage: 'Failed to add the ledger entry',
+      });
+      return costId || id;
     },
 
     issue: async (item, p) => {
-      const created = await createIssue({
-        title: p.name,
-        description: [p.notes, item.evidence?.transcript].filter(Boolean).join('\n\n'),
-        type: 'other',
-        urgency: 'medium',
-        nextAction: p.nextAction || '',
-        source: `autopilot-${item.source}`,
-      });
+      const created = await createIssue(issueFromIntake(item, p));
       return created?.id || created?._docId || null;
     },
 
-    /* A fault report opens a ticket. A "done" report CLOSES the scooter's open
-     * ticket — costed and stock-deducted through completeTicket, the same path
-     * as an admin completion — instead of opening a duplicate. Only when nothing
-     * is open does it record an already-completed ticket. */
+    /* A fault opens a ticket; a "done" report CLOSES the scooter's open ticket
+     * (costed + destocked through completeTicket's shared plan). */
     ticket: async (item, p) => {
-      const scooterId = String(p.scooterId).trim();
-      const scooter = (scooters || []).find((s) => String(s.scooterId) === scooterId);
-      const done = Boolean(p.completed);
-      const { matched, unmatched } = matchPartsByName(p.parts || [], parts || []);
-      const notes = [
-        p.notes,
-        unmatched.length ? `Parts (not in catalog): ${unmatched.join(', ')}` : null,
-        p.minutes ? `Labour: ${p.minutes} min` : null,
-        item.evidence?.transcript ? `Voice note: “${item.evidence.transcript}”` : null,
-      ].filter(Boolean).join('\n');
-
-      if (done) {
-        const open = openTicketForScooter(tickets || [], scooterId);
-        if (open) {
-          await completeTicket(open._docId, {
-            labourMinutes: p.minutes || 0,
-            partsUsed: matched,
-            note: notes || null,
-          });
-          return open._docId;
-        }
+      const action = ticketActionFromIntake(item, p, { tickets, parts, scooters });
+      if (action.action === 'complete') {
+        await completeTicket(action.ticket._docId, action.details);
+        return action.ticket._docId;
       }
-
-      return addTicket({
-        scooterId,
-        city: scooter?.city || '',
-        dateEntered: p.date || todayISO(),
-        dateCompleted: done ? (p.date || todayISO()) : null,
-        category: 'M',
-        status: done ? 'Completed' : 'Backlog',
-        primaryTag: 'WhatsApp',
-        issueDescription: p.name,
-        notes,
-        labourMinutes: p.minutes ?? null,
-        partsUsed: [],
-        partsUsedText: (p.parts || []).join(', '),
-        source: `autopilot-${item.source}`,
-      });
+      return addTicket(action.data);
     },
 
-    /* POW task — same document shape PowContext.addTask writes (it can't be
-     * called here: PowProvider is page-scoped, see Pow.jsx). */
+    /* POW task — PowContext.addTask's shape (PowProvider is page-scoped). */
     task: async (item, p) => {
       if (!orgId) throw new Error('No active organization');
-      const id = `${orgId}_task-${crypto.randomUUID()}`;
-      await orgWrite('pow_tasks', {
-        title: p.name,
-        description: [p.notes, item.evidence?.transcript].filter(Boolean).join('\n\n'),
-        steps: [],
-        categoryId: null,
-        assignees: [],
-        checkedSteps: [],
-        powSteps: {},
-        status: 'backlog',
-        createdWeek: resolveCurrentWeek(null).computedWeek,
-        doneWeek: null,
-        source: `autopilot-${item.source}`,
-      }, { id, rethrow: true, errorMessage: 'Failed to create the POW task' });
+      const id = `${orgId}_task-${safe(`${item.source}_${item.sourceRef}`)}`;
+      await orgWrite('pow_tasks', taskFromIntake(item, p, { week: resolveCurrentWeek(null).computedWeek }), {
+        id, rethrow: true, errorMessage: 'Failed to create the POW task',
+      });
       return id;
     },
-  }), [commitCostRecord, owners, createIssue, scooters, parts, tickets, addTicket, completeTicket, orgId]);
+
+    recurring: (item, p) => writeCost('recurring', item, recurringFromIntake(item, p)),
+
+    /* Installment: tick the commitment that budgets it, or book the INTEREST
+     * as a cost; the principal only lowers the loan balance (FF-2 gotcha #3). */
+    loan_payment: async (item, p) => {
+      const loan = (loans || []).find((l) => l._docId === p.loanId);
+      if (!loan) throw new Error('The loan this payment belongs to no longer exists');
+      const plan = loanPaymentPlan(item, p, { loan, costs });
+      if (plan.settle) await setCostSettlement(plan.settle.costId, plan.settle.period, 'paid');
+      if (plan.interestCost) await writeCost('interest', item, plan.interestCost);
+      await updateLoan(loan._docId, plan.loanPatch);
+      return loan._docId;
+    },
+
+    parts_receipt: async (item, p) => {
+      await receiveParts(p.parts || []);
+      return (p.parts || []).map((x) => x.partId).join(',') || null;
+    },
+  }), [
+    writeCost, owners, recordId, createIssue, tickets, parts, scooters, completeTicket, addTicket,
+    orgId, loans, costs, setCostSettlement, updateLoan, receiveParts,
+  ]);
+
+  /** Remember supplier → category (and ΑΦΜ → name) for next time. Never blocks. */
+  const learnFrom = useCallback(async (item, p) => {
+    const learned = learnedRuleFromApproval(item, p);
+    if (!learned || !orgId) return;
+    await orgWrite('bankRules', { ...learned.rule, id: `learned-${safe(learned.key)}` }, {
+      id: `${orgId}_learnedrule_${safe(learned.key)}`, rethrow: false, silent: true,
+    }).catch(() => {});
+  }, [orgId]);
 
   /**
    * Approve one item: write the real record, then mark the item approved.
@@ -210,24 +192,81 @@ export function IntakeProvider({ children }) {
 
     const payload = { ...item.payload, ...overrides };
     const committedRef = await commit(item, payload);
+    await learnFrom(item, payload);
 
     await patchItem(item._docId, {
       status: 'approved',
       payload,
       committedRef: committedRef ?? null,
-      decidedAt: new Date().toISOString(),
+      decidedAt: iso(),
+      decidedBy: user?.uid ?? null,
+      decidedVia: 'app',
     });
     return committedRef;
-  }, [committers, patchItem]);
+  }, [committers, learnFrom, patchItem, user]);
 
   const reject = useCallback(async (item, reason = null) => {
     if (!item?._docId) throw new Error('reject: item has no document id');
     await patchItem(item._docId, {
       status: 'rejected',
       rejectionReason: reason,
-      decidedAt: new Date().toISOString(),
+      decidedAt: iso(),
+      decidedBy: user?.uid ?? null,
+      decidedVia: 'app',
     });
-  }, [patchItem]);
+  }, [patchItem, user]);
+
+  /**
+   * "Same payment" on a possible duplicate: keep ONE record. When the item is
+   * the bank debit for an invoice/receipt already in the books, that record's
+   * month is ticked paid (ADR-0027) instead of adding a second cost.
+   */
+  const merge = useCallback(async (item) => {
+    const targetId = item?.match?.targetId;
+    if (!item?._docId || !targetId) throw new Error('Nothing to merge with');
+    const target = (costs || []).find((c) => c.id === targetId || c._docId === targetId);
+    if (target && item.source === 'wallet') {
+      const period = settlementPeriodFor(target, item.payload?.date);
+      if (period) await setCostSettlement(target.id, period, 'paid');
+    }
+    await patchItem(item._docId, {
+      status: 'merged',
+      committedRef: targetId,
+      decidedAt: iso(),
+      decidedBy: user?.uid ?? null,
+      decidedVia: 'app',
+    });
+  }, [costs, setCostSettlement, patchItem, user]);
+
+  /**
+   * Undo an automatic decision (spec §3.3: "auto-commit, with undo"): remove the
+   * cost it created, or un-tick the payment it marked — only what Autopilot
+   * itself wrote — and put the item back in the queue. It then waits for the
+   * owner: the next sync never re-commits it on its own.
+   */
+  const undo = useCallback(async (item) => {
+    if (!item?._docId) throw new Error('undo: item has no document id');
+    if (item.status === 'auto_committed') {
+      const ref = item.committedRef;
+      const target = (costs || []).find((c) => c.id === ref || c._docId === ref);
+      const settled = item.settledPeriod || item.match?.period;
+      if ((item.match?.type === 'commitment' || item.match?.type === 'invoice_payment') && settled) {
+        if (target?.settlements?.[settled]?.by === 'autopilot') await setCostSettlement(target.id, settled, null);
+      } else if (target) {
+        await deleteCost(target.id);
+      }
+    } else if (item.status !== 'merged') {
+      throw new Error('Only automatic entries can be undone');
+    }
+    await patchItem(item._docId, {
+      status: 'pending',
+      noAuto: true,
+      committedRef: null,
+      reasons: ['You undid the automatic entry — waiting for your call'],
+      undoneAt: iso(),
+      undoneBy: user?.uid ?? null,
+    });
+  }, [costs, setCostSettlement, deleteCost, patchItem, user]);
 
   /** Approve several at once — the "✅ all" path, sequential so one failure stops nothing else. */
   const approveMany = useCallback(async (list) => {
@@ -244,15 +283,30 @@ export function IntakeProvider({ children }) {
     return results;
   }, [approve]);
 
+  /**
+   * Run a feed now (or back-fill from a date): 'wallet' | 'mydata' | 'finance'.
+   * Same endpoints the nightly cron calls; the server checks this user belongs
+   * to the org.
+   */
+  const syncNow = useCallback(async (feed, { from } = {}) => {
+    const path = feed === 'finance' ? '/api/cron-finance' : `/api/intake-${feed}`;
+    const res = await authedFetch(`${path}${from ? `?from=${encodeURIComponent(from)}` : ''}`, { method: 'POST' });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Sync failed (${res.status})`);
+    return json;
+  }, []);
+
   const value = useMemo(() => ({
     all, pending, recentlyHandled, bySource, owners,
+    autopilot: autopilot || {},
     loading,
     // A missing table (migration not applied yet) must not break the app: the
     // queue simply reads empty and the page explains why.
     error: error ? error.message : null,
-    approve, approveMany, reject,
+    approve, approveMany, reject, merge, undo, syncNow,
     STATUSES: INTAKE_STATUSES,
-  }), [all, pending, recentlyHandled, bySource, owners, loading, error, approve, approveMany, reject]);
+  }), [all, pending, recentlyHandled, bySource, owners, autopilot, loading, error,
+    approve, approveMany, reject, merge, undo, syncNow]);
 
   return <IntakeContext.Provider value={value}>{children}</IntakeContext.Provider>;
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Send, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import Button from '../Shared/Button.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
+import { useIntake } from '../../context/IntakeContext.jsx';
 import { authedFetch } from '../../utils/apiClient.js';
 import { previousMonth } from '../../utils/accountantPack.js';
 import { formatEUR } from '../../utils/formatters.js';
@@ -20,6 +21,7 @@ const LEGACY_KEY = 'omni_accountant_email';
  */
 export default function AccountantPanel() {
   const { config, updateConfig } = useCosts();
+  const { autopilot } = useIntake();
   const stored = config?.accountantEmail || '';
 
   const [email, setEmail] = useState(stored);
@@ -121,6 +123,12 @@ export default function AccountantPanel() {
         </Button>
       </div>
 
+      {autopilot?.accountantPacks?.[month]?.sentAt && (
+        <p className={styles.ok}>
+          Sent {new Date(autopilot.accountantPacks[month].sentAt).toLocaleDateString('el-GR')} to{' '}
+          {autopilot.accountantPacks[month].to} — {autopilot.accountantPacks[month].count} items.
+        </p>
+      )}
       {preview && (
         <p className={styles.preview}>
           {preview.count

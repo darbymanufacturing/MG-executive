@@ -17,7 +17,12 @@ vi.mock('../_lib/require-auth.js', async () => ({
   requireUser: vi.fn(async () => ({ uid: 'u1', email: 'kostas@example.com', role: 'owner', orgId: 'org1' })),
 }));
 vi.mock('../_lib/heartbeat.js', () => ({ heartbeatOk: vi.fn(async () => true), heartbeatFail: vi.fn(async () => true) }));
-vi.mock('../_lib/intake-store.js', () => ({ intakeOrgId: () => 'org1' }));
+const saveAutopilotState = vi.fn(async () => true);
+vi.mock('../_lib/intake-store.js', () => ({
+  intakeOrgId: () => 'org1',
+  loadAutopilotState: vi.fn(async () => ({ accountantPacks: { '2026-07': { sentAt: '2026-08-03T08:00:00Z' } } })),
+  saveAutopilotState: (...a) => saveAutopilotState(...a),
+}));
 
 const fetchRecentWeather = vi.fn(async () => ([
   { date: '2026-09-20', isRainy: false, totalRainMm: 0, weatherCode: 0, temperature: 24 },
@@ -132,6 +137,16 @@ describe('accountant-pack', () => {
     expect(mail.to).toEqual(['accountant@example.com']);
     expect(mail.cc).toEqual(['kostas@example.com']);
     expect(mail.attachments[0].filename).toBe('omni-expenses-2026-08.csv');
+    // Remembered for the panel and the morning brief — earlier months kept.
+    const saved = saveAutopilotState.mock.calls.at(-1)[1].accountantPacks;
+    expect(saved['2026-08']).toMatchObject({ to: 'accountant@example.com', count: 1, total: 124 });
+    expect(saved['2026-07']).toBeDefined();
+  });
+
+  it('a preview never marks the pack as sent', async () => {
+    saveAutopilotState.mockClear();
+    await packHandler({ method: 'POST', body: { month: '2026-08', send: false } }, res());
+    expect(saveAutopilotState).not.toHaveBeenCalled();
   });
 
   it('refuses to send without an accountant address', async () => {

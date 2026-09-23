@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ClipboardCopy, Check, PackageSearch } from 'lucide-react';
+import { ClipboardCopy, Check, PackageSearch, PackageCheck } from 'lucide-react';
 import { useMaintenance } from '../../../context/MaintenanceContext.jsx';
 import { draftOrderText } from '../../../utils/maintenanceAutomation.js';
 import { formatEUR } from '../../../utils/formatters.js';
@@ -15,13 +15,28 @@ import styles from './ReorderPanel.module.css';
  * this list and its stock can be received later.
  */
 export default function ReorderPanel() {
-  const { reorder = [], updatePart } = useMaintenance();
+  const { reorder = [], updatePart, parts = [], receiveParts } = useMaintenance();
   const [copied, setCopied] = useState(null);
   const [marking, setMarking] = useState(null);
+  const [receiving, setReceiving] = useState(null);
 
   const orders = useMemo(() => draftOrderText(reorder, { company: 'Omni' }), [reorder]);
+  // Autopilot — what's been ordered and not delivered yet (closes the loop).
+  const onOrder = useMemo(
+    () => parts.filter((p) => Number(p.unitsOnOrder) > 0 && p.status !== 'Discontinued'),
+    [parts],
+  );
 
-  if (reorder.length === 0) return null;
+  if (reorder.length === 0 && onOrder.length === 0) return null;
+
+  const received = async (part) => {
+    setReceiving(part._docId);
+    try {
+      await receiveParts([{ partId: part._docId, qty: Number(part.unitsOnOrder) }]);
+    } finally {
+      setReceiving(null);
+    }
+  };
 
   const copy = async (order) => {
     try {
@@ -50,7 +65,10 @@ export default function ReorderPanel() {
       <header className={styles.head}>
         <PackageSearch size={16} aria-hidden="true" />
         <h3 id="reorder-title" className={styles.title}>Reorder now</h3>
-        <span className={styles.count}>{reorder.length} part{reorder.length === 1 ? '' : 's'} below reorder point</span>
+        <span className={styles.count}>
+          {reorder.length} part{reorder.length === 1 ? '' : 's'} below reorder point
+          {onOrder.length ? ` · ${onOrder.length} on order` : ''}
+        </span>
       </header>
 
       {orders.map((order) => (
@@ -86,6 +104,32 @@ export default function ReorderPanel() {
           </div>
         </div>
       ))}
+
+      {onOrder.length > 0 && (
+        <div className={styles.order}>
+          <div className={styles.orderHead}>
+            <span className={styles.supplier}>On order — waiting for delivery</span>
+          </div>
+          <ul className={styles.lines}>
+            {onOrder.map((p) => (
+              <li key={p._docId} className={styles.line}>
+                <span className={styles.qty}>{p.unitsOnOrder} ×</span>
+                <span className={styles.name}>{p.partName || p.name || p.sku}</span>
+                <span className={styles.stock}>{p.orderDate ? `ordered ${p.orderDate}` : 'ordered'}</span>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={() => received(p)}
+                  disabled={receiving === p._docId}
+                  title="Put the delivered units on the shelf"
+                >
+                  <PackageCheck size={14} /> {receiving === p._docId ? 'Saving…' : 'Received'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

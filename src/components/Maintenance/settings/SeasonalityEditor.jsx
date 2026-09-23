@@ -87,7 +87,12 @@ export default function SeasonalityEditor() {
         // #225: use safeParseFloat to handle European decimal commas
         seasonalityIndex[key] = safeParseFloat(values[key]) || 0;
       });
-      await updateConfig({ seasonalityIndex });
+      // Stamp when a calibration was saved — the morning brief nudges once a year.
+      await updateConfig({
+        seasonalityIndex,
+        ...(calibrated?.count ? { seasonalityCalibratedAt: new Date().toISOString() } : {}),
+      });
+      setCalibrated(null);
       dirtyRef.current = false; // #224: reset dirty after successful save
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);

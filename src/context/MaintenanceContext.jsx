@@ -8,9 +8,16 @@ import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { useOrgDoc } from '../hooks/useOrgDoc.js';
 import { orgWrite, orgUpdate, orgDelete } from '../hooks/orgWrite.js';
 import { orgDocId } from '../utils/orgDocId.js';
+import { layerFor } from '../lib/dataLayerConfig.js';
+import { sbWriteMany } from '../lib/supabaseWrite.js';
 import {
-  scooterStatusAfter, completionCostFields, stockAfterUse, reorderSuggestions,
+  scooterStatusAfter, reorderSuggestions, scheduleDonePatch, ticketDocIdFor, planTicketCompletion,
+  stockAfterReceipt,
 } from '../utils/maintenanceAutomation.js';
+
+// Lives in the pure module now (the server rolls schedules too); re-exported so
+// existing imports from this context keep working.
+export { advanceDueDate } from '../utils/maintenanceAutomation.js';
 
 // ── Firestore paths (Phase 2 / ADR-0002+0003) ─────────────────────────────────
 const TICKETS_COL  = 'maintenanceTickets';
@@ -150,20 +157,6 @@ export function computeDaysOpen(ticket) {
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
-/**
- * Advance a YYYY-MM-DD date by N units, for recurring maintenance schedules.
- * setMonth/setDate handle month + year rollover. Returns the original string if
- * the date can't be parsed.
- */
-export function advanceDueDate(dateStr, unit, n = 1) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  if (unit === 'weeks') d.setDate(d.getDate() + n * 7);
-  else if (unit === 'months') d.setMonth(d.getMonth() + n);
-  else d.setDate(d.getDate() + n); // 'days' (default)
-  return d.toISOString().slice(0, 10);
-}
-
 // ── Context ───────────────────────────────────────────────────────────────────
 const MaintenanceContext = createContext(null);
 
@@ -254,14 +247,10 @@ export function MaintenanceProvider({ children }) {
     const s = schedules.find((x) => x._docId === docId);
     if (!s) throw new Error('Schedule not found');
     const today = new Date().toISOString().slice(0, 10);
-    const recurs = s.recurrence && s.recurrence !== 'none' && Number(s.interval) > 0;
-    // #623 — anchor the advance to max(s.nextDue, today) so a late completion always
-    // produces a future nextDue rather than remaining in the past.
-    const anchor = s.nextDue < today ? today : s.nextDue;
-    const patch = recurs
-      ? { nextDue: advanceDueDate(anchor, s.recurrence, Number(s.interval)), lastCompleted: today, status: 'active' }
-      : { status: 'done', lastCompleted: today };
-    await orgUpdate(SCHEDULES_COL, docId, patch, { rethrow: true, errorMessage: 'Failed to update schedule' });
+    // #623 anchor rule lives in scheduleDonePatch (shared with the server).
+    await orgUpdate(SCHEDULES_COL, docId, scheduleDonePatch(s, today), {
+      rethrow: true, errorMessage: 'Failed to update schedule',
+    });
   }, [schedules]);
 
   // ── Ticket CRUD ───────────────────────────────────────────────────────────
@@ -270,10 +259,8 @@ export function MaintenanceProvider({ children }) {
     if (!orgId) throw new Error('addTicket: no active org');
     const dateStr = data.dateEntered || new Date().toISOString().slice(0, 10);
     const scooterId = String(data.scooterId || '').trim();
-    const baseId  = orgKey(orgId, scooterId, dateStr);
     // Collision avoidance within the org (multiple tickets same scooter+day).
-    const existing = tickets.filter((t) => t._docId === baseId || t._docId?.startsWith(`${baseId}_`));
-    const docId   = existing.length === 0 ? baseId : `${baseId}_${existing.length + 1}`;
+    const docId = ticketDocIdFor(orgId, scooterId, dateStr, tickets);
     await orgWrite(TICKETS_COL, data, { id: docId, rethrow: true, errorMessage: 'Failed to create ticket' });
     // Autopilot Phase 3 — a new open ticket puts the scooter "In Repair".
     await syncScooterStatus(scooterId, [...tickets, { ...data, scooterId, _docId: docId }]);
@@ -299,37 +286,50 @@ export function MaintenanceProvider({ children }) {
    * Calling completeTicket(docId) with no details behaves as before, plus the
    * schedule/scooter bookkeeping. */
   const completeTicket = useCallback(async (docId, details = {}) => {
-    const ticket = tickets.find((t) => t._docId === docId);
-    const costFields = completionCostFields({
-      labourMinutes: details.labourMinutes,
-      partsUsed: details.partsUsed,
-      labourRatePerHour: config.labourRatePerHour,
+    const ticket = tickets.find((t) => t._docId === docId) || { _docId: docId };
+    // ONE plan, shared with WhatsApp approvals on the server (planTicketCompletion).
+    const plan = planTicketCompletion({
+      ticket, tickets, parts, schedules, scooters, config, details,
+      today: new Date().toISOString().slice(0, 10),
     });
 
-    await orgUpdate(TICKETS_COL, docId, {
-      status: 'Completed',
-      dateCompleted: details.dateCompleted || new Date().toISOString().slice(0, 10),
-      ...costFields,
-      ...(details.note ? { completionNote: details.note } : {}),
-    }, { rethrow: true, errorMessage: 'Failed to complete ticket' });
+    await orgUpdate(TICKETS_COL, docId, plan.ticketPatch, {
+      rethrow: true, errorMessage: 'Failed to complete ticket',
+    });
 
-    for (const { docId: partDocId, stockOnHand } of stockAfterUse(parts, costFields.partsUsed || [])) {
+    for (const { docId: partDocId, stockOnHand } of plan.stock) {
       await orgUpdate(PARTS_COL, partDocId, { stockOnHand }, {
         rethrow: false, errorMessage: 'Ticket completed, but a stock update failed',
       });
     }
 
-    if (ticket?.scheduleId && schedules.some((x) => x._docId === ticket.scheduleId)) {
-      await markScheduleDone(ticket.scheduleId).catch(() => {});
+    if (plan.schedule) {
+      await orgUpdate(SCHEDULES_COL, plan.schedule.docId, plan.schedule.patch, {
+        rethrow: false, errorMessage: 'Ticket completed, but its schedule could not be rolled forward',
+      });
     }
 
-    if (ticket?.scooterId) {
-      await syncScooterStatus(
-        ticket.scooterId,
-        tickets.map((t) => (t._docId === docId ? { ...t, status: 'Completed' } : t)),
-      );
+    if (plan.scooter) {
+      await orgUpdate(SCOOTERS_COL, plan.scooter.docId, {
+        status: plan.scooter.status,
+        statusChangedBy: 'autopilot',
+        statusChangedAt: new Date().toISOString(),
+      }, { rethrow: false, errorMessage: 'Ticket completed, but the scooter status could not be updated' });
     }
-  }, [tickets, parts, schedules, config.labourRatePerHour, markScheduleDone, syncScooterStatus]);
+  }, [tickets, parts, schedules, scooters, config]);
+
+  /* Autopilot — a parts delivery goes back on the shelf and comes off "on
+   * order" (closes the loop the reorder drafts open). `received` = [{partId, qty}]. */
+  const receiveParts = useCallback(async (received) => {
+    const updates = stockAfterReceipt(parts, received);
+    const at = new Date().toISOString();
+    for (const { docId, stockOnHand, unitsOnOrder, status } of updates) {
+      await orgUpdate(PARTS_COL, docId, { stockOnHand, unitsOnOrder, status, lastReceivedAt: at }, {
+        rethrow: true, errorMessage: 'Failed to update stock',
+      });
+    }
+    return updates.length;
+  }, [parts]);
 
   const assignTicket = useCallback(async (docId, uid, displayName) => {
     await orgUpdate(TICKETS_COL, docId, {
@@ -367,16 +367,27 @@ export function MaintenanceProvider({ children }) {
     if (!orgId) throw new Error('importTickets: no active org');
     const uid = auth.currentUser?.uid ?? null;
     const existingIds = new Set(tickets.map((t) => t._docId));
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const entries = rows.map((row) => {
+      const scooterId = String(row.scooterId || '').trim();
+      const dateStr   = row.dateEntered || new Date().toISOString().slice(0, 10);
+      let docId = orgKey(orgId, scooterId, dateStr);
+      let suffix = 1;
+      while (existingIds.has(docId)) { docId = `${orgKey(orgId, scooterId, dateStr)}_${++suffix}`; }
+      existingIds.add(docId);
+      return { id: docId, data: { ...row, updatedAt: new Date().toISOString() } };
+    });
+    // #706 — write where the app READS. After the ADR-0015 cutover this only ever
+    // wrote Firestore, so imported repair logs never appeared.
+    if (layerFor(TICKETS_COL) === 'supabase') {
+      await safeWrite(() => sbWriteMany(TICKETS_COL, orgId, uid, entries), {
+        rethrow: true, errorMessage: 'Ticket import failed',
+      });
+      return;
+    }
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
-      rows.slice(i, i + BATCH_SIZE).forEach((row) => {
-        const scooterId = String(row.scooterId || '').trim();
-        const dateStr   = row.dateEntered || new Date().toISOString().slice(0, 10);
-        let docId = orgKey(orgId, scooterId, dateStr);
-        let suffix = 1;
-        while (existingIds.has(docId)) { docId = `${orgKey(orgId, scooterId, dateStr)}_${++suffix}`; }
-        existingIds.add(docId);
-        batch.set(doc(db, TICKETS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
+      entries.slice(i, i + BATCH_SIZE).forEach(({ id, data }) => {
+        batch.set(doc(db, TICKETS_COL, id), { ...data, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Ticket import failed mid-batch' });
     }
@@ -385,11 +396,20 @@ export function MaintenanceProvider({ children }) {
   const importParts = useCallback(async (rows) => {
     if (!orgId) throw new Error('importParts: no active org');
     const uid = auth.currentUser?.uid ?? null;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const entries = rows.map((row) => ({
+      id: orgKey(orgId, String(row.sku).trim()),
+      data: { ...row, updatedAt: new Date().toISOString() },
+    }));
+    if (layerFor(PARTS_COL) === 'supabase') { // #706 — see importTickets
+      await safeWrite(() => sbWriteMany(PARTS_COL, orgId, uid, entries), {
+        rethrow: true, errorMessage: 'Parts import failed',
+      });
+      return;
+    }
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
       const batch = writeBatch(db);
-      rows.slice(i, i + BATCH_SIZE).forEach((row) => {
-        const docId = orgKey(orgId, String(row.sku).trim());
-        batch.set(doc(db, PARTS_COL, docId), { ...row, orgId, createdByUid: uid, updatedAt: new Date().toISOString() });
+      entries.slice(i, i + BATCH_SIZE).forEach(({ id, data }) => {
+        batch.set(doc(db, PARTS_COL, id), { ...data, orgId, createdByUid: uid });
       });
       await safeWrite(() => batch.commit(), { rethrow: true, errorMessage: 'Parts import failed mid-batch' });
     }
@@ -518,6 +538,7 @@ export function MaintenanceProvider({ children }) {
     addPart,
     updatePart,
     deletePart,
+    receiveParts,
     // Config
     updateConfig,
     // Import
@@ -535,7 +556,7 @@ export function MaintenanceProvider({ children }) {
     addTicket, updateTicket, deleteTicket, completeTicket, assignTicket,
     addScooter, updateScooter, deleteScooter,
     schedules, schedulesLoading, addSchedule, updateSchedule, deleteSchedule, markScheduleDone,
-    addPart, updatePart, deletePart,
+    addPart, updatePart, deletePart, receiveParts,
     updateConfig, importTickets, importParts, addCustomTag,
     loadSeedData, patchPartModels,
   ]);

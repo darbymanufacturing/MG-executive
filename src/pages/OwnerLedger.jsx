@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useOrgCollection } from '../hooks/useOrgCollection.js';
 import { orgWrite, orgDelete, orgUpdate } from '../hooks/orgWrite.js';
 import { useToast } from '../context/ToastContext.jsx';
+import { useCosts } from '../context/CostContext.jsx';
 import { formatEUR, todayISO } from '../utils/formatters.js';
 import { LEDGER_ENTRY_TYPES, LEDGER_TYPE_KEYS, signedAmount, ownerBalance } from '../utils/ownerLedger.js';
 import EmptyState from '../components/Shared/EmptyState.jsx';
@@ -106,12 +107,62 @@ function EntryModal({ owners, onClose, onSave }) {
   );
 }
 
+/**
+ * Autopilot — an owner's monthly salary. On the 1st, the finance job turns it
+ * into a "Salary accrued" entry waiting in Review (owner money is always
+ * confirmed by a person). Stored in the fleet config: ownerSalaries[uid].
+ */
+function SalaryField({ owner, salaries, onSave }) {
+  const saved = salaries?.[owner._docId];
+  const [draft, setDraft] = useState(saved != null ? String(saved) : '');
+  const [lastSaved, setLastSaved] = useState(saved);
+  if (saved !== lastSaved) { // the config changed elsewhere — follow it
+    setLastSaved(saved);
+    setDraft(saved != null ? String(saved) : '');
+  }
+  const commit = () => {
+    const n = Number(String(draft).replace(',', '.'));
+    const next = draft === '' ? null : (Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : saved);
+    if (next === (saved ?? null)) return;
+    onSave(owner._docId, next);
+  };
+  const id = `salary-${owner._docId}`;
+  return (
+    <span className={styles.salaryRow}>
+      <label htmlFor={id}>Monthly salary</label>
+      <input
+        id={id}
+        className={styles.salaryInput}
+        inputMode="decimal"
+        placeholder="—"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        title="Accrued automatically on the 1st — confirmed by you in Review"
+      />
+    </span>
+  );
+}
+
 export default function OwnerLedger() {
   const { userProfile } = useAuth();
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'owner';
   const { items: entries, loading } = useOrgCollection('ownerLedger', { limit: 1000 });
   const { items: users } = useOrgCollection('users', {});
   const { success: toastSuccess, error: toastError } = useToast();
+  const { config, updateConfig } = useCosts();
+
+  async function saveSalary(uid, amount) {
+    const next = { ...(config?.ownerSalaries || {}) };
+    if (amount == null) delete next[uid]; else next[uid] = amount;
+    try {
+      await updateConfig({ ownerSalaries: next });
+      toastSuccess(amount == null ? 'Salary cleared.' : 'Salary saved — accrued on the 1st of each month.');
+    } catch (err) {
+      toastError(err.message || 'Could not save the salary.');
+    }
+  }
 
   const [showAdd, setShowAdd] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
@@ -193,6 +244,7 @@ export default function OwnerLedger() {
                     <span className={styles.balanceLabel}>
                       {bal === 0 ? 'Settled up' : owedToYou ? 'Company owes them' : 'They owe the company'}
                     </span>
+                    {isAdmin && <SalaryField owner={o} salaries={config?.ownerSalaries} onSave={saveSalary} />}
                   </div>
                 );
               })}

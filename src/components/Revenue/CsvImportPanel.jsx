@@ -6,48 +6,16 @@ import { parseRevenueCSV } from '../../utils/csvParser.js';
 import { useRevenue } from '../../context/RevenueContext.jsx';
 import { useCosts } from '../../context/CostContext.jsx';
 import { DEFAULT_CONFIG } from '../../utils/constants.js';
-import { stripVat } from '../../utils/vat.js';
+import { stripVatFromRow } from '../../utils/revenueImport.js';
 import { formatEUR, formatDate, formatPercent } from '../../utils/formatters.js';
 import styles from './CsvImportPanel.module.css';
-
-// Monetary fields on a parsed revenue row that are eligible for VAT stripping when
-// the source CSV reports gross (VAT-included) amounts. Deliberately EXCLUDES:
-// - `totalVat` / `refundedVat` — already-computed VAT figures from the export, not
-//   gross amounts to strip VAT out of;
-// - `vatRate` — metadata (the export's own rate), not a monetary amount;
-// - trip counts, durations, distance, unique users/vehicles — non-monetary.
-const VAT_ADJUSTABLE_FIELDS = [
-  'totalRawIncome',
-  'totalFreeTripWorth',
-  'totalRawRefunds',
-  'unpaidUserRevenue',
-  'userDebtRefunds',
-  'unpaidOrgRevenue',
-  'orgDebtRefunds',
-  'totalPaidDebt',
-  'averagePayment',
-  'averageWorth',
-  'totalPaidRevenue',
-  'totalPaidRefunds',
-];
-
-/** Returns a copy of `row` with every VAT-adjustable monetary field stripped of VAT. */
-function stripVatFromRow(row, rate) {
-  const adjusted = { ...row };
-  VAT_ADJUSTABLE_FIELDS.forEach((field) => {
-    if (typeof row[field] === 'number') {
-      adjusted[field] = stripVat(row[field], rate);
-    }
-  });
-  return adjusted;
-}
 
 export default function CsvImportPanel({ locations }) {
   const { revenueData, importRevenueDays } = useRevenue();
   // App convention (DEFAULT_CONFIG comment, src/utils/constants.js): revenue is
   // stored EX-VAT. Guard for config.financial being absent (fresh org before
   // CostContext seeds defaults).
-  const { config } = useCosts();
+  const { config, updateConfig } = useCosts();
   const vatRate = config?.financial?.vatRate ?? DEFAULT_CONFIG.financial.vatRate;
   const fileRef   = useRef();
   const [parsed,          setParsed]          = useState(null);   // { rows, errors, total }
@@ -57,7 +25,9 @@ export default function CsvImportPanel({ locations }) {
   const [selectedLocation, setSelectedLocation] = useState('');
   // Pre-import question (owner ask, VAT-awareness): default = amounts already
   // exclude VAT, so unchecked imports the CSV's own figures unchanged.
-  const [amountsIncludeVat, setAmountsIncludeVat] = useState(false);
+  // Starts from the owner's last answer (remembered below) so a file forwarded
+  // to Omni on WhatsApp/email imports the same way (AUTOMATION_PLAN §4.5).
+  const [amountsIncludeVat, setAmountsIncludeVat] = useState(Boolean(config?.revenueImport?.amountsIncludeVat));
 
   // Single point where the VAT division is applied — both the preview table and
   // the actual commit (handleImport) read from this same memoized array, so the
@@ -107,6 +77,14 @@ export default function CsvImportPanel({ locations }) {
       // above. Do NOT re-apply stripVat here, that would double-strip.
       const rows = displayRows.map((r) => ({ ...r, location: selectedLocation || null }));
       await importRevenueDays(rows);
+      // Remember this import's VAT answer + city for files sent to Omni later.
+      updateConfig({
+        revenueImport: {
+          amountsIncludeVat,
+          location: selectedLocation || null,
+          lastImportAt: new Date().toISOString(),
+        },
+      }).catch(() => {});
       const newCount     = parsed.rows.filter((r) => !existingDates.has(r.date)).length;
       const updateCount  = parsed.rows.length - newCount;
       setStatus({

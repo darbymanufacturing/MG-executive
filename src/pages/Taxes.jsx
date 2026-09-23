@@ -8,6 +8,9 @@ import KpiCard from '../components/Dashboard/KpiCard.jsx';
 import CategoryBadge from '../components/Costs/CategoryBadge.jsx';
 import EmptyState from '../components/Shared/EmptyState.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
+import { useCosts } from '../context/CostContext.jsx';
+import { useIntake } from '../context/IntakeContext.jsx';
+import { vatPositionByQuarter } from '../utils/vatPosition.js';
 import { taxBreakdown } from '../utils/taxSummary.js';
 import { formatEUR, formatEURCompact, formatDate } from '../utils/formatters.js';
 import { MONTHS } from '../utils/constants.js';
@@ -25,7 +28,20 @@ const monthLabel = (ym) => {
  * derives the breakdown via the pure taxSummary util; computes no canonical totals.
  */
 export default function Taxes() {
-  const { scopedCosts } = useMetrics();
+  const { scopedCosts, scopedRevenue } = useMetrics();
+  const { config } = useCosts();
+  const { all: intakeItems } = useIntake();
+
+  // Autopilot — the VAT position per quarter (output VAT on revenue − input VAT
+  // recorded on expenses), with myDATA's own figure as a cross-check.
+  const vatYear = new Date().getFullYear();
+  const vatQuarters = useMemo(() => vatPositionByQuarter({
+    costs: scopedCosts || [],
+    revenue: scopedRevenue || [],
+    financial: config?.financial,
+    year: vatYear,
+    intake: intakeItems || [],
+  }).filter((q) => q.started), [scopedCosts, scopedRevenue, config?.financial, vatYear, intakeItems]);
 
   const tax = useMemo(() => taxBreakdown(scopedCosts || []), [scopedCosts]);
 
@@ -46,6 +62,49 @@ export default function Taxes() {
   return (
     <div className={styles.page}>
       <Header title="Taxes & Duties" subtitle="What the company actually pays the state" />
+
+      {vatQuarters.some((q) => q.output || q.input || q.paid) && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>VAT position — {vatYear}</h2>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Quarter</th>
+                  <th className={`${styles.th} ${styles.right}`}>VAT on revenue</th>
+                  <th className={`${styles.th} ${styles.right}`}>VAT on expenses</th>
+                  <th className={`${styles.th} ${styles.right}`}>Net (owed)</th>
+                  <th className={`${styles.th} ${styles.right}`}>VAT paid</th>
+                  <th className={styles.th}>Expenses with VAT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vatQuarters.map((q) => (
+                  <tr key={q.quarter} className={styles.tr}>
+                    <td className={styles.td}>{q.quarter}</td>
+                    <td className={`${styles.td} ${styles.right}`}>{formatEUR(q.output)}</td>
+                    <td className={`${styles.td} ${styles.right}`}>
+                      {formatEUR(q.input)}
+                      {q.aade != null && Math.abs(q.aade - q.input) >= 1 && (
+                        <span className={styles.vatNote} title="Input VAT on the supplier invoices myDATA holds for you">
+                          {' '}· myDATA {formatEUR(q.aade)}
+                        </span>
+                      )}
+                    </td>
+                    <td className={`${styles.td} ${styles.right}`}>{formatEUR(q.net)}</td>
+                    <td className={`${styles.td} ${styles.right}`}>{formatEUR(q.paid)}</td>
+                    <td className={styles.td}>{q.coverage.withVat} of {q.coverage.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className={styles.vatNote}>
+            An estimate for planning, not a return — your accountant files it. VAT on expenses is only as complete as
+            the &ldquo;expenses with VAT&rdquo; column; myDATA invoices fill it in automatically.
+          </p>
+        </section>
+      )}
 
       {tax.count === 0 ? (
         <EmptyState

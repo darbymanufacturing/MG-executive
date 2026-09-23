@@ -160,6 +160,43 @@ export function settlementStatusFor(cost, date) {
 }
 
 /**
+ * Which occurrence does a payment made on `paymentISO` settle? Returns its
+ * 'YYYY-MM' settlement key — keys are the OCCURRENCE month, not the payment
+ * month (#705: an invoice dated 12 Aug paid on 5 Sep must tick August, and rent
+ * due 31 Aug debited on 1 Sep must tick August too).
+ *   - one-time  → its own date's month
+ *   - recurring → the occurrence due NEAREST the payment date, looking 40 days
+ *                 back and 15 ahead (bills are paid around their due date —
+ *                 late or a little early). Ties go to the earlier occurrence.
+ * Null when that occurrence is already settled — the owner ticked this payment
+ * by hand, so counting the debit again would double it — or when nothing was
+ * due around that date.
+ */
+export function settlementPeriodFor(cost, paymentISO) {
+  const pay = parseISODate(String(paymentISO || '').slice(0, 10));
+  if (!cost || !pay) return null;
+
+  if (!isRecurring(cost)) {
+    const start = parseISODate(cost.startDate);
+    if (!start || settlementStatusFor(cost, start)) return null;
+    return periodKeyOf(start);
+  }
+
+  const windowStart = new Date(pay.getFullYear(), pay.getMonth(), pay.getDate() - 40);
+  const windowEnd = new Date(pay.getFullYear(), pay.getMonth(), pay.getDate() + 15);
+  let occ = nextOccurrence(cost, { now: windowStart });
+  let nearest = null;
+  let nearestGap = Infinity;
+  for (let guard = 0; occ && occ <= windowEnd && guard < 60; guard++) {
+    const gap = Math.abs(occ.getTime() - pay.getTime());
+    if (gap < nearestGap) { nearest = occ; nearestGap = gap; }
+    occ = stepOccurrence(cost, occ);
+  }
+  if (!nearest || settlementStatusFor(cost, nearest)) return null;
+  return periodKeyOf(nearest);
+}
+
+/**
  * Like nextOccurrence, but skips occurrences the owner has already settled
  * (committed/paid) — so the forecast shows the next month you still owe.
  */

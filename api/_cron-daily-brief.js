@@ -80,15 +80,36 @@ export function buildServerContexts({ costs, revenue, scooters, tickets, issues,
   };
 }
 
-/** Feed health for the "Automation" lines of the brief. */
-export function feedHealthFrom({ revenue, intake, tickets }, now = new Date()) {
+/** The previous calendar month as YYYY-MM. */
+const prevMonthOf = (now) => {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+/**
+ * Feed health for the "Automation" lines of the brief — only facts, and only
+ * the ones the owner can act on:
+ *   revenue gone quiet · items waiting in Review · preventive tickets raised today
+ *   · last month's accountant pack not sent yet (from the 3rd — AUTOMATION_PLAN §5,
+ *     "monthly pack on the 3rd, held for approval") · seasonality not recalibrated
+ *     in a year (§4.6, "seasonality recalibration each January")
+ */
+export function feedHealthFrom({ revenue, intake, tickets, autopilot = {}, maintenanceConfig = {} }, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const lastRevenue = revenue.map((r) => r.date).filter(Boolean).sort().pop() || null;
+  const lastMonth = prevMonthOf(now);
+  const packDue = now.getUTCDate() >= 3 && !autopilot?.accountantPacks?.[lastMonth]?.sentAt;
+  const calibratedAt = Date.parse(maintenanceConfig?.seasonalityCalibratedAt || '');
+  const seasonalityReview = !Number.isFinite(calibratedAt)
+    ? now.getUTCMonth() === 0
+    : now.getTime() - calibratedAt > 365 * DAY_MS;
   return {
     revenueLastDate: lastRevenue,
     revenueDaysStale: lastRevenue ? daysBetween(lastRevenue, today) : null,
     pendingReview: intake.filter((i) => i.status === 'pending').length,
     dueTicketsToday: tickets.filter((t) => t.source === 'autopilot-schedule' && t.dateEntered === today).length,
+    accountantPackDue: packDue ? lastMonth : null,
+    seasonalityReview,
   };
 }
 
@@ -137,7 +158,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, skipped: 'data-void', date });
     }
 
-    payload.feedHealth = feedHealthFrom({ revenue, intake, tickets }, now);
+    payload.feedHealth = feedHealthFrom({
+      revenue, intake, tickets,
+      autopilot: configRows.find((c) => c._docId === `${orgId}_autopilot`) || {},
+      maintenanceConfig: configRows.find((c) => c._docId === `${orgId}_maintenance`) || {},
+    }, now);
 
     const recipients = users.filter((u) => u.role === 'admin' || u.role === 'owner' || u.isOwner);
     const db = getDb();

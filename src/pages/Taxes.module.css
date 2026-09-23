@@ -121,3 +121,10 @@
   .kpis { grid-template-columns: 1fr; }
   .page { padding: 1rem; }
 }
+
+/* Autopilot VAT position — the fine print and the myDATA cross-check. */
+.vatNote {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}

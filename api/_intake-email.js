@@ -25,6 +25,7 @@ import { ingestBatch, intakeOrgId } from './_lib/intake-store.js';
 import { storeReceipt } from './_lib/receipt-store.js';
 import { extractInvoice, extractionToIntake } from './_lib/invoice-extract.js';
 import { heartbeatOk, heartbeatFail } from './_lib/heartbeat.js';
+import { detectCsvKind, importRevenueCsvServer, importRepairLogServer } from './_lib/csv-import.js';
 
 const HEARTBEAT_ENV = 'HEARTBEAT_INTAKE_EMAIL';
 const MAX_ATTACHMENTS = 10;
@@ -76,8 +77,26 @@ export default async function handler(req, res) {
   const raws = [];
   const skipped = [];
 
+  const imports = [];
   for (const att of attachments.slice(0, MAX_ATTACHMENTS)) {
     const { filename, mimeType, contentBase64 } = att || {};
+
+    // A Hopp export forwarded to Omni imports itself (AUTOMATION_PLAN §4.5) —
+    // only from a trusted sender, since it writes revenue / tickets directly.
+    if (contentBase64 && (/csv/i.test(mimeType || '') || /\.csv$/i.test(filename || ''))) {
+      if (!trusted) { skipped.push({ filename, reason: 'CSV imports only from a trusted sender' }); continue; }
+      try {
+        const csvText = Buffer.from(contentBase64, 'base64').toString('utf8');
+        const kind = detectCsvKind(csvText);
+        if (kind === 'revenue') imports.push({ filename, ...(await importRevenueCsvServer({ orgId: intakeOrgId(), csvText, caption: subject, by: `email:${from}` })) });
+        else if (kind === 'repairs') imports.push({ filename, ...(await importRepairLogServer({ orgId: intakeOrgId(), csvText, by: `email:${from}` })) });
+        else skipped.push({ filename, reason: 'not a Hopp trip-analytics or repair-log export' });
+      } catch (err) {
+        skipped.push({ filename, reason: err?.message || String(err) });
+      }
+      continue;
+    }
+
     if (!contentBase64 || !ALLOWED_TYPES.has(mimeType)) {
       skipped.push({ filename, reason: `unsupported type ${mimeType || 'unknown'}` });
       continue;
@@ -98,9 +117,12 @@ export default async function handler(req, res) {
         sourceRef: `${messageId}:${filename || 'attachment'}`,
         evidence: { from, subject, filename, receivedAt, senderTrusted: trusted, fileUrl },
       });
-      // An untrusted sender never gets the benefit of the doubt: force review by
-      // dropping the category guess, which sends it down the "hold" path.
-      if (!trusted) raw.payload.category = null;
+      // An untrusted sender never gets the benefit of the doubt: the item is held
+      // for review whatever the learned rules would say about the supplier.
+      if (!trusted) {
+        raw.payload.category = null;
+        raw.holdReason = 'Sent by an address that is not on the trusted list';
+      }
       raws.push(raw);
     } catch (err) {
       skipped.push({ filename, reason: err?.message || String(err) });
@@ -108,6 +130,10 @@ export default async function handler(req, res) {
   }
 
   if (!raws.length) {
+    if (imports.length) {
+      await heartbeatOk(HEARTBEAT_ENV, `csv imports=${imports.length}`);
+      return res.status(200).json({ ok: true, extracted: 0, imports, skipped });
+    }
     await heartbeatFail(HEARTBEAT_ENV, `nothing extracted from ${messageId}`);
     return res.status(200).json({ ok: true, extracted: 0, skipped });
   }
@@ -115,7 +141,7 @@ export default async function handler(req, res) {
   try {
     const report = await ingestBatch(raws, { source: 'gmail' });
     await heartbeatOk(HEARTBEAT_ENV, `docs=${raws.length} auto=${report.auto} held=${report.held}`);
-    return res.status(200).json({ ok: true, extracted: raws.length, skipped, ...report });
+    return res.status(200).json({ ok: true, extracted: raws.length, imports, skipped, ...report });
   } catch (err) {
     const message = err?.message || String(err);
     console.error('[intake-email]', message);

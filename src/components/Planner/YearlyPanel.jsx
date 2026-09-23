@@ -15,7 +15,9 @@ const LABEL_CLASS = {
  * (openingDerived, CASH-VIEW §3) and render read-only with a "= DEC Y−1
  * CLOSING" note. CLOSING BALANCE is computed (opening + retained), read-only.
  */
-export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpening, openingDerived = false }) {
+export default function YearlyPanel({
+  yearly, year, openingBalance, onCommitOpening, openingDerived = false, bank = null,
+}) {
   // Reset the in-progress draft whenever the committed value or selected year
   // changes — done during render (React's documented "adjusting state" pattern,
   // https://react.dev/learn/you-might-not-need-an-effect) rather than in a
@@ -56,17 +58,33 @@ export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpen
                   <span className={styles.derivedNote}>= DEC {year - 1} CLOSING</span>
                 </span>
               ) : (
-                <input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  className={styles.openingInput}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={commit}
-                  onKeyDown={handleKeyDown}
-                  aria-label="Opening balance"
-                />
+                <span className={styles.derivedOpening}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    className={styles.openingInput}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={handleKeyDown}
+                    aria-label="Opening balance"
+                  />
+                  {/* Autopilot — the real 1 January balance, back-solved from Wallet
+                      (today's balance minus every movement since 1 Jan). Offered,
+                      never applied on its own. */}
+                  {bank?.openingYear === year && Number.isFinite(bank.openingAmount)
+                    && Math.abs(bank.openingAmount - (Number(draft) || 0)) >= 0.01 && (
+                    <button
+                      type="button"
+                      className={styles.bankUse}
+                      onClick={() => onCommitOpening?.(String(bank.openingAmount))}
+                      title="Your bank balance on 1 January, from Wallet"
+                    >
+                      Use bank {formatEUR(bank.openingAmount)}
+                    </button>
+                  )}
+                </span>
               )
             ) : (
               <span
@@ -77,6 +95,15 @@ export default function YearlyPanel({ yearly, year, openingBalance, onCommitOpen
             )}
           </div>
         ))}
+        {bank && Number.isFinite(bank.balance) && (
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryLabel}>BANK TODAY</span>
+            <span className={styles.derivedOpening}>
+              <span className={styles.summaryValue}>{formatEUR(bank.balance)}</span>
+              <span className={styles.derivedNote}>WALLET · {String(bank.asOf || '').slice(0, 10)}</span>
+            </span>
+          </div>
+        )}
       </div>
     </aside>
   );

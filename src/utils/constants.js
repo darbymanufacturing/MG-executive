@@ -379,3 +379,17 @@ export const REVENUE_CHART_COLORS = {
   loss:    '#F44336',
   trips:   '#42A5F5',
 };
+
+/**
+ * Issue types (the Issues module's vocabulary). Shared by the Capture box's
+ * classifier (#697) so the model can only ever return a type the app knows.
+ */
+export const ISSUE_TYPE_LABELS = Object.freeze({
+  municipality: 'Municipality',
+  partnership:  'Partnership',
+  facility:     'Facility',
+  regulatory:   'Regulatory',
+  admin:        'Admin',
+  finance:      'Finance',
+  other:        'Other',
+});
