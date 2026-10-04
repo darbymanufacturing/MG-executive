@@ -36,6 +36,7 @@ import {
   calcPaybackPeriod, calcCostRecoveryRate, calcRevGrowthMoM,
   getHealthColor, monthlyDebtServiceFromCosts,
 } from '../utils/financialHealth.js';
+import { isActiveInMonth, currentCosts } from '../utils/upcomingPayments.js';
 import { useProjects } from '../context/ProjectContext.jsx';
 import { isPowDay, daysSince, relativeLabel, currentWeekStart } from '../utils/powHelpers.js';
 import { formatEUR, formatEURCompact, formatPercent, formatTrips } from '../utils/formatters.js';
@@ -146,17 +147,8 @@ export default function Dashboard() {
   const periodCosts = useMemo(() => {
     if (viewMode !== 'month' || !selectedMonth) return filteredCosts;
     const [y, m] = selectedMonth.split('-').map(Number);
-    const monthIdx = m - 1;
-    const monthStart = new Date(y, monthIdx, 1);
-    const monthEnd   = new Date(y, monthIdx + 1, 0);
-    return filteredCosts.filter((c) => {
-      const start = c.startDate ? new Date(c.startDate) : null;
-      const end   = c.endDate   ? new Date(c.endDate)   : null;
-      if (c.frequency === 'one-time') {
-        return start && start.getFullYear() === y && start.getMonth() === monthIdx;
-      }
-      return (start ? start <= monthEnd : true) && (end ? end >= monthStart : true);
-    });
+    // One month-membership test for the whole app (hub ≡ this page): #603, #712.
+    return filteredCosts.filter((c) => isActiveInMonth(c, y, m - 1));
   }, [filteredCosts, viewMode, selectedMonth]);
 
   // ── Period span (months count for range) ─────────────────────────────────
@@ -264,7 +256,11 @@ export default function Dashboard() {
     : null;
 
   // ── Financial health metrics ──────────────────────────────────────────────
-  const usedCosts   = viewMode === 'month' ? periodCosts : filteredCosts;
+  // 'all' = as things stand today, so ended commitments are out of the run-rate (#711).
+  const usedCosts   = useMemo(
+    () => (viewMode === 'month' ? periodCosts : viewMode === 'all' ? currentCosts(filteredCosts) : filteredCosts),
+    [viewMode, periodCosts, filteredCosts],
+  );
 
   // #699 — one shared helper so this page and /money can never disagree.
   const autoDebtService = useMemo(() => monthlyDebtServiceFromCosts(usedCosts), [usedCosts]);

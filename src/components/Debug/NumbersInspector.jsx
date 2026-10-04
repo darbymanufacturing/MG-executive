@@ -37,7 +37,8 @@ function SummaryBlock({ summary }) {
         value={formatEURCompact(summary.displayTotal)}
         formula={`monthlyCostRate(${formatEUR(summary.monthlyCostRate)}) × ${i.periodMonths} + oneTime(${formatEUR(summary.oneTimeInPeriod)})`}
       />
-      <Row label="Monthly run-rate" value={formatEUR(summary.monthlyCostRate)} formula="totalMonthlyCost(periodCosts) · one-time excluded" />
+      <Row label="Monthly run-rate" value={formatEUR(summary.monthlyCostRate)} formula="totalMonthlyCost(month: active that month · all: not ended) · one-time excluded" />
+      <Row label="Commitments" value={summary.commitmentCount} formula="recurring, not ended (same test as the 'all' run-rate — #711)" />
       <Row label="One-time in period" value={formatEUR(summary.oneTimeInPeriod)} formula="Σ one-time amounts dated in period" />
       <Row
         label="Annual"
@@ -68,9 +69,11 @@ function SummaryBlock({ summary }) {
       <Row label="SIM cost" value={formatEUR(summary.revenue.simCost)} formula={`monthlySimCost × ${i.periodMonths}`} />
       <Row label="Operating revenue" value={formatEURCompact(summary.revenue.operatingRevenue)} formula="companyShare − simCost" />
       <Row label="Annualized revenue" value={formatEURCompact(summary.annualizedRevenue)} formula="trailing-12-mo basis (Investment) — DIFFERENT basis" />
-      <Row label="Monthly opex (ex-inv)" value={formatEUR(summary.monthlyOpexExInvestment)} formula="totalMonthlyCost(non-investment)" />
+      <Row label="Monthly opex (ex-inv)" value={formatEUR(summary.monthlyOpexExInvestment)} formula="totalMonthlyCost(non-investment, not ended)" />
       <Row label="Revenue MTD" value={formatEURCompact(summary.revenueMTD)} formula="current-month gross" />
-      <Row label="Costs MTD" value={formatEURCompact(summary.costsMTD)} formula="recurring active + one-time dated, this month (#603)" />
+      <Row label="Costs MTD" value={formatEURCompact(summary.costsMTD)} formula="this month's COSTS: recurring running on its billing day + one-time dated (#603, #712)" />
+      <Row label="Due this month" value={formatEUR(summary.dueThisMonth)} formula={`Σ charges that fall in the month (${summary.dueCountThisMonth})`} />
+      <Row label="Paid this month" value={formatEUR(summary.paidThisMonth)} formula={`ticked paid + actual records to date (${summary.paidCountThisMonth}) — evidence, not costs`} />
 
       <div className={styles.sectionTitle}>P&amp;L</div>
       <Row label="Display P&L" value={formatEURCompact(summary.displayPnL)} formula="operatingRevenue − displayTotal" />

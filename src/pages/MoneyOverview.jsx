@@ -11,7 +11,6 @@ import ShowTheMath from '../components/Money/ShowTheMath.jsx';
 import { useMetrics } from '../context/MetricsContext.jsx';
 import { useCosts } from '../context/CostContext.jsx';
 import { calcEBITDA, calcDSCR, calcCostRecoveryRate, monthlyDebtServiceFromCosts } from '../utils/financialHealth.js';
-import { isCommitment } from '../utils/upcomingPayments.js';
 import { formatEUR } from '../utils/formatters.js';
 import styles from './MoneyOverview.module.css';
 
@@ -21,16 +20,15 @@ import styles from './MoneyOverview.module.css';
  * nothing is computed inline beyond presentational derivations (ADR-0024 preserved).
  */
 export default function MoneyOverview() {
-  const { mtd, upcoming30, handledThisMonth, scopedCosts, scopedRevenue } = useMetrics();
+  const { mtd, allTime, upcoming30, handledThisMonth, scopedCostsNow, scopedRevenue } = useMetrics();
   const { config, setCostSettlement } = useCosts();
 
   const summary = mtd;
   const fin = config?.financial;
 
-  const commitmentCount = useMemo(
-    () => (scopedCosts || []).filter((c) => isCommitment(c)).length,
-    [scopedCosts],
-  );
+  // "What we have" is today's standing commitments — the hub's 'all' view, the same
+  // numbers the Expenses page shows — not this month's costs (#711).
+  const commitmentCount = allTime.commitmentCount;
 
   // Per-scooter margin = revenue/scooter − cost/scooter (MTD = one month).
   const fleet = summary.fleetSizeEffective || 0;
@@ -40,7 +38,7 @@ export default function MoneyOverview() {
 
   // Health metrics — reuse the existing engine (trailing-12-month basis).
   const health = useMemo(() => {
-    const costs = scopedCosts || [];
+    const costs = scopedCostsNow || []; // today's run-rate — ended commitments are not in it (#711)
     const rev = scopedRevenue || [];
     return {
       ebitdaMargin: calcEBITDA(costs, rev, fin).ebitdaMargin,
@@ -55,7 +53,7 @@ export default function MoneyOverview() {
       ),
       costRecovery: calcCostRecoveryRate(costs, rev, fin),
     };
-  }, [scopedCosts, scopedRevenue, config, fin]);
+  }, [scopedCostsNow, scopedRevenue, config, fin]);
 
   return (
     <div className={styles.page}>
@@ -88,14 +86,19 @@ export default function MoneyOverview() {
         <div className={styles.grid2}>
           <UpcomingPanel upcoming={upcoming30} handled={handledThisMonth} onMark={setCostSettlement} />
           <CommitmentsPanel
-            monthly={summary.monthlyCostRate}
-            annual={summary.annualTotal}
-            byCategory={summary.costByCategory}
+            monthly={allTime.monthlyCostRate}
+            annual={allTime.annualTotal}
+            byCategory={allTime.costByCategory}
             count={commitmentCount}
           />
         </div>
 
-        <PaidPanel total={summary.costsMTD} byCategory={summary.costsMTDByCategory} label="this month" />
+        <PaidPanel
+          total={summary.paidThisMonth}
+          byCategory={summary.paidThisMonthByCategory}
+          due={summary.dueThisMonth}
+          label="this month"
+        />
 
         <HealthChips
           ebitdaMargin={health.ebitdaMargin}

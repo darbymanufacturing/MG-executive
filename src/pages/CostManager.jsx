@@ -15,7 +15,6 @@ import { useMetrics } from '../context/MetricsContext.jsx';
 import { FREQUENCIES, CATEGORIES, CATEGORY_KEYS, COST_GROUPS, COST_GROUP_KEYS, groupForCategory } from '../utils/constants.js';
 import { formatEUR, formatDate } from '../utils/formatters.js';
 import { normalizeToMonthly, getCostStatus, filterCostsByLocation } from '../utils/calculations.js';
-import { isCommitment } from '../utils/upcomingPayments.js';
 import LocationSelector from '../components/Shared/LocationSelector.jsx';
 import { exportCostsCSV, downloadCostTemplate } from '../utils/exportData.js';
 import { parseCostsCSV } from '../utils/costCsvParser.js';
@@ -110,7 +109,7 @@ function PendingInvoiceBanner({ onConfirm }) {
 
 export default function CostManager() {
   const { costs, config, loading: costsLoading, addCost, updateCost, deleteCost, setCostSettlement, bulkUpdateCosts, bulkDeleteCosts, importData } = useCosts();
-  const { getSummary, getUpcoming, getHandled, scopedCosts } = useMetrics();
+  const { getSummary, getUpcoming, getHandled } = useMetrics();
   const locations = config.locations || [];
   const [showIntro, setShowIntro] = useState(false); // module intro animation removed — only the opening Omni loader animates
   const [activeFilter, setActiveFilter] = useState('all');
@@ -162,10 +161,9 @@ export default function CostManager() {
     () => getHandled({ location: locationFilter }),
     [getHandled, locationFilter],
   );
-  const commitmentCount = useMemo(
-    () => filterCostsByLocation(scopedCosts, locationFilter).filter((c) => isCommitment(c)).length,
-    [scopedCosts, locationFilter],
-  );
+  // #711 — the count comes from the hub with the run-rate it sits beside, so the two
+  // can never be computed from different sets again.
+  const commitmentCount = moneySummary.commitmentCount;
 
   const toggleSort = (field) => {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -304,8 +302,8 @@ export default function CostManager() {
           <KpiCard
             icon={Receipt}
             label="Paid this month"
-            value={formatEUR(moneySummary.costsMTD)}
-            sub="actuals month-to-date"
+            value={formatEUR(moneySummary.paidThisMonth)}
+            sub={`of ${formatEUR(moneySummary.dueThisMonth)} due this month`}
           />
         </div>
 

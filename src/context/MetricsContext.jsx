@@ -6,7 +6,7 @@ import { useFleet } from './FleetContext.jsx';
 import { financialSummary } from '../utils/financialSummary.js';
 import { filterCostsByLocation } from '../utils/calculations.js';
 import { filterRevenueByLocation } from '../utils/revenueCalculations.js';
-import { upcomingForCosts, settledThisMonth } from '../utils/upcomingPayments.js';
+import { upcomingForCosts, settledThisMonth, currentCosts } from '../utils/upcomingPayments.js';
 
 /**
  * MetricsContext — the numbers hub (W5, ADR-0024).
@@ -99,6 +99,11 @@ export function MetricsProvider({ children }) {
     return settledThisMonth(costsForCalc, { now });
   }, [scopedCosts, now]);
 
+  // The costs that count TODAY — ended commitments removed (#711). Pages that feed the
+  // health engine (EBITDA, loan coverage, cost recovery) read this, so their run-rate
+  // matches the hub's instead of quietly including a lease that finished last month.
+  const scopedCostsNow = useMemo(() => currentCosts(scopedCosts, { now }), [scopedCosts, now]);
+
   // Pre-baked views the lighter consumers (PulseStrip) read directly.
   const mtd = useMemo(() => getSummary(mtdPeriod), [getSummary, mtdPeriod]);
   const allTime = useMemo(() => getSummary(ALL_PERIOD), [getSummary]);
@@ -119,8 +124,9 @@ export function MetricsProvider({ children }) {
     // Exposed so Dashboard (and other chart consumers) can build location-filtered
     // arrays from already-fleet-scoped data, matching the hub's own scope (#638).
     scopedCosts,
+    scopedCostsNow,
     scopedRevenue,
-  }), [getSummary, getUpcoming, getHandled, mtd, allTime, upcoming30, handledThisMonth, fleetScope, isAllFleets, activeFleet, scopedCosts, scopedRevenue]);
+  }), [getSummary, getUpcoming, getHandled, mtd, allTime, upcoming30, handledThisMonth, fleetScope, isAllFleets, activeFleet, scopedCosts, scopedCostsNow, scopedRevenue]);
 
   return <MetricsContext.Provider value={value}>{children}</MetricsContext.Provider>;
 }

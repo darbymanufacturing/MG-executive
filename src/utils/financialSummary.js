@@ -13,6 +13,13 @@
  * boundaries (ported verbatim from Dashboard.jsx / PulseStrip.jsx) and the
  * "annual = monthly-run-rate × 12" rule (NOT totalAnnualCost — see #601).
  *
+ * Three rules about TIME live here too (ADR-0032, #711/#712):
+ *   - "now" ('all' mode) is today's run-rate: a recurring cost that has ended is history,
+ *     so it is not in monthlyCostRate / annualTotal / per-scooter / costByCategory;
+ *   - a recurring cost belongs to a month only if it is still running on its own billing
+ *     day in that month (isActiveInMonth) — month mode and costsMTD share that one test;
+ *   - "paid" is evidence (a settlement tick or an actual record), never "it was active".
+ *
  * @param {Array}  costs    - already fleet-scoped + location-filtered by the caller
  * @param {Array}  revenue  - already fleet-scoped + location-filtered by the caller
  * @param {Array}  scooters - already fleet-scoped (drives the LIVE active/total counts)
@@ -31,27 +38,17 @@ import {
 } from './calculations.js';
 import { revenueBreakdown } from './revenueCalculations.js';
 import { annualizedRevenue as annualizedRevenueFn } from './financialHealth.js';
+import { currentCosts, isCommitment, isActiveInMonth, monthPayments } from './upcomingPayments.js';
 
 /**
- * Period-cost filter — recurring costs ACTIVE this period OR one-time costs DATED in period.
- * Verbatim port of Dashboard.jsx:159-173 (≡ PulseStrip.jsx:106-120, the #603 structural fix).
- * Only applied for 'month' mode; 'range'/'all' use the unfiltered cost array, matching
- * Dashboard.jsx:197 (`viewMode === 'month' ? periodCosts : filteredCosts`).
+ * Period-cost filter — recurring costs ACTIVE this period OR one-time costs DATED in period
+ * (the #603 structural fix: one predicate for every page). "Active" is isActiveInMonth —
+ * end-date aware to the billing day (#712). Only applied for 'month' mode.
  */
 function filterPeriodCosts(costs, period) {
   if (period.mode !== 'month' || !period.monthKey) return costs;
   const [y, m] = period.monthKey.split('-').map(Number);
-  const monthIdx = m - 1;
-  const monthStart = new Date(y, monthIdx, 1);
-  const monthEnd = new Date(y, monthIdx + 1, 0);
-  return costs.filter((c) => {
-    const start = c.startDate ? new Date(c.startDate) : null;
-    const end = c.endDate ? new Date(c.endDate) : null;
-    if (c.frequency === 'one-time') {
-      return start && start.getFullYear() === y && start.getMonth() === monthIdx;
-    }
-    return (start ? start <= monthEnd : true) && (end ? end >= monthStart : true);
-  });
+  return costs.filter((c) => isActiveInMonth(c, y, m - 1));
 }
 
 /**
@@ -122,8 +119,13 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
 
   // ── Period-scoped cost set ────────────────────────────────────────────────
   const periodCosts = filterPeriodCosts(safeCosts, p);
-  // Dashboard.jsx:197 — month mode uses periodCosts; range/all use the full filtered set.
-  const costsForRate = p.mode === 'month' ? periodCosts : safeCosts;
+  // #711 — what counts today: commitments still running + every one-time record.
+  const costsNow = currentCosts(safeCosts, { now });
+  // month → the month's own set · all → today's run-rate (ended commitments are history) ·
+  // range → the full set (legacy classic-dashboard approximation: run-rate × months).
+  const costsForRate = p.mode === 'month' ? periodCosts : p.mode === 'all' ? costsNow : safeCosts;
+  // The count shown beside the run-rate uses the SAME predicate, so the two cannot disagree.
+  const commitmentCount = safeCosts.filter((c) => isCommitment(c, { now })).length;
 
   // ── Cost totals ────────────────────────────────────────────────────────────
   // one-time EXCLUDED from the monthly rate (FREQUENCIES['one-time'].monthlyMultiplier = 0).
@@ -169,7 +171,7 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
   // monthlyOpexExInvestment: monthly run-rate of every non-investment cost (FleetRoiTab
   // parity — its baseMonthlyOpex). #278 — skip null/undefined categories to avoid NaN.
   const monthlyOpexExInvestment = totalMonthlyCost(
-    safeCosts.filter((c) => c.category && c.category !== 'investment'),
+    costsNow.filter((c) => c.category && c.category !== 'investment'),
   );
 
   // MTD figures (current calendar month relative to `now`) — PulseStrip parity.
@@ -180,24 +182,15 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
   const revenueMTD = safeRevenue
     .filter((r) => r.date?.startsWith(mtdKey))
     .reduce((s, r) => s + (r.totalPaidRevenue || 0), 0);
-  // costsMTD: recurring active-this-month at monthly rate + one-time dated this month
-  // (PulseStrip.jsx:106-120, the #603 basis). Computed independently of `period`.
-  const mtdMonthStart = new Date(mtdY, mtdMonthIdx, 1);
-  const mtdMonthEnd = new Date(mtdY, mtdMonthIdx + 1, 0);
-  // costsMTDByCategory: the SAME predicate + amounts as costsMTD, grouped by category, so
+  // costsMTD: this month's COSTS (accrual) — recurring active this month at the monthly
+  // rate + one-time dated this month (the #603 basis). Computed independently of `period`.
+  // It is the month's cost, NOT what has been paid — see paidThisMonth below (#712).
+  // costsMTDByCategory: the SAME predicate + amounts, grouped by category, so
   // Σ(values) === costsMTD exactly. Unlike costByCategory (a monthly run-rate that excludes
-  // one-time rows), this includes one-time costs dated this month — it's the real "what we
-  // paid this month" breakdown (ADR-0025; the bars must reconcile with the costsMTD header).
+  // one-time rows), this includes one-time costs dated this month.
   const mtdCostOf = (c) => {
-    const start = c.startDate ? new Date(c.startDate) : null;
-    const end = c.endDate ? new Date(c.endDate) : null;
-    if (c.frequency === 'one-time') {
-      return (start && start.getFullYear() === mtdY && start.getMonth() === mtdMonthIdx)
-        ? (c.amount || 0)
-        : 0;
-    }
-    const activeThisMonth = (start ? start <= mtdMonthEnd : true) && (end ? end >= mtdMonthStart : true);
-    return activeThisMonth ? normalizeToMonthly(c) : 0;
+    if (!isActiveInMonth(c, mtdY, mtdMonthIdx)) return 0;
+    return c.frequency === 'one-time' ? (c.amount || 0) : normalizeToMonthly(c);
   };
   const costsMTD = safeCosts.reduce((s, c) => s + mtdCostOf(c), 0);
   const costsMTDByCategory = safeCosts.reduce((acc, c) => {
@@ -205,6 +198,9 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
     if (v) acc[c.category] = (acc[c.category] || 0) + v;
     return acc;
   }, {});
+
+  // Cash view of the same month (#712): what falls due, and what is actually paid.
+  const payments = monthPayments(safeCosts, { now });
 
   // ── P&L ─────────────────────────────────────────────────────────────────────
   const displayPnL = rev.operatingRevenue - displayTotal;
@@ -216,6 +212,7 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
     displayTotal,
     annualTotal,
     costByCategory,
+    commitmentCount,
 
     // per-scooter (LIVE fleet count)
     fleetSizeEffective,
@@ -236,6 +233,12 @@ export function financialSummary(costs, revenue, scooters, config, period, optio
     revenueMTD,
     costsMTD,
     costsMTDByCategory,
+    // cash, this month: paid (evidence) of due (charges that fall in the month)
+    paidThisMonth: payments.paidTotal,
+    paidCountThisMonth: payments.paidCount,
+    paidThisMonthByCategory: payments.paidByCategory,
+    dueThisMonth: payments.dueTotal,
+    dueCountThisMonth: payments.dueCount,
 
     // P&L
     displayPnL,

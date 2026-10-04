@@ -10,6 +10,10 @@ import {
   settledThisMonth,
   settlementStatusFor,
   periodKeyOf,
+  currentCosts,
+  isActiveInMonth,
+  occurrencesInMonth,
+  monthPayments,
 } from '../upcomingPayments.js';
 
 const NOW = new Date(2026, 5, 26); // 2026-06-26 (local midnight)
@@ -203,5 +207,90 @@ describe('settlement ledger (ADR-0027)', () => {
     // beyond the horizon (August) is excluded
     const augCommit = { ...julyCommit, id: 'au', settlements: { '2026-08': { status: 'committed', at: 'x' } } };
     expect(settledThisMonth([augCommit], { now: NOW, horizonDays: 30 }).committed).toHaveLength(0);
+  });
+});
+
+describe('month membership + the cash view (#711 / #712)', () => {
+  const monthly = (startDate, endDate) => ({ amount: 100, frequency: 'monthly', startDate, endDate });
+
+  it('currentCosts drops ended commitments and keeps one-time records + future starts', () => {
+    const now = new Date(2026, 9, 4);
+    const rows = [
+      { id: 'ended', frequency: 'monthly', startDate: '2025-01-01', endDate: '2026-10-03' },
+      { id: 'endsToday', frequency: 'monthly', startDate: '2025-01-01', endDate: '2026-10-04' },
+      { id: 'future', frequency: 'monthly', startDate: '2026-12-01' },
+      { id: 'record', frequency: 'one-time', startDate: '2024-05-05' },
+    ];
+    expect(currentCosts(rows, { now }).map((c) => c.id)).toEqual(['endsToday', 'future', 'record']);
+    expect(currentCosts(null)).toEqual([]);
+  });
+
+  it('a monthly cost belongs to a month only while it is running on its billing day', () => {
+    expect(isActiveInMonth(monthly('2026-06-15', '2026-10-01'), 2026, 9)).toBe(false); // ended before the 15th
+    expect(isActiveInMonth(monthly('2026-06-15', '2026-10-15'), 2026, 9)).toBe(true);  // ends ON the billing day
+    expect(isActiveInMonth(monthly('2026-06-15', '2026-10-14'), 2026, 9)).toBe(false);
+    expect(isActiveInMonth(monthly('2026-06-15', '2026-10-01'), 2026, 8)).toBe(true);  // September was billed
+    expect(isActiveInMonth(monthly('2026-06-15'), 2026, 4)).toBe(false);               // not started yet
+    expect(isActiveInMonth(monthly('2026-06-15'), 2026, 5)).toBe(true);                // its first month
+    expect(isActiveInMonth(monthly(undefined), 2026, 5)).toBe(true);                   // undated = always on
+  });
+
+  it('clamps the billing day to short months', () => {
+    expect(isActiveInMonth(monthly('2025-01-31', '2026-02-27'), 2026, 1)).toBe(false); // bills 28 Feb
+    expect(isActiveInMonth(monthly('2025-01-31', '2026-02-28'), 2026, 1)).toBe(true);
+  });
+
+  it('smoothed (quarterly) and day-based (weekly) costs keep sensible boundaries', () => {
+    const quarterly = { amount: 300, frequency: 'quarterly', startDate: '2026-01-15', endDate: '2026-10-01' };
+    expect(isActiveInMonth(quarterly, 2026, 8)).toBe(true);
+    expect(isActiveInMonth(quarterly, 2026, 9)).toBe(false);
+    const weekly = { amount: 10, frequency: 'weekly', startDate: '2026-01-01', endDate: '2026-10-02' };
+    expect(isActiveInMonth(weekly, 2026, 9)).toBe(true);   // two days of October are inside the run
+    expect(isActiveInMonth(weekly, 2026, 10)).toBe(false);
+  });
+
+  it('one-time rows belong to their own month, and an ISO timestamp is still a date', () => {
+    expect(isActiveInMonth({ frequency: 'one-time', startDate: '2026-10-09' }, 2026, 9)).toBe(true);
+    expect(isActiveInMonth({ frequency: 'one-time', startDate: '2026-10-09T08:30:00Z' }, 2026, 9)).toBe(true);
+    expect(isActiveInMonth({ frequency: 'one-time', startDate: '2026-09-30' }, 2026, 9)).toBe(false);
+    expect(isActiveInMonth({ frequency: 'one-time' }, 2026, 9)).toBe(false);
+  });
+
+  it('occurrencesInMonth counts the dated charges inside the month and the run', () => {
+    expect(occurrencesInMonth(monthly('2026-06-15'), 2026, 9)).toBe(1);
+    expect(occurrencesInMonth(monthly('2026-06-15', '2026-10-01'), 2026, 9)).toBe(0);
+    expect(occurrencesInMonth(monthly('2026-11-10'), 2026, 9)).toBe(0); // starts later
+    const quarterly = { amount: 300, frequency: 'quarterly', startDate: '2026-01-15' };
+    expect(occurrencesInMonth(quarterly, 2026, 9)).toBe(1);  // 15 Oct
+    expect(occurrencesInMonth(quarterly, 2026, 10)).toBe(0); // nothing in November
+    const weekly = { amount: 10, frequency: 'weekly', startDate: '2026-10-01' };
+    expect(occurrencesInMonth(weekly, 2026, 9)).toBe(5);     // 1, 8, 15, 22, 29 Oct
+    expect(occurrencesInMonth({ ...weekly, endDate: '2026-10-16' }, 2026, 9)).toBe(3);
+    expect(occurrencesInMonth({ frequency: 'one-time', amount: 5, startDate: '2026-10-31' }, 2026, 9)).toBe(1);
+    expect(occurrencesInMonth({ frequency: 'monthly', amount: 5 }, 2026, 9)).toBe(0); // undated: no dated charge
+  });
+
+  it('monthPayments: due is what falls in the month; paid needs a tick or an actual record', () => {
+    const now = new Date(2026, 9, 4);
+    const costs = [
+      { id: 'rent', amount: 300, frequency: 'monthly', category: 'fixed', startDate: '2026-07-01' },
+      { id: 'loan', amount: 250, frequency: 'monthly', category: 'debt', startDate: '2025-04-04',
+        settlements: { '2026-10': { status: 'paid', at: 'x' } } },
+      { id: 'lease', amount: 600, frequency: 'monthly', category: 'fixed', startDate: '2026-06-15', endDate: '2026-10-01' },
+      // the old string form of a tick
+      { id: 'legacyTick', amount: 80, frequency: 'monthly', category: 'fixed', startDate: '2026-01-09',
+        settlements: { '2026-10': 'paid' } },
+      { id: 'fee', amount: 40, frequency: 'one-time', category: 'fees', startDate: '2026-10-02' },
+      { id: 'invoice', amount: 100, frequency: 'one-time', category: 'fees', startDate: '2026-10-20' },
+      { id: 'zero', amount: 0, frequency: 'monthly', category: 'fixed', startDate: '2026-01-01' },
+    ];
+    const r = monthPayments(costs, { now });
+    expect(r.period).toBe('2026-10');
+    expect(r.dueTotal).toBeCloseTo(300 + 250 + 80 + 40 + 100);
+    expect(r.dueCount).toBe(5);
+    expect(r.paidTotal).toBeCloseTo(250 + 80 + 40);
+    expect(r.paidCount).toBe(3);
+    expect(r.paidByCategory).toEqual({ debt: 250, fixed: 80, fees: 40 });
+    expect(monthPayments(undefined, { now })).toMatchObject({ dueTotal: 0, paidTotal: 0 });
   });
 });

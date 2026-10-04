@@ -27,10 +27,11 @@ const STEP_MONTHS = { monthly: 1, quarterly: 3, annual: 12, yearly: 12 };
 /** Days to advance per occurrence for day-anchored frequencies. */
 const STEP_DAYS = { weekly: 7, daily: 1 };
 
-/** Parse a 'YYYY-MM-DD' string to a local-midnight Date, or null if invalid. */
+/** Parse a 'YYYY-MM-DD' string (or an ISO timestamp — only its date part is read) to a
+ *  local-midnight Date, or null if invalid. */
 function parseISODate(str) {
   if (!str) return null;
-  const [y, m, d] = String(str).split('-').map(Number);
+  const [y, m, d] = String(str).slice(0, 10).split('-').map(Number);
   if (!y || !m || !d) return null;
   const date = new Date(y, m - 1, d);
   return isNaN(date.getTime()) ? null : date;
@@ -137,6 +138,63 @@ function stepOccurrence(cost, occ) {
     return new Date(occ.getFullYear(), occ.getMonth(), occ.getDate() + stepDays); // calendar-day step (DST-safe)
   }
   return null;
+}
+
+/**
+ * Recurring costs that count "as things stand today": commitments that have not ended,
+ * plus every one-time record. An ended lease is history, not part of today's monthly
+ * run-rate (#711 — the Expenses page summed three ended commitments into "what we have").
+ */
+export function currentCosts(costs, { now = new Date() } = {}) {
+  return (Array.isArray(costs) ? costs : []).filter((c) => !isRecurring(c) || isCommitment(c, { now }));
+}
+
+/**
+ * Is a cost part of a calendar month's costs?
+ *   one-time  → dated in that month.
+ *   recurring → started by the month's end AND still running on its own billing day in
+ *               that month. The second half is #712: a lease that ended on the 1st has
+ *               no charge left on the 15th, so it is not a cost of that month.
+ * Daily/weekly costs have no billing day; they count while any day of the month is
+ * inside the run.
+ */
+export function isActiveInMonth(cost, year, monthIndex) {
+  const start = parseISODate(cost?.startDate);
+  if (!isRecurring(cost)) {
+    return Boolean(start) && start.getFullYear() === year && start.getMonth() === monthIndex;
+  }
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex + 1, 0);
+  if (start && start > monthEnd) return false;
+  const end = parseISODate(cost.endDate);
+  if (!end) return true;
+  const billingDay = start && STEP_MONTHS[cost.frequency]
+    ? monthAnchoredDate(year, monthIndex, start.getDate())
+    : monthStart;
+  return end >= billingDay;
+}
+
+/**
+ * How many dated charges of a cost fall inside a calendar month (the cash view): the
+ * occurrences anchored on its start date that land in the month and inside its run.
+ * A one-time cost is one charge, in its own month.
+ */
+export function occurrencesInMonth(cost, year, monthIndex) {
+  const start = parseISODate(cost?.startDate);
+  if (!start) return 0;
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex + 1, 0);
+  if (!isRecurring(cost)) return start >= monthStart && start <= monthEnd ? 1 : 0;
+
+  let count = 0;
+  // nextOccurrence already honours a later start and the end date.
+  let occ = nextOccurrence(cost, { now: monthStart });
+  const end = parseISODate(cost.endDate);
+  for (let guard = 0; occ && occ <= monthEnd && !(end && occ > end) && guard < 40; guard++) {
+    count++;
+    occ = stepOccurrence(cost, occ);
+  }
+  return count;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -327,4 +385,48 @@ export function settledThisMonth(costs, { now = new Date(), horizonDays = 30 } =
   const committedTotal = committed.reduce((sum, e) => sum + e.amount, 0);
   const paidTotal = paid.reduce((sum, e) => sum + e.amount, 0);
   return { period, committed, paid, committedTotal, paidTotal };
+}
+
+/**
+ * The current month in cash terms (#712): what falls due in it, and how much of that
+ * has actually been paid. "Paid" is evidence, never arithmetic:
+ *   recurring → this month's occurrence is ticked `paid` in the settlement ledger
+ *               (by hand, or by a matched bank debit — ADR-0027 / ADR-0031);
+ *   one-time  → an actual record dated today or earlier (ADR-0025), or ticked paid.
+ * A commitment merely being active is not a payment — that is what the old
+ * "Paid this month" figure reported.
+ *
+ * @returns {{ period, dueTotal, dueCount, paidTotal, paidCount, paidByCategory }}
+ */
+export function monthPayments(costs, { now = new Date() } = {}) {
+  const today = atMidnight(now);
+  const year = today.getFullYear();
+  const monthIndex = today.getMonth();
+
+  let dueTotal = 0;
+  let dueCount = 0;
+  let paidTotal = 0;
+  let paidCount = 0;
+  const paidByCategory = {};
+
+  for (const cost of (Array.isArray(costs) ? costs : [])) {
+    const amount = Number(cost?.amount) || 0;
+    if (amount <= 0) continue;
+    const charges = occurrencesInMonth(cost, year, monthIndex);
+    if (!charges) continue;
+
+    const total = charges * amount;
+    dueTotal += total;
+    dueCount += charges;
+
+    const ticked = settlementStatusFor(cost, today) === 'paid';
+    const happened = !isRecurring(cost) && parseISODate(cost.startDate) <= today;
+    if (!ticked && !happened) continue;
+
+    paidTotal += total;
+    paidCount += charges;
+    paidByCategory[cost.category] = (paidByCategory[cost.category] || 0) + total;
+  }
+
+  return { period: periodKeyOf(today), dueTotal, dueCount, paidTotal, paidCount, paidByCategory };
 }

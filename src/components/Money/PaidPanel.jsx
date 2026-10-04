@@ -6,8 +6,11 @@ import { formatEUR } from '../../utils/formatters.js';
 /**
  * "What we paid" — actuals for the period (ADR-0025). `total` + `byCategory` come
  * from the numbers hub; the bars show the category mix of the period's spend.
+ * `due` (optional) is what falls due in the same period, so "paid" reads against
+ * something: payments are evidence (ticks, bank debits, actual records), not the
+ * month's costs (#712).
  */
-export default function PaidPanel({ total = 0, byCategory = {}, label = 'this month', title = 'What we paid' }) {
+export default function PaidPanel({ total = 0, byCategory = {}, label = 'this month', title = 'What we paid', due = null }) {
   const cats = Object.entries(byCategory)
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -20,11 +23,15 @@ export default function PaidPanel({ total = 0, byCategory = {}, label = 'this mo
         <span className={styles.panelTitle}>{title}</span>
         <span className={styles.rowVal} style={{ marginLeft: 'auto' }}>{formatEUR(total)}</span>
       </div>
-      <div className={styles.sub} style={{ marginTop: -4, marginBottom: 10 }}>{label}</div>
+      <div className={styles.sub} style={{ marginTop: -4, marginBottom: 10 }}>
+        {label}{due != null ? ` · of ${formatEUR(due)} due` : ''}
+      </div>
 
       <div className={styles.list}>
         {cats.length === 0 ? (
-          <div className={styles.empty}>No spend recorded {label}.</div>
+          <div className={styles.empty}>
+            {due != null ? `Nothing marked paid ${label} yet.` : `No spend recorded ${label}.`}
+          </div>
         ) : (
           cats.map(([key, val]) => (
             <div key={key} className={styles.bar}>

@@ -260,3 +260,80 @@ describe('9. costsMTDByCategory reconciles to costsMTD and includes one-time', (
     expect(s.costByCategory['one-off'] || 0).toBeCloseTo(0);
   });
 });
+
+// ─────────────────────────────────────────────────
+// 10. TIME rules (ADR-0032, #711 / #712). The fixture has the SHAPE of the owner's
+//     live cost table on 2026-10-04 (names and amounts invented): one commitment
+//     that ended months ago, two that ended on the 1st/2nd of the current month —
+//     BEFORE their own billing day — and four still running. The Expenses page
+//     showed "4 active" beside a total that summed all seven.
+// ─────────────────────────────────────────────────
+describe('10. ended commitments, billing days, and what "paid" means', () => {
+  const TODAY = new Date(2026, 9, 4); // 2026-10-04
+  const AT = { now: TODAY };
+  const ALL = { mode: 'all', months: 1 };
+  const month = (monthKey) => ({ mode: 'month', monthKey, months: 1 });
+
+  const COSTS = [
+    { id: 'a', amount: 200, frequency: 'monthly', category: 'fixed', startDate: '2025-03-30', endDate: '2026-06-30' }, // ended in June
+    { id: 'b', amount: 600, frequency: 'monthly', category: 'fixed', startDate: '2026-06-15', endDate: '2026-10-01' }, // ended 1 Oct, bills on the 15th
+    { id: 'c', amount: 400, frequency: 'monthly', category: 'fixed', startDate: '2026-06-30', endDate: '2026-10-02' }, // ended 2 Oct, bills on the 30th
+    { id: 'd', amount: 300, frequency: 'monthly', category: 'fixed', startDate: '2026-07-01' },                        // due 1st
+    { id: 'e', amount: 250, frequency: 'monthly', category: 'fixed', startDate: '2025-04-04', endDate: '2035-04-04' }, // due 4th (today)
+    { id: 'f', amount: 50, frequency: 'monthly', category: 'fixed', startDate: '2025-03-14' },                         // due 14th
+    { id: 'g', amount: 150, frequency: 'monthly', category: 'variable', startDate: '2026-07-25' },                     // due 25th
+    { id: 'h', amount: 30, frequency: 'one-time', category: 'fees', startDate: '2026-09-30' },
+  ];
+
+  test("'all' = today's run-rate: ended commitments are out, and the count matches the total", () => {
+    const s = financialSummary(COSTS, [], [], CONFIG, ALL, AT);
+    expect(s.commitmentCount).toBe(4);
+    expect(s.monthlyCostRate).toBeCloseTo(750); // d + e + f + g — NOT 1950
+    expect(s.annualTotal).toBeCloseTo(9000);
+    expect(s.costByCategory.fixed).toBeCloseTo(600);
+    expect(s.costByCategory.variable).toBeCloseTo(150);
+    expect(s.perScooterMonthly).toBeCloseTo(75); // 750 / fleetSize 10
+    expect(s.monthlyOpexExInvestment).toBeCloseTo(750);
+  });
+
+  test('a commitment that ended before its billing day is not a cost of that month', () => {
+    const s = financialSummary(COSTS, [], [], CONFIG, month('2026-10'), AT);
+    expect(s.monthlyCostRate).toBeCloseTo(750);
+    expect(s.costsMTD).toBeCloseTo(750);
+    expect(Object.values(s.costsMTDByCategory).reduce((x, y) => x + y, 0)).toBeCloseTo(s.costsMTD);
+  });
+
+  test('…but it still belongs to every month it was billed in', () => {
+    // September: b (15 Sep) and c (30 Sep) were both still running on their billing day.
+    const sep = financialSummary(COSTS, [], [], CONFIG, month('2026-09'), AT);
+    expect(sep.monthlyCostRate).toBeCloseTo(1750);
+    expect(sep.displayTotal).toBeCloseTo(1780); // + the one-time dated 30 Sep
+    // June: a's last charge (30 Jun = its end date) counts; d and g had not started.
+    const jun = financialSummary(COSTS, [], [], CONFIG, month('2026-06'), AT);
+    expect(jun.monthlyCostRate).toBeCloseTo(1500); // a + b + c + e + f
+  });
+
+  test('due this month = the charges that fall in it; nothing is "paid" just for being active', () => {
+    const s = financialSummary(COSTS, [], [], CONFIG, ALL, AT);
+    expect(s.dueThisMonth).toBeCloseTo(750);
+    expect(s.dueCountThisMonth).toBe(4);
+    expect(s.paidThisMonth).toBe(0);
+    expect(s.paidCountThisMonth).toBe(0);
+  });
+
+  test('paid = a paid tick for this month, or an actual record dated today or earlier', () => {
+    const costs = [
+      ...COSTS.map((c) => (c.id === 'e' ? { ...c, settlements: { '2026-10': { status: 'paid', at: 'x' } } } : c)),
+      // earmarked is not paid, and September's tick is not October's
+      { id: 'd2', amount: 999, frequency: 'monthly', category: 'fixed', startDate: '2026-01-20',
+        settlements: { '2026-10': { status: 'committed', at: 'x' }, '2026-09': { status: 'paid', at: 'x' } } },
+      { id: 'p', amount: 40, frequency: 'one-time', category: 'fees', startDate: '2026-10-02' },  // happened
+      { id: 'q', amount: 100, frequency: 'one-time', category: 'fees', startDate: '2026-10-20' }, // still coming
+    ];
+    const s = financialSummary(costs, [], [], CONFIG, ALL, AT);
+    expect(s.dueThisMonth).toBeCloseTo(750 + 999 + 40 + 100);
+    expect(s.paidThisMonth).toBeCloseTo(250 + 40);
+    expect(s.paidCountThisMonth).toBe(2);
+    expect(s.paidThisMonthByCategory).toEqual({ fixed: 250, fees: 40 });
+  });
+});
