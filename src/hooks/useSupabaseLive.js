@@ -26,6 +26,29 @@ import { onSupabaseWrite } from '../lib/supabaseRealtimeBus.js';
 
 const DEFAULT_LIMIT = 50;
 
+// #710 — one realtime channel per SUBSCRIPTION, never per query. realtime-js (2.106)
+// hands back the EXISTING channel when the name matches, and `.on('postgres_changes')`
+// throws on a channel that is already joining/joined. So a name built only from the
+// query crashed the whole app the moment two hooks read the same table with the same
+// options (IntakeContext + the Home owner widget both read `users`). A suffix that is
+// new on every effect run makes each subscription own its channel, and keeps a
+// re-running effect independent of how quickly its previous channel is removed
+// (removeChannel is asynchronous).
+let channelSeq = 0;
+const ownChannelName = (base) => `${base}:${++channelSeq}`;
+
+/** Realtime is best-effort (see the consistency note above): the fetch has already
+ *  loaded the data, so a subscription that cannot start costs live updates — it must
+ *  never take the page down. Returns the channel, or null when it could not start. */
+function openChannel(name, table, build) {
+  try {
+    return build(supabase.channel(ownChannelName(name)));
+  } catch (err) {
+    console.warn(`[useSupabaseLive] realtime unavailable for ${table}:`, err?.message || err);
+    return null;
+  }
+}
+
 /** Apply the (snake_case) extra where-clauses to a raw row client-side — the
  *  realtime stream only filters by org_id, so additional clauses run here. */
 function matchesWhere(row, clauses) {
@@ -133,8 +156,7 @@ export function useSupabaseCollectionLive(table, opts = {}) {
 
     doFetch();
 
-    const channel = supabase
-      .channel(`rt:${table}:${orgId}:${orderKey}:${whereKey}`)
+    const channel = openChannel(`rt:${table}:${orgId}:${orderKey}:${whereKey}`, table, (ch) => ch
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `org_id=eq.${orgId}` }, (payload) => {
         if (cancelled) return;
         const newRow = payload.new;
@@ -160,9 +182,9 @@ export function useSupabaseCollectionLive(table, opts = {}) {
           if (subscribedOnce && !cancelled) { silentRef.current = true; doFetch(); } // reconnect → silent resync
           subscribedOnce = true;
         }
-      });
+      }));
 
-    return () => { cancelled = true; supabase.removeChannel(channel); };
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, orgId, orgLoading, orderKey, whereKey, pageLimit, refreshTick]);
 
@@ -225,8 +247,7 @@ export function useSupabaseDocLive(table, sourceDocId) {
 
     doFetch();
 
-    const channel = supabase
-      .channel(`rt:${table}:doc:${sourceDocId}`)
+    const channel = openChannel(`rt:${table}:doc:${sourceDocId}`, table, (ch) => ch
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `source_doc_id=eq.${sourceDocId}` }, (payload) => {
         if (cancelled) return;
         if (payload.eventType === 'DELETE') { setItem(null); return; }
@@ -239,9 +260,9 @@ export function useSupabaseDocLive(table, sourceDocId) {
           if (subscribedOnce && !cancelled) doFetch();
           subscribedOnce = true;
         }
-      });
+      }));
 
-    return () => { cancelled = true; supabase.removeChannel(channel); };
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, [table, sourceDocId, orgId, orgLoading, refreshTick]);
 
   // #575 — refetch this doc when a local write to its table lands (realtime gap).

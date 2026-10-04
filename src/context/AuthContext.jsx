@@ -194,22 +194,31 @@ export function AuthProvider({ children }) {
       // the same select so we always read the authoritative DB value, not the
       // change-event payload (which may be truncated for large JSONB columns).
       if (supabase) {
-        profileChannel = supabase
-          .channel(`profile:${uid}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'users',
-              filter: `source_doc_id=eq.${uid}`,
-            },
-            () => {
-              // Re-fetch on any change; the epoch guard inside handles stale callbacks.
-              fetchAndCheckProfile();
-            },
-          )
-          .subscribe();
+        // #710 — the epoch makes the name unique per auth state: realtime-js hands back
+        // an existing channel with the same name, and the one from the previous auth
+        // state is still being removed (removeChannel is asynchronous). Sign-in must
+        // never depend on realtime, so a failed subscription only costs live updates.
+        try {
+          profileChannel = supabase
+            .channel(`profile:${uid}:${epoch}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'users',
+                filter: `source_doc_id=eq.${uid}`,
+              },
+              () => {
+                // Re-fetch on any change; the epoch guard inside handles stale callbacks.
+                fetchAndCheckProfile();
+              },
+            )
+            .subscribe();
+        } catch (err) {
+          console.warn('[auth] profile realtime unavailable:', err?.message || err);
+          profileChannel = null;
+        }
       }
     });
 
